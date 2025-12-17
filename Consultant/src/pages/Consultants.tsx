@@ -514,7 +514,7 @@ export default function Consultants() {
         key: razorpayKey,
         amount: orderData.amount,
         currency: orderData.currency || "INR",
-        name: "Solvior Consultation",
+        name: "AIOB Consultation",
         description: `Appointment with ${selectedConsultantObj?.fullName || "Consultant"}`,
         order_id: razorpayOrderId,
         handler: async function (response: any) {
@@ -608,7 +608,7 @@ export default function Consultants() {
         <div className="max-w-7xl mx-auto px-6 py-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center font-bold text-lg text-white">S</div>
-            <span className="font-semibold text-xl tracking-tight">Solvior</span>
+            <span className="font-semibold text-xl tracking-tight">AIOB</span>
           </div>
           <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-300">
             <a href="/" className="hover:text-white transition-colors">Home</a>
@@ -841,7 +841,7 @@ export default function Consultants() {
       <footer className="bg-[#020617] pt-10 pb-10 px-6 border-t border-slate-800/50 text-slate-300 mt-20">
         <div className="max-w-7xl mx-auto">
           <div className="pt-8 border-t border-slate-800 flex flex-col md:flex-row justify-between items-center text-xs text-slate-500">
-            <p>&copy; 2025 Solvior. All rights reserved.</p>
+            <p>&copy; 2025 AIOB. All rights reserved.</p>
             <div className="flex items-center gap-6 mt-4 md:mt-0">
               <a href="#" className="hover:text-white transition-colors">Privacy Policy</a>
               <a href="#" className="hover:text-white transition-colors">Terms of Service</a>

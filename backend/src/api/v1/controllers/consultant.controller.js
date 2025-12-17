@@ -223,7 +223,7 @@ exports.approve = async (req, res, next) => {
     const { id } = req.params;
     const updated = await Consultant.findByIdAndUpdate(
       id,
-      { status: "Approved" },
+      { status: "Active" },
       { new: true }
     );
     if (!updated) {

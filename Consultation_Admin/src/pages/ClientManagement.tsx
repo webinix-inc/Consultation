@@ -97,7 +97,7 @@ const ClientManagement = () => {
 
     const { mutate: updateUser, isPending: isUpdating } = useMutation({
         mutationFn: ({ id, data }: { id: string; data: any }) =>
-            UserAPI.updateUser(id, data),
+            ClientAPI.updateClient(id, data),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["clients"] });
             toast.success("Client updated successfully!");
@@ -106,8 +106,11 @@ const ClientManagement = () => {
     });
 
     const handleBlockToggle = (user: any) => {
-        const newStatus = user.verificationStatus === 'Blocked' ? 'Approved' : 'Blocked';
-        updateUser({ id: user._id, data: { verificationStatus: newStatus } });
+        setUpdatingStatusUserId(user._id);
+        const newStatus = user.status === 'Blocked' ? 'Active' : 'Blocked';
+        updateUser({ id: user._id, data: { status: newStatus } }, {
+            onSettled: () => setUpdatingStatusUserId(null)
+        });
     };
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -174,7 +177,7 @@ const ClientManagement = () => {
                                     <th className="p-3 font-medium">Mobile Number</th>
                                     <th className="p-3 font-medium">Role</th>
                                     <th className="p-3 font-medium">Created On</th>
-                                    <th className="p-3 font-medium">Verification</th>
+                                    <th className="p-3 font-medium">Status</th>
                                     <th className="p-3 font-medium text-center">Actions</th>
                                 </tr>
                             </thead>
@@ -193,7 +196,7 @@ const ClientManagement = () => {
                                         <td className="p-3"><span className="px-2 py-1 rounded-xl text-xs font-medium bg-green-100 text-green-600">Client</span></td>
                                         <td className="p-3">{user.createdAt ? new Date(user.createdAt).toLocaleDateString() : "N/A"}</td>
                                         <td className="p-3">
-                                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${user.verificationStatus === 'Blocked' ? 'bg-red-100 text-red-700' :
+                                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${user.status === 'Blocked' ? 'bg-red-100 text-red-700' :
                                                 user.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
                                                 }`}>
                                                 {user.status || 'NA'}
@@ -204,11 +207,16 @@ const ClientManagement = () => {
 
                                             <Button
                                                 size="sm"
-                                                variant={user.verificationStatus === 'Blocked' ? "outline" : "destructive"}
+                                                variant={user.status === 'Blocked' ? "outline" : "destructive"}
                                                 onClick={() => handleBlockToggle(user)}
-                                                className={`h-8 ${user.verificationStatus === 'Blocked' ? 'text-green-600 border-green-200' : ''}`}
+                                                disabled={updatingStatusUserId === user._id}
+                                                className={`h-8 ${user.status === 'Blocked' ? 'text-green-600 border-green-200' : ''}`}
                                             >
-                                                {user.verificationStatus === 'Blocked' ? <CheckCircle size={14} /> : <Ban size={14} />}
+                                                {updatingStatusUserId === user._id ? (
+                                                    <span className="animate-spin mr-1">⏳</span>
+                                                ) : (
+                                                    user.status === 'Blocked' ? <CheckCircle size={14} /> : <Ban size={14} />
+                                                )}
                                             </Button>
                                         </td>
                                     </tr>

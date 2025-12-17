@@ -209,7 +209,7 @@ const consultantSchema = new mongoose.Schema(
     clients: { type: Number, default: 0 },
     status: {
       type: String,
-      enum: ["Approved", "Pending", "Rejected", "Blocked"],
+      enum: ["Approved", "Active", "Pending", "Rejected", "Blocked", "Inactive"],
       default: "Pending",
     },
   },

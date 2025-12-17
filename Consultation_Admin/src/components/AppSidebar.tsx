@@ -91,7 +91,7 @@ export function AppSidebar() {
         <div className="p-4 border-b border-[#1f2f4a] mb-2">
           <div className="flex items-center gap-3">
             <img src={Logo} alt="logo" className="h-8 w-auto object-contain" />
-            <span className="font-bold text-white text-lg">Solvior</span>
+            <span className="font-bold text-white text-lg">AIOB</span>
           </div>
         </div>
 

@@ -108,7 +108,7 @@ export function AppSidebar() {
             onClick={handleLogoClick}
           >
             <img src={Logo} alt="logo" className="h-8 w-auto object-contain" />
-            <span className="font-bold text-white text-lg">Solvior</span>
+            <span className="font-bold text-white text-lg">AIOB</span>
           </div>
         </div>
 

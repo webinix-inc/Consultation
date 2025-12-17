@@ -417,7 +417,7 @@ The Client panel is part of the **Consultant** frontend application (`Consultant
 ## 🌐 Public Features
 
 ### Home Page (`/`)
-- **Landing Page** (`SolviorHero`)
+- **Landing Page** (`AIOBHero`)
   - Platform introduction
   - Feature highlights
   - Call-to-action buttons

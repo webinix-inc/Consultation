@@ -112,6 +112,9 @@ const Login = () => {
       } else if (errorMessage.includes("application has been rejected")) {
         navigate('/account-status?status=rejected');
         return;
+      } else if (errorMessage.includes("has been blocked")) {
+        navigate('/account-status?status=blocked');
+        return;
       }
 
       toast.error(errorMessage);
@@ -165,6 +168,9 @@ const Login = () => {
       } else if (errorMessage.includes("application has been rejected")) {
         navigate('/account-status?status=rejected');
         return;
+      } else if (errorMessage.includes("has been blocked")) {
+        navigate('/account-status?status=blocked');
+        return;
       }
 
       toast.error(errorMessage);
@@ -183,7 +189,7 @@ const Login = () => {
             className="h-16 w-16 object-contain mb-2"
           />
           <h1 className="text-2xl font-bold text-[#007ACC] tracking-wide">
-            Solvior
+            AIOB
           </h1>
           <p className="text-sm text-gray-500 mt-1">
             {loginMode === 'password'
@@ -381,7 +387,7 @@ const Login = () => {
         </div>
 
         <div className="text-center text-sm text-gray-400 mt-4">
-          © {new Date().getFullYear()} Solvior. All rights reserved.
+          © {new Date().getFullYear()} AIOB. All rights reserved.
         </div>
       </div>
     </div>

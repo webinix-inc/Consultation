@@ -22,7 +22,7 @@ import NotificationsPage from "./pages/Notifications";
 import ClientDetailPage from "./pages/ClientProfile";
 import SettingsPage from "./pages/Settings";
 import AppointmentManagement from "./pages/AppointmentManagement";
-import SolviorHero from "./pages/Home";
+import AIOBHero from "./pages/Home";
 import CompleteProfile from "./pages/CompleteProfile";
 import AccountStatus from "./pages/AccountStatus";
 import Signup from "./pages/Signup";
@@ -81,7 +81,7 @@ const App = () => {
       </Helmet>
       <Routes>
         {/* Public Routes */}
-        <Route path="/" element={<SolviorHero />} />
+        <Route path="/" element={<AIOBHero />} />
         <Route path="/consultants" element={<Consultants />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />

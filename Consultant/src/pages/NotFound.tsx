@@ -58,7 +58,7 @@ const NotFound = () => {
         </Link>
 
         <p className="text-xs text-gray-400 mt-8">
-          © {new Date().getFullYear()} Solvior. All rights reserved.
+          © {new Date().getFullYear()} AIOB. All rights reserved.
         </p>
       </div>
     </div>

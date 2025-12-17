@@ -180,6 +180,8 @@ exports.verifyOtp = async (req, res, next) => {
           throw new ApiError("Your account is pending approval.", httpStatus.FORBIDDEN);
         } else if (account.status === 'Rejected') {
           throw new ApiError("Your account application has been rejected.", httpStatus.FORBIDDEN);
+        } else if (account.status === 'Blocked') {
+          throw new ApiError("Your account has been blocked by the administrator.", httpStatus.FORBIDDEN);
         }
         // For other non-Active statuses (Inactive, Archived, etc.)
         throw new ApiError("Account is inactive. Please contact administrator.", httpStatus.FORBIDDEN);
@@ -322,6 +324,8 @@ exports.login = async (req, res, next) => {
         throw new ApiError("Your account is pending approval.", httpStatus.FORBIDDEN);
       } else if (account.status === 'Rejected') {
         throw new ApiError("Your account application has been rejected.", httpStatus.FORBIDDEN);
+      } else if (account.status === 'Blocked') {
+        throw new ApiError("Your account has been blocked by the administrator.", httpStatus.FORBIDDEN);
       }
       throw new ApiError("Account is inactive. Please contact administrator.", httpStatus.FORBIDDEN);
     }

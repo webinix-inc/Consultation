@@ -227,3 +227,26 @@ exports.getAllClients = async (req, res, next) => {
         next(error);
     }
 };
+
+exports.updateClient = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const updateData = req.body;
+
+        console.log(`[updateClient] Admin updating client ${id}`, updateData);
+
+        const client = await Client.findByIdAndUpdate(
+            id,
+            { $set: updateData },
+            { new: true, runValidators: true }
+        ).select("-passwordHash");
+
+        if (!client) {
+            throw new ApiError(ERROR.USER_NOT_FOUND, httpStatus.NOT_FOUND);
+        }
+
+        return sendSuccess(res, "Client updated successfully", client);
+    } catch (error) {
+        next(error);
+    }
+};

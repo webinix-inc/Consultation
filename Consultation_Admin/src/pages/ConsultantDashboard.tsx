@@ -357,8 +357,8 @@ const ConsultantDashboard = () => {
     email: consultant.email,
     mobile: consultant.mobile || consultant.phone,
     role: "Consultant",
-    status: consultant.status === "Approved" ? "Active" : "Inactive",
-    verificationStatus: consultant.status === "Approved" ? "Approved" : consultant.status || "Pending",
+    status: consultant.status === "Active" ? "Active" : "Inactive",
+    verificationStatus: consultant.status === "Active" ? "Active" : consultant.status || "Pending",
   } : null;
 
   // Use predefined Indian states list

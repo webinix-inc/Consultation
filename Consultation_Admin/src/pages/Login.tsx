@@ -116,7 +116,7 @@ const Login = () => {
             className="h-16 w-16 object-contain mb-2"
           />
           <h1 className="text-2xl font-bold text-[#007ACC] tracking-wide">
-            Solvior
+            AIOB
           </h1>
           <p className="text-sm text-gray-500 mt-1">
             {step === 1 ? "Admin Portal - Enter your mobile number" : "Enter the OTP sent to your mobile"}
@@ -213,7 +213,7 @@ const Login = () => {
         </div>
 
         <div className="text-center text-sm text-gray-400 mt-6">
-          © {new Date().getFullYear()} Solvior. All rights reserved.
+          © {new Date().getFullYear()} AIOB. All rights reserved.
         </div>
       </div>
     </div>

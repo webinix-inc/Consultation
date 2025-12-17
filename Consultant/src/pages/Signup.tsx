@@ -303,7 +303,7 @@ const Signup = () => {
         </div>
 
         <div className="text-center text-sm text-gray-400 mt-6">
-          © {new Date().getFullYear()} Solvior. All rights reserved.
+          © {new Date().getFullYear()} AIOB. All rights reserved.
         </div>
       </div>
     </div>

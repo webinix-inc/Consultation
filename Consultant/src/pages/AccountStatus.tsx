@@ -23,6 +23,13 @@ const AccountStatus = () => {
                     message: 'After careful review, we regret to inform you that your application has been rejected at this time. If you believe this is an error or would like to appeal, please contact support.',
                     color: 'text-red-600'
                 };
+            case 'blocked':
+                return {
+                    icon: <Ban className="w-16 h-16 text-red-600" />,
+                    title: 'Account Blocked',
+                    message: 'Your account has been blocked by the administrator due to policy violations or security concerns. You cannot log in at this time. Please contact support for assistance.',
+                    color: 'text-red-700'
+                };
             default:
                 return {
                     icon: <Clock className="w-16 h-16 text-gray-500" />,

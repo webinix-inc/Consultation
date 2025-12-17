@@ -5,7 +5,7 @@ import ConsultantAPI from "@/api/consultant.api";
 import CategoryAPI from "@/api/category.api";
 import axiosInstance from "@/api/axiosInstance";
 
-export default function SolviorHero() {
+export default function AIOBHero() {
   const navigate = useNavigate();
 
   // Fetch consultants from API (only Approved status) - using public endpoint
@@ -14,8 +14,8 @@ export default function SolviorHero() {
     queryFn: async () => {
       try {
         // Use public endpoint that doesn't require authentication
-        const response = await axiosInstance.get("/consultants/public", { 
-          params: { status: "Approved" } 
+        const response = await axiosInstance.get("/consultants/public", {
+          params: { status: "Active" }
         });
         // Handle different response structures
         let data = [];
@@ -66,7 +66,7 @@ export default function SolviorHero() {
         <header className="max-w-7xl mx-auto px-6 py-6 flex items-center justify-between w-full relative z-10">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center font-bold text-lg text-white">S</div>
-            <span className="font-semibold text-xl tracking-tight">Solvior</span>
+            <span className="font-semibold text-xl tracking-tight">AIOB</span>
           </div>
           <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-300">
             <a href="/" className="hover:text-white transition-colors">Home</a>
@@ -82,7 +82,7 @@ export default function SolviorHero() {
               const token = localStorage.getItem("token");
               const userStr = localStorage.getItem("user");
               const isLoggedIn = !!token && !!userStr;
-              
+
               if (isLoggedIn) {
                 return (
                   <button
@@ -426,8 +426,8 @@ export default function SolviorHero() {
                     <p className="text-slate-500 text-sm leading-relaxed mb-4">
                       {category.description || `${category.title} consultation services with expert guidance.`}
                     </p>
-                    <a 
-                      href="#" 
+                    <a
+                      href="#"
                       onClick={(e) => {
                         e.preventDefault();
                         navigate("/login");
@@ -479,7 +479,7 @@ export default function SolviorHero() {
                 const totalReviews = consultant.ratingSummary?.totalReviews || consultant.reviews?.length || 0;
                 const clientsCount = consultant.clientInfo?.totalClients || consultant.clients || 0;
                 const experience = consultant.yearsOfExperience ? `${consultant.yearsOfExperience}+ years of experience` : "Experienced professional";
-                
+
                 return (
                   <div key={consultant._id || consultant.id || index} className="bg-white rounded-2xl overflow-hidden shadow-sm border border-slate-100 hover:shadow-xl transition-shadow duration-300 flex flex-col">
                     <div className="relative h-72 overflow-hidden bg-slate-100">
@@ -487,10 +487,10 @@ export default function SolviorHero() {
                         <svg className="w-4 h-4 text-yellow-500 fill-current" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg>
                         <span className="text-xs font-bold text-slate-800">{rating.toFixed(1)}</span>
                       </div>
-                      <img 
-                        src={consultantImage} 
-                        alt={consultantName} 
-                        className="w-full h-full object-cover object-top" 
+                      <img
+                        src={consultantImage}
+                        alt={consultantName}
+                        className="w-full h-full object-cover object-top"
                         onError={(e) => {
                           const target = e.target as HTMLImageElement;
                           target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(consultantName)}&background=0d6efd&color=fff`;
@@ -514,8 +514,8 @@ export default function SolviorHero() {
 
                       <div className="mt-auto pt-4 border-t border-slate-100 flex items-center justify-between">
                         <span className="text-slate-400 text-xs font-medium">{totalReviews} reviews</span>
-                        <a 
-                          href="#" 
+                        <a
+                          href="#"
                           onClick={(e) => {
                             e.preventDefault();
                             navigate(`/consultant/${consultant._id || consultant.id}`);
@@ -659,7 +659,7 @@ export default function SolviorHero() {
                 </svg>
               </div>
               <p className="text-slate-600 text-lg leading-relaxed mb-8">
-                Our experience with Solvior has been nothing short of exceptional. From day one, their team demonstrated a deep understanding of our industry and quickly identified key areas for improvement.
+                Our experience with AIOB has been nothing short of exceptional. From day one, their team demonstrated a deep understanding of our industry and quickly identified key areas for improvement.
               </p>
 
               <div className="pt-8 border-t border-slate-300/50 flex items-center gap-4">
@@ -690,7 +690,7 @@ export default function SolviorHero() {
                 </svg>
               </div>
               <p className="text-slate-600 text-lg leading-relaxed mb-8">
-                The strategic changes they recommended have not only optimized our operations but also led to a significant increase in our revenue. I highly recommend Solvior to any business looking to grow.
+                The strategic changes they recommended have not only optimized our operations but also led to a significant increase in our revenue. I highly recommend AIOB to any business looking to grow.
               </p>
               <div className="pt-8 border-t border-slate-300/50 flex items-center gap-4">
                 <img className="w-14 h-14 rounded-full object-cover" src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?ixlib=rb-4.0.3&auto=format&fit=crop&w=100&q=80" alt="Michael Desouza" />

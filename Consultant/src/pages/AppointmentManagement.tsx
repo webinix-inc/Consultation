@@ -983,12 +983,6 @@ const AppointmentManagementConsultant: React.FC = () => {
           <h2 className="text-lg font-semibold text-gray-800">Appointment Management</h2>
           <p className="text-sm text-gray-500">Home &gt; Appointments</p>
         </div>
-        {/* Hide Add Appointment button for clients - they should book from consultant cards */}
-        {isConsultant && (
-          <button onClick={() => setOpenModal("schedule")} className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700">
-            <Plus size={16} /> Add Appointment
-          </button>
-        )}
       </div>
 
       <div className="bg-white p-3 rounded-lg border mb-4 flex flex-wrap gap-3 items-center">

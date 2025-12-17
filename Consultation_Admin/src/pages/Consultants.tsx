@@ -71,7 +71,7 @@ interface User {
   mobile?: string;
   role?: string;
   status?: "Active" | "Inactive" | string;
-  verificationStatus?: "Approved" | "Pending" | "Rejected" | "Blocked";
+  verificationStatus?: "Active" | "Pending" | "Rejected" | "Blocked";
   category?: Category | ID | null;
   subcategory?: Subcategory | ID | null;
   yearsOfExperience?: number;
@@ -304,7 +304,7 @@ const ConsultantCard: React.FC<{
     statusConfig.Active;
 
   const verificationConfig = {
-    Approved: { bg: "bg-green-50", text: "text-green-600", label: "Approved" },
+    Active: { bg: "bg-green-50", text: "text-green-600", label: "Active" },
     Pending: { bg: "bg-yellow-50", text: "text-yellow-600", label: "Pending" },
     Rejected: { bg: "bg-red-50", text: "text-red-600", label: "Rejected" },
     Blocked: { bg: "bg-red-100", text: "text-red-700", label: "Blocked" },
@@ -419,7 +419,7 @@ const ConsultantCard: React.FC<{
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                onStatusUpdate(id, "Approved");
+                onStatusUpdate(id, "Active");
               }}
               className="py-2.5 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
             >
@@ -504,7 +504,7 @@ const ConsultationManagement: React.FC = () => {
           email: c.email || "",
           mobile: c.mobile || c.phone || "",
           role: "Consultant",
-          status: c.status === "Approved" ? "Active" : "Inactive",
+          status: c.status === "Active" ? "Active" : "Inactive",
           verificationStatus: c.status || "Pending",
           yearsOfExperience: c.yearsOfExperience || 0,
           clientsCount: c.clientsCount || c.clientInfo?.totalClients || c.clients || 0,
@@ -738,7 +738,7 @@ const ConsultationManagement: React.FC = () => {
   const isUpdatingStatus = approveConsultantMutation.isPending || rejectConsultantMutation.isPending;
   const handleStatusUpdate = useCallback(
     (id: ID, newStatus: string) => {
-      if (newStatus === "Approved") {
+      if (newStatus === "Active") {
         approveConsultantMutation.mutate(id, {
           onError: (err: any) => {
             const status = err?.response?.status;

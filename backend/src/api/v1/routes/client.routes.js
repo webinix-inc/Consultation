@@ -17,4 +17,7 @@ router.get("/", authorizeRoles("Admin", "Consultant"), clientController.getAllCl
 // Consultant/Admin view client profile route
 router.get("/:id", authorizeRoles("Consultant", "Admin"), clientController.getClientProfileById);
 
+// Admin update client (e.g. block/unblock)
+router.patch("/:id", authorizeRoles("Admin"), clientController.updateClient);
+
 module.exports = router;

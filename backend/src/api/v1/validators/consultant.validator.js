@@ -235,7 +235,7 @@ const createConsultantSchema = Joi.object({
 
   clients: Joi.number().min(0).optional(),
   profileCompleteness: Joi.number().min(0).max(100).optional(),
-  status: Joi.string().valid("Active", "Pending", "Inactive", "Archived").optional(),
+  status: Joi.string().valid("Active", "Approved", "Pending", "Rejected", "Blocked", "Inactive", "Archived").optional(),
   dashboardSettings: dashboardSettingsItem.optional(),
   auth: authItem.optional(),
   notes: Joi.string().allow("").max(2000).optional(),
@@ -355,7 +355,7 @@ const updateConsultantSchema = Joi.object({
 
   clients: Joi.number().min(0).optional(),
   profileCompleteness: Joi.number().min(0).max(100).optional(),
-  status: Joi.string().valid("Active", "Pending", "Inactive", "Archived").optional(),
+  status: Joi.string().valid("Active", "Approved", "Pending", "Rejected", "Blocked", "Inactive", "Archived").optional(),
   dashboardSettings: dashboardSettingsItem.optional(),
   auth: authItem.optional(),
   notes: Joi.string().allow("").max(2000).optional(),
