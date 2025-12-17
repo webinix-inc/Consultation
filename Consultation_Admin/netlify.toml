@@ -1,0 +1,9 @@
+[build]
+command = "npm run build"
+publish = "dist"   # use "build" if CRA
+
+[[redirects]]
+from = "/api/*"
+to = "http://13.203.42.82:5002/api/v1/:splat"
+status = 200
+force = true

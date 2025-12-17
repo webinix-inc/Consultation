@@ -1,0 +1,5 @@
+>> Change the title in index.html and in APP.tsx through Helmet tag
+>> Change favicon in index.html
+>> Change the Backend API Url in src/api/axiosInstance file acco to requirement
+>> Update the Logo.png in images folder as per the project
+>> Update the Comapany name In Login and Sign Up

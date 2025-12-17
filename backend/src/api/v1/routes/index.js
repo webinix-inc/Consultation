@@ -1,0 +1,42 @@
+const express = require("express");
+const router = express.Router();
+
+const userRoutes = require("./user.routes");
+const authRoutes = require("./auth.routes");
+const categoryRoutes = require("./category.routes");
+const subcategoryRoutes = require("./subcategory.routes");
+const consultantRoutes = require("./consultant.routes");
+const appointmentRoutes = require("./appointment.routes");
+const analyticsRoutes = require("./analytics.routes");
+const notificationRoutes = require("./notification.routes");
+const clientConsultantRoutes = require("./clientConsultant.routes");
+const adminSettingsRoutes = require("./adminSettings.routes");
+const consultantSettingsRoutes = require("./consultantSettings.routes");
+const transactionRoutes = require("./transaction.routes");
+const paymentRoutes = require("./payment.routes");
+const clientRoutes = require("./client.routes");
+const fileUploadRoutes = require("./fileUpload.routes");
+const documentRoutes = require("./document.routes");
+const agoraRoutes = require("./agora.routes");
+const locationRoutes = require("./location.routes");
+
+router.use("/auth", authRoutes);
+router.use("/users", userRoutes);
+router.use("/categories", categoryRoutes);
+router.use("/subcategories", subcategoryRoutes);
+router.use("/consultants", consultantRoutes);
+router.use("/appointments", appointmentRoutes);
+router.use("/analytics", analyticsRoutes);
+router.use("/notifications", notificationRoutes);
+router.use("/client-consultants", clientConsultantRoutes);
+router.use("/admin-settings", adminSettingsRoutes);
+router.use("/consultant-settings", consultantSettingsRoutes);
+router.use("/transactions", transactionRoutes);
+router.use("/payments", paymentRoutes);
+router.use("/clients", clientRoutes);
+router.use("/upload", fileUploadRoutes);
+router.use("/documents", documentRoutes);
+router.use("/agora", agoraRoutes);
+router.use("/locations", locationRoutes);
+
+module.exports = router;
