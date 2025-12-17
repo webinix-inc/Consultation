@@ -14,7 +14,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(
   cors({
-    origin: ["http://localhost:5001", "http://localhost:5173", "https://consultation-admin.netlify.app", "https://consultation-consultant.netlify.app", "http://13.203.42.82", "http://localhost:5175", "http://52.66.228.187/admin/", "http://localhost:5174", "http://localhost:5002"], // Allow frontend on port 5001
+    origin: ["http://localhost:5001", "http://localhost:5173", "https://consultation-tau.vercel.app", "https://consultation-admin.vercel.app", "http://13.203.42.82", "http://localhost:5175", "http://52.66.228.187/admin/", "http://localhost:5174", "http://localhost:5002"], // Allow frontend on port 5001
     methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
     credentials: true,
   })
