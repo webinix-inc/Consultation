@@ -41,10 +41,9 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import ConsultantAPI from "@/api/consultant.api";
-import UserAPI from "@/api/user.api";
-import ConsultantSettingsAPI from "@/api/consultantSettings.api";
 import { Autocomplete } from "@/components/ui/autocomplete";
 import { INDIAN_STATES } from "@/constants/indianStates";
+import { NotificationsTab, AvailabilityTab } from "@/components/ConsultantSettingsTabs";
 
 type EducationRow = {
   institute: string;
@@ -291,10 +290,7 @@ const ConsultantDashboard = () => {
   const [pricing, setPricing] = useState<PricingForm>(initialPricingForm);
   const [socials, setSocials] = useState<SocialForm>(initialSocialForm);
   const [media, setMedia] = useState<MediaForm>(initialMediaForm);
-  const [appointmentPreferences, setAppointmentPreferences] =
-    useState<AppointmentPreferencesForm>(initialAppointmentPreferences);
-  const [availability, setAvailability] =
-    useState<AvailabilityForm>(initialAvailability);
+
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   const [searchParams] = useSearchParams();
@@ -571,150 +567,28 @@ const ConsultantDashboard = () => {
         : "",
     });
 
-    setAppointmentPreferences({
-      bookingWindowDays:
-        consultant?.appointmentPreferences?.bookingWindowDays !== undefined &&
-          consultant?.appointmentPreferences?.bookingWindowDays !== null
-          ? String(consultant.appointmentPreferences.bookingWindowDays)
-          : "",
-      minNoticeHours:
-        consultant?.appointmentPreferences?.minNoticeHours !== undefined &&
-          consultant?.appointmentPreferences?.minNoticeHours !== null
-          ? String(consultant.appointmentPreferences.minNoticeHours)
-          : "",
-      bufferMinutes:
-        consultant?.appointmentPreferences?.bufferMinutes !== undefined &&
-          consultant?.appointmentPreferences?.bufferMinutes !== null
-          ? String(consultant.appointmentPreferences.bufferMinutes)
-          : "",
-      allowInstantBooking:
-        consultant?.appointmentPreferences?.allowInstantBooking ?? false,
-      allowClientReschedule:
-        consultant?.appointmentPreferences?.allowClientReschedule ?? true,
-      allowClientCancellation:
-        consultant?.appointmentPreferences?.allowClientCancellation ?? true,
-      allowNotes: consultant?.appointmentPreferences?.allowNotes ?? true,
-      defaultMeetingLink:
-        consultant?.appointmentPreferences?.defaultMeetingLink || "",
-    });
 
-    const weeklyAvailability =
-      Array.isArray(consultant?.availability?.weekly) &&
-        consultant.availability.weekly.length > 0
-        ? consultant.availability.weekly.map((item: any) => ({
-          day: item.day || "",
-          isAvailable:
-            item.isAvailable === undefined ? true : Boolean(item.isAvailable),
-          slots: Array.isArray(item.slots)
-            ? item.slots.map((slot: any) => ({
-              start: slot.start || "",
-              end: slot.end || "",
-              channel: slot.channel || "video",
-              notes: slot.notes || "",
-            }))
-            : [],
-        }))
-        : [];
 
-    const blackoutDates =
-      Array.isArray(consultant?.availability?.blackoutDates) &&
-        consultant.availability.blackoutDates.length > 0
-        ? consultant.availability.blackoutDates
-          .map((value: any) => {
-            const date = new Date(value);
-            if (Number.isNaN(date.getTime())) return "";
-            return date.toISOString().split("T")[0];
-          })
-          .filter(Boolean)
-        : [];
 
-    setAvailability({
-      timezone: consultant?.availability?.timezone || "Asia/Kolkata",
-      weekly: weeklyAvailability,
-      blackoutDates,
-    });
   }, [consultant, calculateYearsOfExperience]);
 
-  // Fetch consultant settings
-  const {
-    data: settingsData,
-    isLoading: isLoadingSettings,
-  } = useQuery({
-    queryKey: ["consultant-settings", consultantId],
-    queryFn: async () => {
-      if (!consultantId) return null;
-      try {
-        const settings = await ConsultantSettingsAPI.getSettings(consultantId);
-        return settings;
-      } catch (err) {
-        // Settings might not exist yet, that's okay
-        console.warn("Consultant settings not found:", err);
-        return null;
-      }
-    },
-    enabled: Boolean(consultantId),
-    retry: false,
-  });
-
-  const consultantSettings = settingsData?.data;
-
+  // Recalculate years of experience when experiences change
   useEffect(() => {
     syncStateFromConsultant();
 
-    // Load settings into form if available
-    if (consultantSettings) {
-      // Load availability settings
-      if (consultantSettings.availability) {
-        const avail = consultantSettings.availability;
-        if (avail.workingHours) {
-          const weeklyAvailability = Object.entries(avail.workingHours).map(([day, dayData]: [string, any]) => ({
-            day,
-            enabled: dayData?.enabled || false,
-            slots: dayData?.slots?.map((slot: any) => ({
-              start: slot.start || "",
-              end: slot.end || "",
-              channel: slot.channel || "video",
-              notes: slot.notes || "",
-            })) || [],
-          }));
-
-          setAvailability({
-            timezone: avail.timezone || "Asia/Kolkata",
-            weekly: weeklyAvailability,
-            blackoutDates: avail.timeOff?.map((to: any) => {
-              const date = new Date(to.startDate);
-              return date.toISOString().split("T")[0];
-            }).filter(Boolean) || [],
-          });
-        }
-      }
-
-      // Load appointment preferences from settings
-      if (consultantSettings.availability?.sessionSettings) {
-        const session = consultantSettings.availability.sessionSettings;
-        setAppointmentPreferences({
-          defaultDuration: String(session.defaultDuration || 60),
-          bufferTime: String(session.bufferTime || 15),
-          maxSessionsPerDay: String(session.maxSessionsPerDay || 8),
-          minDuration: String(session.minDuration || 30),
-          maxDuration: String(session.maxDuration || 180),
-        });
-      }
-
-      // Load commission settings
-      if (consultant?.commission) {
-        setCommissionForm({
-          platformPercent: String(consultant.commission.platformPercent || 0),
-          minDurationMin: String(consultant.commission.minDurationMin || 30),
-          maxDurationMin: String(consultant.commission.maxDurationMin || 180),
-          cancellationWindowHours: String(consultant.commission.cancellationWindowHours || 24),
-          payoutDelayDays: "0",
-          notes: "",
-          customRates: [],
-        });
-      }
+    // Load commission settings
+    if (consultant?.commission) {
+      setCommissionForm({
+        platformPercent: String(consultant.commission.platformPercent || 0),
+        minDurationMin: String(consultant.commission.minDurationMin || 30),
+        maxDurationMin: String(consultant.commission.maxDurationMin || 180),
+        cancellationWindowHours: String(consultant.commission.cancellationWindowHours || 24),
+        payoutDelayDays: "0",
+        notes: "",
+        customRates: [],
+      });
     }
-  }, [syncStateFromConsultant, consultantSettings, consultant]);
+  }, [syncStateFromConsultant, consultant]);
 
   const initials = useMemo(() => {
     const fullName = form.fullName || user?.fullName || consultant?.name || "";
@@ -775,34 +649,7 @@ const ConsultantDashboard = () => {
     );
   };
 
-  const updateCommissionRateRow = (
-    index: number,
-    patch: Partial<CustomRateRow>
-  ) => {
-    setCommissionForm((prev) => ({
-      ...prev,
-      customRates: prev.customRates.map((row, idx) =>
-        idx === index ? { ...row, ...patch } : row
-      ),
-    }));
-  };
 
-  const addCommissionRateRow = () => {
-    setCommissionForm((prev) => ({
-      ...prev,
-      customRates: [...prev.customRates, createEmptyCustomRate()],
-    }));
-  };
-
-  const removeCommissionRateRow = (index: number) => {
-    setCommissionForm((prev) => {
-      if (prev.customRates.length === 1) return prev;
-      return {
-        ...prev,
-        customRates: prev.customRates.filter((_, idx) => idx !== index),
-      };
-    });
-  };
 
   const { mutate: updateConsultant, isPending: isSaving } = useMutation({
     mutationFn: async (payload: Record<string, unknown>) => {
@@ -843,7 +690,7 @@ const ConsultantDashboard = () => {
     }
     const parseDelimitedList = (value: string) =>
       value
-        .split(/[,\n]/)
+        .split(/[,\\n]/)
         .map((item) => item.trim())
         .filter(Boolean);
 
@@ -853,125 +700,69 @@ const ConsultantDashboard = () => {
       return Number.isNaN(parsed) ? fallback : parsed;
     };
 
-    const languagesList = parseDelimitedList(form.languages);
-    const tagsList = parseDelimitedList(form.tags);
-    const mediaGalleryList = parseDelimitedList(media.gallery);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let payload: any = {};
 
-    const baseFee =
-      pricing.baseFee.trim() || form.fees.trim()
-        ? toNumber(pricing.baseFee || form.fees)
-        : 0;
+    if (activeTab === "commission") {
+      payload = {
+        commission: {
+          platformPercent: commissionForm.platformPercent ? Number(commissionForm.platformPercent) : 0,
+          minDurationMin: commissionForm.minDurationMin ? Number(commissionForm.minDurationMin) : 0,
+          maxDurationMin: commissionForm.maxDurationMin ? Number(commissionForm.maxDurationMin) : 0,
+          cancellationWindowHours: commissionForm.cancellationWindowHours ? Number(commissionForm.cancellationWindowHours) : 0,
+        },
+      };
+    } else {
+      const languagesList = parseDelimitedList(form.languages);
+      const tagsList = parseDelimitedList(form.tags);
+      const mediaGalleryList = parseDelimitedList(media.gallery);
 
-    // Get category from consultant
-    const categoryTitle = consultant?.category || form.category || "General";
-
-    // Extract firstName and lastName from fullName for backward compatibility
-    const nameParts = form.fullName.trim().split(" ");
-    const firstName = nameParts[0] || "";
-    const lastName = nameParts.slice(1).join(" ") || "";
-
-    const payload = {
-      department: categoryTitle, // Using category as department for backward compatibility
-      firstName: firstName,
-      lastName: lastName,
-      displayName: form.fullName.trim(), // Use fullName as displayName
-      name: form.fullName.trim(),
-      bioTitle: form.bioTitle.trim(),
-      email: form.email.trim(),
-      phone: form.phone.trim(),
-      alternatePhone: form.alternatePhone.trim(),
-      category: categoryTitle,
-      fees: baseFee,
-      pricing: {
-        baseFee,
-        currency: pricing.currency.trim() || "INR",
-        billingType: pricing.billingType,
-        discountPercent: toNumber(pricing.discountPercent),
-        customRates: consultant?.pricing?.customRates || [],
-      },
-      gender: form.gender,
-      regNo: form.regNo.trim(),
-      languages: languagesList,
-      tags: tagsList,
-      about: form.about,
-      yearsOfExperience: toNumber(form.yearsOfExperience),
-      address: form.address,
-      country: form.country,
-      state: form.state,
-      city: form.city,
-      pincode: form.pincode,
-      image: photo || "",
-      socials: {
-        website: socials.website.trim(),
-        linkedin: socials.linkedin.trim(),
-        twitter: socials.twitter.trim(),
-        facebook: socials.facebook.trim(),
-        instagram: socials.instagram.trim(),
-      },
-      education: education
-        .filter(
-          (row) =>
-            row.institute.trim() ||
-            row.qualification.trim() ||
-            row.startYear.trim() ||
-            row.endYear.trim()
-        )
-        .map((row) => ({
-          institute: row.institute.trim(),
-          qualification: row.qualification.trim(),
-          startYear: row.startYear.trim(),
-          endYear: row.endYear.trim(),
-          year: row.startYear && row.endYear ? `${row.startYear}-${row.endYear}` : row.startYear || row.endYear || "", // For backward compatibility
-          description: row.description?.trim() || "",
+      payload = {
+        name: form.fullName,
+        email: form.email,
+        phone: form.phone,
+        mobile: form.phone,
+        about: form.about,
+        bioTitle: form.bioTitle,
+        gender: form.gender,
+        regNo: form.regNo,
+        address: form.address,
+        country: form.country,
+        state: form.state,
+        city: form.city,
+        pincode: form.pincode,
+        yearsOfExperience: toNumber(form.yearsOfExperience),
+        fees: toNumber(form.fees),
+        languages: languagesList,
+        tags: tagsList,
+        category: form.category,
+        subcategory: form.subcategory,
+        image: photo,
+        introVideo: media.introVideo,
+        gallery: mediaGalleryList,
+        socials,
+        education: education.map((row) => ({
+          ...row,
+          startYear: row.startYear,
+          endYear: row.endYear,
         })),
-      experiences: experiences
-        .filter(
-          (row) =>
-            row.company.trim() ||
-            row.role.trim() ||
-            row.startYear.trim() ||
-            row.endYear.trim()
-        )
-        .map((row) => {
-          const startYearNum = row.startYear ? parseInt(row.startYear) : null;
-          const endYearNum = row.endYear ? parseInt(row.endYear) : null;
-          const calculatedYears = startYearNum && endYearNum && !isNaN(startYearNum) && !isNaN(endYearNum)
-            ? (endYearNum - startYearNum)
-            : startYearNum && !isNaN(startYearNum)
-              ? (new Date().getFullYear() - startYearNum)
-              : 0;
-          return {
-            company: row.company.trim(),
-            role: row.role.trim(),
-            startYear: row.startYear.trim(),
-            endYear: row.endYear.trim(),
-            years: calculatedYears > 0 ? String(calculatedYears) : row.years.trim(), // Calculate from years
-            year: row.startYear && row.endYear ? `${row.startYear}-${row.endYear}` : row.startYear || row.endYear || "", // For backward compatibility
-            description: row.description?.trim() || "",
-          };
-        }),
-      awards: awards
-        .filter((row) => row.title.trim() || row.year.trim() || row.desc.trim())
-        .map((row) => ({
-          title: row.title.trim(),
-          year: row.year.trim(),
+        experiences: experiences.map((row) => ({
+          ...row,
+          years: toNumber(row.years),
+          startYear: toNumber(row.startYear),
+          endYear: toNumber(row.endYear),
+        })),
+        awards: awards.map((row) => ({
+          ...row,
+          year: toNumber(row.year),
           desc: row.desc.trim(),
         })),
-      commission: {
-        platformPercent: commissionForm.platformPercent
-          ? Number(commissionForm.platformPercent)
-          : 0,
-        minDurationMin: commissionForm.minDurationMin
-          ? Number(commissionForm.minDurationMin)
-          : 0,
-        maxDurationMin: commissionForm.maxDurationMin
-          ? Number(commissionForm.maxDurationMin)
-          : 0,
-        cancellationWindowHours: commissionForm.cancellationWindowHours
-          ? Number(commissionForm.cancellationWindowHours)
-          : 0,
-      },
-    };
+        billingType: pricing.billingType,
+        baseFee: toNumber(pricing.baseFee),
+        currency: pricing.currency,
+        discountPercent: toNumber(pricing.discountPercent),
+      };
+    }
 
     updateConsultant(payload);
   };
@@ -992,7 +783,7 @@ const ConsultantDashboard = () => {
   const disabled = !editing;
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="min-h-screen bg-white flex">
       <aside className="w-64 bg-white border-r p-4 space-y-3">
         <div>
           <h2 className="font-semibold text-gray-700">
@@ -1031,6 +822,7 @@ const ConsultantDashboard = () => {
       </aside>
 
       <main className="flex-1 p-6 space-y-6">
+
         {isLoading && (
           <div className="flex h-full w-full items-center justify-center py-24">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -1132,7 +924,8 @@ const ConsultantDashboard = () => {
                             <Input
                               value={form.category}
                               disabled={true}
-                              className="h-9 bg-gray-50"
+                              onChange={(e) => setForm((prev) => ({ ...prev, category: e.target.value }))}
+                              className={`h-9 ${!editing ? "bg-gray-50" : ""}`}
                             />
                           </div>
                           <div>
@@ -1142,7 +935,8 @@ const ConsultantDashboard = () => {
                             <Input
                               value={form.subcategory}
                               disabled={true}
-                              className="h-9 bg-gray-50"
+                              onChange={(e) => setForm((prev) => ({ ...prev, subcategory: e.target.value }))}
+                              className={`h-9 ${!editing ? "bg-gray-50" : ""}`}
                             />
                           </div>
                           <div>
@@ -1721,412 +1515,12 @@ const ConsultantDashboard = () => {
 
                   <TabsContent value="schedule" className="space-y-5 mt-4">
                     {/* Consultant Settings Section - Availability */}
-                    {consultantSettings && (
-                      <>
-                        <Card className="border-muted/60">
-                          <CardHeader className="pb-2">
-                            <CardTitle className="text-base">Availability Settings</CardTitle>
-                          </CardHeader>
-                          <CardContent className="space-y-4">
-                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                              <div>
-                                <Label className="text-xs text-muted-foreground mb-1 block">
-                                  Accepting New Clients
-                                </Label>
-                                <div className="flex items-center gap-2 h-9">
-                                  <Switch
-                                    checked={consultantSettings.availability?.acceptingNewClients ?? true}
-                                    disabled={true}
-                                  />
-                                  <span className="text-sm">
-                                    {consultantSettings.availability?.acceptingNewClients ? "Yes" : "No"}
-                                  </span>
-                                </div>
-                              </div>
-                              <div>
-                                <Label className="text-xs text-muted-foreground mb-1 block">
-                                  Current Status
-                                </Label>
-                                <Input
-                                  value={consultantSettings.availability?.currentStatus || "available"}
-                                  disabled={true}
-                                  className="h-9 bg-gray-50 capitalize"
-                                />
-                              </div>
-                              <div>
-                                <Label className="text-xs text-muted-foreground mb-1 block">
-                                  Default Duration (minutes)
-                                </Label>
-                                <Input
-                                  value={consultantSettings.availability?.sessionSettings?.defaultDuration || 60}
-                                  disabled={true}
-                                  className="h-9 bg-gray-50"
-                                />
-                              </div>
-                              <div>
-                                <Label className="text-xs text-muted-foreground mb-1 block">
-                                  Buffer Time (minutes)
-                                </Label>
-                                <Input
-                                  value={consultantSettings.availability?.sessionSettings?.bufferTime || 15}
-                                  disabled={true}
-                                  className="h-9 bg-gray-50"
-                                />
-                              </div>
-                              <div>
-                                <Label className="text-xs text-muted-foreground mb-1 block">
-                                  Max Sessions Per Day
-                                </Label>
-                                <Input
-                                  value={consultantSettings.availability?.sessionSettings?.maxSessionsPerDay || 8}
-                                  disabled={true}
-                                  className="h-9 bg-gray-50"
-                                />
-                              </div>
-                              <div>
-                                <Label className="text-xs text-muted-foreground mb-1 block">
-                                  Cancellation Window (hours)
-                                </Label>
-                                <Input
-                                  value={consultantSettings.availability?.cancellation?.cancellationWindow || 24}
-                                  disabled={true}
-                                  className="h-9 bg-gray-50"
-                                />
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-
-                        <Card className="border-muted/60">
-                          <CardHeader className="pb-2">
-                            <CardTitle className="text-base">Notification Settings</CardTitle>
-                          </CardHeader>
-                          <CardContent className="space-y-4">
-                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                              <div className="flex items-center justify-between">
-                                <Label className="text-sm">Email Notifications</Label>
-                                <Switch
-                                  checked={consultantSettings.notifications?.email ?? true}
-                                  disabled={true}
-                                />
-                              </div>
-                              <div className="flex items-center justify-between">
-                                <Label className="text-sm">SMS Notifications</Label>
-                                <Switch
-                                  checked={consultantSettings.notifications?.sms ?? true}
-                                  disabled={true}
-                                />
-                              </div>
-                              <div className="flex items-center justify-between">
-                                <Label className="text-sm">Appointment Reminders</Label>
-                                <Switch
-                                  checked={consultantSettings.notifications?.appointmentReminders ?? true}
-                                  disabled={true}
-                                />
-                              </div>
-                              <div className="flex items-center justify-between">
-                                <Label className="text-sm">Client Messages</Label>
-                                <Switch
-                                  checked={consultantSettings.notifications?.clientMsgs ?? true}
-                                  disabled={true}
-                                />
-                              </div>
-                              <div className="flex items-center justify-between">
-                                <Label className="text-sm">Weekly Reports</Label>
-                                <Switch
-                                  checked={consultantSettings.notifications?.weeklyReports ?? true}
-                                  disabled={true}
-                                />
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-
-                        <Card className="border-muted/60">
-                          <CardHeader className="pb-2">
-                            <CardTitle className="text-base">Communication Settings</CardTitle>
-                          </CardHeader>
-                          <CardContent className="space-y-4">
-                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                              <div>
-                                <Label className="text-xs text-muted-foreground mb-1 block">
-                                  Preferred Contact Method
-                                </Label>
-                                <Input
-                                  value={consultantSettings.communication?.preferredContactMethod || "email"}
-                                  disabled={true}
-                                  className="h-9 bg-gray-50 capitalize"
-                                />
-                              </div>
-                              <div>
-                                <Label className="text-xs text-muted-foreground mb-1 block">
-                                  Response Time SLA (hours)
-                                </Label>
-                                <Input
-                                  value={consultantSettings.communication?.responseTimeSLA || 24}
-                                  disabled={true}
-                                  className="h-9 bg-gray-50"
-                                />
-                              </div>
-                              <div className="flex items-center justify-between">
-                                <Label className="text-sm">Allow Video Calls</Label>
-                                <Switch
-                                  checked={consultantSettings.communication?.allowVideoCalls ?? true}
-                                  disabled={true}
-                                />
-                              </div>
-                              <div className="flex items-center justify-between">
-                                <Label className="text-sm">Allow Audio Calls</Label>
-                                <Switch
-                                  checked={consultantSettings.communication?.allowAudioCalls ?? true}
-                                  disabled={true}
-                                />
-                              </div>
-                              <div className="flex items-center justify-between">
-                                <Label className="text-sm">Allow Chat</Label>
-                                <Switch
-                                  checked={consultantSettings.communication?.allowChat ?? true}
-                                  disabled={true}
-                                />
-                              </div>
-                              <div className="flex items-center justify-between">
-                                <Label className="text-sm">Allow In-Person</Label>
-                                <Switch
-                                  checked={consultantSettings.communication?.allowInPerson ?? true}
-                                  disabled={true}
-                                />
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-
-                        <Card className="border-muted/60">
-                          <CardHeader className="pb-2">
-                            <CardTitle className="text-base">Payment Settings</CardTitle>
-                          </CardHeader>
-                          <CardContent className="space-y-4">
-                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                              <div>
-                                <Label className="text-xs text-muted-foreground mb-1 block">
-                                  Currency
-                                </Label>
-                                <Input
-                                  value={consultantSettings.payments?.currency || "USD"}
-                                  disabled={true}
-                                  className="h-9 bg-gray-50"
-                                />
-                              </div>
-                              <div className="flex items-center justify-between">
-                                <Label className="text-sm">Require Payment Upfront</Label>
-                                <Switch
-                                  checked={consultantSettings.payments?.requirePaymentUpfront ?? true}
-                                  disabled={true}
-                                />
-                              </div>
-                              <div className="flex items-center justify-between">
-                                <Label className="text-sm">Auto Confirm Payments</Label>
-                                <Switch
-                                  checked={consultantSettings.payments?.autoConfirmPayments ?? false}
-                                  disabled={true}
-                                />
-                              </div>
-                              <div className="flex items-center justify-between">
-                                <Label className="text-sm">Partial Payment Allowed</Label>
-                                <Switch
-                                  checked={consultantSettings.payments?.partialPaymentAllowed ?? false}
-                                  disabled={true}
-                                />
-                              </div>
-                            </div>
-                            {consultantSettings.payments?.acceptedMethods && consultantSettings.payments.acceptedMethods.length > 0 && (
-                              <div>
-                                <Label className="text-xs text-muted-foreground mb-1 block">
-                                  Accepted Payment Methods
-                                </Label>
-                                <div className="flex flex-wrap gap-2">
-                                  {consultantSettings.payments.acceptedMethods.map((method: string) => (
-                                    <span
-                                      key={method}
-                                      className="px-2 py-1 bg-gray-100 rounded text-xs capitalize"
-                                    >
-                                      {method.replace("_", " ")}
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </CardContent>
-                        </Card>
-                      </>
-                    )}
+                    <AvailabilityTab consultantId={consultantId || undefined} readOnly={true} />
                   </TabsContent>
 
                   <TabsContent value="notifications" className="space-y-5 mt-4">
                     {/* Consultant Settings Section - Notifications */}
-                    {consultantSettings && (
-                      <>
-                        <Card className="border-muted/60">
-                          <CardHeader className="pb-2">
-                            <CardTitle className="text-base">Notification Settings</CardTitle>
-                          </CardHeader>
-                          <CardContent className="space-y-4">
-                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                              <div className="flex items-center justify-between">
-                                <Label className="text-sm">Email Notifications</Label>
-                                <Switch
-                                  checked={consultantSettings.notifications?.email ?? true}
-                                  disabled={true}
-                                />
-                              </div>
-                              <div className="flex items-center justify-between">
-                                <Label className="text-sm">SMS Notifications</Label>
-                                <Switch
-                                  checked={consultantSettings.notifications?.sms ?? true}
-                                  disabled={true}
-                                />
-                              </div>
-                              <div className="flex items-center justify-between">
-                                <Label className="text-sm">Appointment Reminders</Label>
-                                <Switch
-                                  checked={consultantSettings.notifications?.appointmentReminders ?? true}
-                                  disabled={true}
-                                />
-                              </div>
-                              <div className="flex items-center justify-between">
-                                <Label className="text-sm">Client Messages</Label>
-                                <Switch
-                                  checked={consultantSettings.notifications?.clientMsgs ?? true}
-                                  disabled={true}
-                                />
-                              </div>
-                              <div className="flex items-center justify-between">
-                                <Label className="text-sm">Weekly Reports</Label>
-                                <Switch
-                                  checked={consultantSettings.notifications?.weeklyReports ?? true}
-                                  disabled={true}
-                                />
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-
-                        <Card className="border-muted/60">
-                          <CardHeader className="pb-2">
-                            <CardTitle className="text-base">Communication Settings</CardTitle>
-                          </CardHeader>
-                          <CardContent className="space-y-4">
-                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                              <div>
-                                <Label className="text-xs text-muted-foreground mb-1 block">
-                                  Preferred Contact Method
-                                </Label>
-                                <Input
-                                  value={consultantSettings.communication?.preferredContactMethod || "email"}
-                                  disabled={true}
-                                  className="h-9 bg-gray-50 capitalize"
-                                />
-                              </div>
-                              <div>
-                                <Label className="text-xs text-muted-foreground mb-1 block">
-                                  Response Time SLA (hours)
-                                </Label>
-                                <Input
-                                  value={consultantSettings.communication?.responseTimeSLA || 24}
-                                  disabled={true}
-                                  className="h-9 bg-gray-50"
-                                />
-                              </div>
-                              <div className="flex items-center justify-between">
-                                <Label className="text-sm">Allow Video Calls</Label>
-                                <Switch
-                                  checked={consultantSettings.communication?.allowVideoCalls ?? true}
-                                  disabled={true}
-                                />
-                              </div>
-                              <div className="flex items-center justify-between">
-                                <Label className="text-sm">Allow Audio Calls</Label>
-                                <Switch
-                                  checked={consultantSettings.communication?.allowAudioCalls ?? true}
-                                  disabled={true}
-                                />
-                              </div>
-                              <div className="flex items-center justify-between">
-                                <Label className="text-sm">Allow Chat</Label>
-                                <Switch
-                                  checked={consultantSettings.communication?.allowChat ?? true}
-                                  disabled={true}
-                                />
-                              </div>
-                              <div className="flex items-center justify-between">
-                                <Label className="text-sm">Allow In-Person</Label>
-                                <Switch
-                                  checked={consultantSettings.communication?.allowInPerson ?? true}
-                                  disabled={true}
-                                />
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-
-                        <Card className="border-muted/60">
-                          <CardHeader className="pb-2">
-                            <CardTitle className="text-base">Payment Settings</CardTitle>
-                          </CardHeader>
-                          <CardContent className="space-y-4">
-                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                              <div>
-                                <Label className="text-xs text-muted-foreground mb-1 block">
-                                  Currency
-                                </Label>
-                                <Input
-                                  value={consultantSettings.payments?.currency || "USD"}
-                                  disabled={true}
-                                  className="h-9 bg-gray-50"
-                                />
-                              </div>
-                              <div className="flex items-center justify-between">
-                                <Label className="text-sm">Require Payment Upfront</Label>
-                                <Switch
-                                  checked={consultantSettings.payments?.requirePaymentUpfront ?? true}
-                                  disabled={true}
-                                />
-                              </div>
-                              <div className="flex items-center justify-between">
-                                <Label className="text-sm">Auto Confirm Payments</Label>
-                                <Switch
-                                  checked={consultantSettings.payments?.autoConfirmPayments ?? false}
-                                  disabled={true}
-                                />
-                              </div>
-                              <div className="flex items-center justify-between">
-                                <Label className="text-sm">Partial Payment Allowed</Label>
-                                <Switch
-                                  checked={consultantSettings.payments?.partialPaymentAllowed ?? false}
-                                  disabled={true}
-                                />
-                              </div>
-                            </div>
-                            {consultantSettings.payments?.acceptedMethods && consultantSettings.payments.acceptedMethods.length > 0 && (
-                              <div>
-                                <Label className="text-xs text-muted-foreground mb-1 block">
-                                  Accepted Payment Methods
-                                </Label>
-                                <div className="flex flex-wrap gap-2">
-                                  {consultantSettings.payments.acceptedMethods.map((method: string) => (
-                                    <span
-                                      key={method}
-                                      className="px-2 py-1 bg-gray-100 rounded text-xs capitalize"
-                                    >
-                                      {method.replace("_", " ")}
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </CardContent>
-                        </Card>
-                      </>
-                    )}
+                    <NotificationsTab consultantId={consultantId || undefined} readOnly={true} />
                   </TabsContent>
                 </Tabs>
               </div>

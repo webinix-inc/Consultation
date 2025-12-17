@@ -33,6 +33,24 @@ const ConsultantAPI = {
     const res = await axiosInstance.post(`/consultants/${id}/reject`);
     return res.data;
   },
+
+  // Settings
+  getSettings: async (consultantId: string) => {
+    const res = await axiosInstance.get(`/consultant-settings/${consultantId}`);
+    return res.data;
+  },
+  updateSettings: async (consultantId: string, data: any) => {
+    const res = await axiosInstance.put(`/consultant-settings/${consultantId}`, data);
+    return res.data;
+  },
+  updateNotifications: async (consultantId: string, data: any) => {
+    const res = await axiosInstance.put(`/consultant-settings/${consultantId}/notifications`, data);
+    return res.data;
+  },
+  updateAvailability: async (consultantId: string, data: any) => {
+    const res = await axiosInstance.put(`/consultant-settings/${consultantId}/availability`, data);
+    return res.data;
+  },
 };
 
 export default ConsultantAPI;

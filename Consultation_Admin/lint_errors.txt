@@ -1,0 +1,26 @@
+﻿
+D:\NexFutrr\Consultation\Consultation\Consultation\Consultation_Admin\src\pages\ConsultantDashboard.tsx
+   293:10   error  'appointmentPreferences' is assigned a value but never used   @typescript-eslint/no-unused-vars
+   295:10   error  'availability' is assigned a value but never used             @typescript-eslint/no-unused-vars
+   335:15   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   342:21   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   449:43   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   466:43   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   492:40   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   525:58   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   603:53   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   608:37   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   622:24   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   640:16   error  'isLoadingSettings' is assigned a value but never used        @typescript-eslint/no-unused-vars
+   669:103  error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   672:47   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   683:52   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   777:9    error  'updateCommissionRateRow' is assigned a value but never used  @typescript-eslint/no-unused-vars
+   789:9    error  'addCommissionRateRow' is assigned a value but never used     @typescript-eslint/no-unused-vars
+   796:9    error  'removeCommissionRateRow' is assigned a value but never used  @typescript-eslint/no-unused-vars
+   831:20   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   855:18   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+  1009:89   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+
+Γ£û 21 problems (21 errors, 0 warnings)
+

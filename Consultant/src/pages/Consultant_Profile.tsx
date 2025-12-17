@@ -27,6 +27,8 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import UserAPI from "@/api/user.api";
 import ConsultantAPI from "@/api/consultant.api";
+import CategoryAPI from "@/api/category.api";
+import SubcategoryAPI from "@/api/subcategory.api";
 import { toast } from "react-hot-toast";
 import { Autocomplete } from "@/components/ui/autocomplete";
 import { INDIAN_STATES } from "@/constants/indianStates";
@@ -300,7 +302,7 @@ export default function Profile() {
     "basic" | "address" | "online" | "education" | "settings"
   >("basic");
   const [settingsSubTab, setSettingsSubTab] = useState<"notifications" | "schedule">("notifications");
-  
+
   // Use predefined Indian states list
   const states = INDIAN_STATES;
   const [education, setEducation] = useState<EducationRow[]>([
@@ -448,6 +450,21 @@ export default function Profile() {
     },
     enabled: Boolean(loggedInUserEmail || loggedInUserId),
     retry: false,
+  });
+
+  /* ============================
+     Fetch System Categories & Subcategories
+     ============================ */
+  const { data: categories = [] } = useQuery({
+    queryKey: ["categories"],
+    queryFn: CategoryAPI.getAll,
+    select: (res: any) => res?.data ?? res ?? [],
+  });
+
+  const { data: subcategories = [] } = useQuery({
+    queryKey: ["subcategories"],
+    queryFn: () => SubcategoryAPI.getAll(),
+    select: (res: any) => res?.data ?? res ?? [],
   });
 
   const consultant = consultantData?.data;
@@ -879,7 +896,7 @@ export default function Profile() {
         : 0;
 
     // Get category from user or consultant
-    const categoryTitle = user?.category?.title || user?.subcategory?.title || consultant?.category || form.category || "General";
+    const categoryTitle = form.category || user?.category?.title || user?.subcategory?.title || consultant?.category || "General";
 
     // Extract firstName and lastName from fullName for backward compatibility
     const nameParts = form.fullName.trim().split(" ");
@@ -898,6 +915,7 @@ export default function Profile() {
       alternatePhone: form.alternatePhone.trim(),
       category: categoryTitle,
       fees: toNumber(form.fees), // Explicitly use the fees from the form
+      subcategory: form.subcategory,
       pricing: {
         baseFee: toNumber(form.fees), // Sync baseFee with fees
         currency: pricing.currency.trim() || "INR",
@@ -1081,647 +1099,685 @@ export default function Profile() {
         </TabsList>
 
         <TabsContent value="basic" className="space-y-5 mt-4">
-      <Card className="border-muted/60">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">
-            Basic Information
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-wrap items-center gap-6">
-            <Avatar className="h-16 w-16 rounded-lg">
-              <AvatarImage src={photo ?? undefined} />
-              <AvatarFallback className="rounded-lg">
-                {initials}
-              </AvatarFallback>
-            </Avatar>
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                ref={fileRef}
-                type="file"
-                accept="image/png,image/jpeg,image/gif"
-                className="hidden"
-                onChange={onFileChange}
-                disabled={disabled}
-              />
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handlePick}
-                disabled={disabled}
-                className="gap-2"
-              >
-                <Upload className="h-4 w-4" />
-                Change Image
-              </Button>
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => setPhoto(null)}
-                disabled={disabled || !photo}
-                className="gap-2"
-              >
-                <Trash2 className="h-4 w-4" />
-                Remove
-              </Button>
-              <p className="w-full text-xs text-muted-foreground">
-                Upload square images (JPEG, PNG or GIF)
-              </p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-            <div>
-              <Label className="text-xs text-muted-foreground mb-1 block">
-                Category
-              </Label>
-              <Input
-                value={form.category}
-                disabled={true}
-                className="h-9 bg-gray-50"
-              />
-            </div>
-            <div>
-              <Label className="text-xs text-muted-foreground mb-1 block">
-                Subcategory
-              </Label>
-              <Input
-                value={form.subcategory}
-                disabled={true}
-                className="h-9 bg-gray-50"
-              />
-            </div>
-            <div>
-              <Label className="text-xs text-muted-foreground mb-1 block">
-                Full Name
-              </Label>
-              <Input
-                value={form.fullName}
-                disabled={true}
-                className="h-9 bg-gray-50"
-              />
-            </div>
-            <LabeledInput
-              id="yearsOfExperience"
-              label="Years of Experience"
-              type="number"
-              value={form.yearsOfExperience}
-              onChange={() => { }}
-              disabled={true}
-              className="bg-gray-50"
-            />
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-            <LabeledInput
-              id="email"
-              label="Email Address"
-              type="email"
-              value={form.email}
-              onChange={(value) =>
-                setForm((prev) => ({ ...prev, email: value }))
-              }
-              disabled={disabled || Boolean(consultantId)}
-              className={consultantId ? "bg-gray-50" : ""}
-            />
-            <LabeledInput
-              id="phone"
-              label="Phone Number"
-              value={form.phone}
-              onChange={(value) =>
-                setForm((prev) => ({ ...prev, phone: value }))
-              }
-              disabled={true}
-              className="bg-gray-50"
-            />
-            <LabeledInput
-              id="alternatePhone"
-              label="Alternate Phone"
-              value={form.alternatePhone}
-              onChange={(value) =>
-                setForm((prev) => ({ ...prev, alternatePhone: value }))
-              }
-              disabled={disabled}
-            />
-            <LabeledInput
-              id="fees"
-              label="Consultation Fee"
-              type="number"
-              value={form.fees}
-              onChange={(value) =>
-                setForm((prev) => ({ ...prev, fees: value }))
-              }
-              disabled={disabled}
-            />
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <LabeledInput
-              id="bioTitle"
-              label="Professional Headline"
-              value={form.bioTitle}
-              onChange={(value) =>
-                setForm((prev) => ({ ...prev, bioTitle: value }))
-              }
-              disabled={disabled}
-            />
-            <div>
-              <Label className="text-xs text-muted-foreground mb-1 block">
-                Gender
-              </Label>
-              <Select
-                disabled={disabled}
-                value={form.gender}
-                onValueChange={(value) =>
-                  setForm((prev) => ({ ...prev, gender: value }))
-                }
-              >
-                <SelectTrigger className="h-9">
-                  <SelectValue placeholder="Select" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="male">Male</SelectItem>
-                  <SelectItem value="female">Female</SelectItem>
-                  <SelectItem value="other">Other</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <LabeledInput
-              id="regNo"
-              label="Registration Number"
-              value={form.regNo}
-              onChange={(value) =>
-                setForm((prev) => ({ ...prev, regNo: value }))
-              }
-              disabled={disabled}
-            />
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div>
-              <Label className="text-xs text-muted-foreground mb-1 block">
-                Known Languages
-              </Label>
-              <Textarea
-                disabled={disabled}
-                value={form.languages}
-                onChange={(event) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    languages: event.target.value,
-                  }))
-                }
-                className="min-h-[56px]"
-                placeholder="Comma separated e.g. English, Hindi"
-              />
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                Provide one or many languages separated by commas.
-              </p>
-            </div>
-            <div>
-              <Label className="text-xs text-muted-foreground mb-1 block">
-                Tags & Expertise
-              </Label>
-              <Textarea
-                disabled={disabled}
-                value={form.tags}
-                onChange={(event) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    tags: event.target.value,
-                  }))
-                }
-                className="min-h-[56px]"
-                placeholder="Comma separated e.g. Leadership, Strategy"
-              />
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                Tags power search and discovery for consultants.
-              </p>
-            </div>
-          </div>
-
-          <div>
-            <Label className="text-xs text-muted-foreground mb-1 block">
-              About
-            </Label>
-            <Textarea
-              disabled={disabled}
-              value={form.about}
-              onChange={(event) =>
-                setForm((prev) => ({
-                  ...prev,
-                  about: event.target.value,
-                }))
-              }
-              className="min-h-[80px]"
-            />
-          </div>
-        </CardContent>
-      </Card>
-        </TabsContent>
-
-        <TabsContent value="address" className="space-y-5 mt-4">
-      <Card className="border-muted/60">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">
-            Address Information
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <Label className="text-xs text-muted-foreground mb-1 block">
-              Address
-            </Label>
-            <Textarea
-              disabled={disabled}
-              value={form.address}
-              onChange={(event) =>
-                setForm((prev) => ({
-                  ...prev,
-                  address: event.target.value,
-                }))
-              }
-              className="min-h-[56px]"
-            />
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-            <div>
-              <Label className="text-xs text-muted-foreground mb-1 block">
-                Country
-              </Label>
-              <Select
-                disabled={disabled}
-                value={form.country}
-                onValueChange={(value) =>
-                  setForm((prev) => ({ ...prev, country: value }))
-                }
-              >
-                <SelectTrigger className="h-9">
-                  <SelectValue placeholder="Select" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="india">India</SelectItem>
-                  <SelectItem value="us">United States</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-xs text-muted-foreground mb-1 block">
-                State
-              </Label>
-              <Autocomplete
-                value={form.state}
-                onValueChange={(value) => {
-                  setForm((prev) => ({ 
-                    ...prev, 
-                    state: value
-                  }));
-                }}
-                options={states}
-                placeholder="Select state"
-                disabled={disabled}
-                allowCustom={false}
-                searchPlaceholder="Search states..."
-                emptyMessage="No states found."
-              />
-            </div>
-            <div>
-              <Label className="text-xs text-muted-foreground mb-1 block">
-                City
-              </Label>
-              <Input
-                value={form.city}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, city: e.target.value }))
-                }
-                placeholder="Enter city name"
-                disabled={disabled}
-                className="h-9"
-              />
-            </div>
-            <LabeledInput
-              id="pincode"
-              label="Pin Code"
-              type="number"
-              value={form.pincode}
-              onChange={(value) =>
-                setForm((prev) => ({ ...prev, pincode: value }))
-              }
-              disabled={disabled}
-            />
-          </div>
-        </CardContent>
-      </Card>
-        </TabsContent>
-
-        <TabsContent value="online" className="space-y-5 mt-4">
-      <Card className="border-muted/60">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">Online Presence</CardTitle>
-        </CardHeader>
-        <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <LabeledInput
-            id="website"
-            label="Website"
-            value={socials.website}
-            onChange={(value) =>
-              setSocials((prev) => ({ ...prev, website: value }))
-            }
-            disabled={disabled}
-          />
-          <LabeledInput
-            id="linkedin"
-            label="LinkedIn"
-            value={socials.linkedin}
-            onChange={(value) =>
-              setSocials((prev) => ({ ...prev, linkedin: value }))
-            }
-            disabled={disabled}
-          />
-          <LabeledInput
-            id="twitter"
-            label="Twitter / X"
-            value={socials.twitter}
-            onChange={(value) =>
-              setSocials((prev) => ({ ...prev, twitter: value }))
-            }
-            disabled={disabled}
-          />
-          <LabeledInput
-            id="facebook"
-            label="Facebook"
-            value={socials.facebook}
-            onChange={(value) =>
-              setSocials((prev) => ({ ...prev, facebook: value }))
-            }
-            disabled={disabled}
-          />
-          <LabeledInput
-            id="instagram"
-            label="Instagram"
-            value={socials.instagram}
-            onChange={(value) =>
-              setSocials((prev) => ({ ...prev, instagram: value }))
-            }
-            disabled={disabled}
-          />
-        </CardContent>
-      </Card>
-        </TabsContent>
-
-        <TabsContent value="education" className="space-y-5 mt-4">
-      <Card className="border-muted/60">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">
-            Educational Details
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {education.map((row, index) => (
-            <div
-              key={`edu-${index}`}
-              className="rounded-md border border-muted/40 p-3 space-y-3"
-            >
-              <div className="grid grid-cols-1 items-end gap-4 md:grid-cols-4">
-                <LabeledInput
-                  id={`edu-institute-${index}`}
-                  label="Institute Name"
-                  value={row.institute}
-                  onChange={(value) =>
-                    updateEducationRow(index, { institute: value })
-                  }
-                  disabled={disabled}
-                />
-                <LabeledInput
-                  id={`edu-qualification-${index}`}
-                  label="Qualification"
-                  value={row.qualification}
-                  onChange={(value) =>
-                    updateEducationRow(index, { qualification: value })
-                  }
-                  disabled={disabled}
-                />
-                <LabeledInput
-                  id={`edu-startYear-${index}`}
-                  label="Start Year"
-                  value={row.startYear}
-                  onChange={(value) =>
-                    updateEducationRow(index, { startYear: value })
-                  }
-                  disabled={disabled}
-                />
-                <div className="flex items-end gap-2">
-                  <LabeledInput
-                    id={`edu-endYear-${index}`}
-                    label="End Year"
-                    value={row.endYear}
-                    onChange={(value) =>
-                      updateEducationRow(index, { endYear: value })
-                    }
-                    className="flex-1"
+          <Card className="border-muted/60">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">
+                Basic Information
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex flex-wrap items-center gap-6">
+                <Avatar className="h-16 w-16 rounded-lg">
+                  <AvatarImage src={photo ?? undefined} />
+                  <AvatarFallback className="rounded-lg">
+                    {initials}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/gif"
+                    className="hidden"
+                    onChange={onFileChange}
                     disabled={disabled}
                   />
                   <Button
-                    variant="destructive"
-                    size="icon"
-                    disabled={disabled || education.length === 1}
-                    onClick={() =>
-                      removeRow(education, setEducation, index)
-                    }
-                    className="h-9 w-9"
+                    variant="outline"
+                    size="sm"
+                    onClick={handlePick}
+                    disabled={disabled}
+                    className="gap-2"
                   >
-                    <Trash2 className="h-4 w-4" />
+                    <Upload className="h-4 w-4" />
+                    Change Image
                   </Button>
-                </div>
-              </div>
-              <div>
-                <Label className="text-xs text-muted-foreground mb-1 block">
-                  Description / Notes
-                </Label>
-                <Textarea
-                  disabled={disabled}
-                  value={row.description || ""}
-                  onChange={(event) =>
-                    updateEducationRow(index, {
-                      description: event.target.value,
-                    })
-                  }
-                  className="min-h-[56px]"
-                  placeholder="Highlights, awards, major learnings…"
-                />
-              </div>
-            </div>
-          ))}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() =>
-              addRow(education, setEducation, emptyEducation)
-            }
-            disabled={disabled}
-            className="text-primary"
-          >
-            + Add Education
-          </Button>
-        </CardContent>
-      </Card>
-
-      <Card className="border-muted/60">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">Experience</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {experiences.map((row, index) => (
-            <div
-              key={`exp-${index}`}
-              className="rounded-md border border-muted/40 p-3 space-y-3"
-            >
-              <div className="grid grid-cols-1 items-end gap-4 md:grid-cols-5">
-                <LabeledInput
-                  id={`exp-company-${index}`}
-                  label="Company Name"
-                  value={row.company}
-                  onChange={(value) =>
-                    updateExperienceRow(index, { company: value })
-                  }
-                  disabled={disabled}
-                />
-                <LabeledInput
-                  id={`exp-role-${index}`}
-                  label="Role / Title"
-                  value={row.role}
-                  onChange={(value) =>
-                    updateExperienceRow(index, { role: value })
-                  }
-                  disabled={disabled}
-                />
-                <LabeledInput
-                  id={`exp-startYear-${index}`}
-                  label="Start Year"
-                  value={row.startYear}
-                  onChange={(value) =>
-                    updateExperienceRow(index, { startYear: value })
-                  }
-                  disabled={disabled}
-                />
-                <LabeledInput
-                  id={`exp-endYear-${index}`}
-                  label="End Year"
-                  value={row.endYear}
-                  onChange={(value) =>
-                    updateExperienceRow(index, { endYear: value })
-                  }
-                  disabled={disabled}
-                />
-                <div className="flex items-end">
                   <Button
                     variant="destructive"
-                    size="icon"
-                    disabled={disabled || experiences.length === 1}
-                    onClick={() =>
-                      removeRow(experiences, setExperiences, index)
-                    }
-                    className="h-9 w-9"
+                    size="sm"
+                    onClick={() => setPhoto(null)}
+                    disabled={disabled || !photo}
+                    className="gap-2"
                   >
                     <Trash2 className="h-4 w-4" />
+                    Remove
                   </Button>
+                  <p className="w-full text-xs text-muted-foreground">
+                    Upload square images (JPEG, PNG or GIF)
+                  </p>
                 </div>
               </div>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+                <div>
+                  <Label className="text-xs text-muted-foreground mb-1 block">
+                    Category
+                  </Label>
+                  <Select
+                    value={form.category}
+                    disabled={disabled}
+                    onValueChange={(val) => setForm({ ...form, category: val, subcategory: "" })}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="Select Category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.map((cat: any) => (
+                        <SelectItem key={cat._id} value={cat.title}>
+                          {cat.title}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground mb-1 block">
+                    Subcategory
+                  </Label>
+                  <Select
+                    value={form.subcategory}
+                    disabled={disabled || !form.category}
+                    onValueChange={(val) => setForm({ ...form, subcategory: val })}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="Select Subcategory" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {subcategories
+                        .filter((sub: any) => {
+                          if (!form.category) return false;
+                          // Find ID of currently selected category title
+                          const selectedCat = categories.find((c: any) => c.title === form.category);
+                          if (!selectedCat) return false;
+
+                          // Handle parentCategory variations (ID string vs object)
+                          const pVal = sub.parentCategory;
+                          const pId = typeof pVal === 'object' && pVal !== null ? pVal._id : pVal;
+
+                          // Also check legacy categoryId field if present
+                          const cId = sub.categoryId;
+
+                          return String(pId) === String(selectedCat._id) || String(cId) === String(selectedCat._id);
+                        })
+                        .map((sub: any) => (
+                          <SelectItem key={sub._id} value={sub.title}>
+                            {sub.title}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground mb-1 block">
+                    Full Name
+                  </Label>
+                  <Input
+                    value={form.fullName}
+                    disabled={true}
+                    className="h-9 bg-gray-50"
+                  />
+                </div>
+                <LabeledInput
+                  id="yearsOfExperience"
+                  label="Years of Experience"
+                  type="number"
+                  value={form.yearsOfExperience}
+                  onChange={() => { }}
+                  disabled={true}
+                  className="bg-gray-50"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+                <LabeledInput
+                  id="email"
+                  label="Email Address"
+                  type="email"
+                  value={form.email}
+                  onChange={(value) =>
+                    setForm((prev) => ({ ...prev, email: value }))
+                  }
+                  disabled={disabled || Boolean(consultantId)}
+                  className={consultantId ? "bg-gray-50" : ""}
+                />
+                <LabeledInput
+                  id="phone"
+                  label="Phone Number"
+                  value={form.phone}
+                  onChange={(value) =>
+                    setForm((prev) => ({ ...prev, phone: value }))
+                  }
+                  disabled={true}
+                  className="bg-gray-50"
+                />
+                <LabeledInput
+                  id="alternatePhone"
+                  label="Alternate Phone"
+                  value={form.alternatePhone}
+                  onChange={(value) =>
+                    setForm((prev) => ({ ...prev, alternatePhone: value }))
+                  }
+                  disabled={disabled}
+                />
+                <LabeledInput
+                  id="fees"
+                  label="Consultation Fee"
+                  type="number"
+                  value={form.fees}
+                  onChange={(value) =>
+                    setForm((prev) => ({ ...prev, fees: value }))
+                  }
+                  disabled={disabled}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <LabeledInput
+                  id="bioTitle"
+                  label="Professional Headline"
+                  value={form.bioTitle}
+                  onChange={(value) =>
+                    setForm((prev) => ({ ...prev, bioTitle: value }))
+                  }
+                  disabled={disabled}
+                />
+                <div>
+                  <Label className="text-xs text-muted-foreground mb-1 block">
+                    Gender
+                  </Label>
+                  <Select
+                    disabled={disabled}
+                    value={form.gender}
+                    onValueChange={(value) =>
+                      setForm((prev) => ({ ...prev, gender: value }))
+                    }
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="Select" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="male">Male</SelectItem>
+                      <SelectItem value="female">Female</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <LabeledInput
+                  id="regNo"
+                  label="Registration Number"
+                  value={form.regNo}
+                  onChange={(value) =>
+                    setForm((prev) => ({ ...prev, regNo: value }))
+                  }
+                  disabled={disabled}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <Label className="text-xs text-muted-foreground mb-1 block">
+                    Known Languages
+                  </Label>
+                  <Textarea
+                    disabled={disabled}
+                    value={form.languages}
+                    onChange={(event) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        languages: event.target.value,
+                      }))
+                    }
+                    className="min-h-[56px]"
+                    placeholder="Comma separated e.g. English, Hindi"
+                  />
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    Provide one or many languages separated by commas.
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground mb-1 block">
+                    Tags & Expertise
+                  </Label>
+                  <Textarea
+                    disabled={disabled}
+                    value={form.tags}
+                    onChange={(event) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        tags: event.target.value,
+                      }))
+                    }
+                    className="min-h-[56px]"
+                    placeholder="Comma separated e.g. Leadership, Strategy"
+                  />
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    Tags power search and discovery for consultants.
+                  </p>
+                </div>
+              </div>
+
               <div>
                 <Label className="text-xs text-muted-foreground mb-1 block">
-                  Highlights & Responsibilities
+                  About
                 </Label>
                 <Textarea
                   disabled={disabled}
-                  value={row.description || ""}
+                  value={form.about}
                   onChange={(event) =>
-                    updateExperienceRow(index, {
-                      description: event.target.value,
-                    })
+                    setForm((prev) => ({
+                      ...prev,
+                      about: event.target.value,
+                    }))
+                  }
+                  className="min-h-[80px]"
+                />
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="address" className="space-y-5 mt-4">
+          <Card className="border-muted/60">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">
+                Address Information
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label className="text-xs text-muted-foreground mb-1 block">
+                  Address
+                </Label>
+                <Textarea
+                  disabled={disabled}
+                  value={form.address}
+                  onChange={(event) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      address: event.target.value,
+                    }))
                   }
                   className="min-h-[56px]"
-                  placeholder="Include responsibilities, teams, achievements…"
                 />
               </div>
-            </div>
-          ))}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() =>
-              addRow(experiences, setExperiences, emptyExperience)
-            }
-            disabled={disabled}
-            className="text-primary"
-          >
-            + Add Experience
-          </Button>
-        </CardContent>
-      </Card>
 
-      <Card className="border-muted/60">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">Awards</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {awards.map((row, index) => (
-            <div
-              key={`award-${index}`}
-              className="grid grid-cols-1 items-end gap-4 md:grid-cols-3"
-            >
-              <LabeledInput
-                id={`award-title-${index}`}
-                label="Title"
-                value={row.title}
-                onChange={(value) =>
-                  updateAwardRow(index, { title: value })
-                }
-                disabled={disabled}
-              />
-              <LabeledInput
-                id={`award-year-${index}`}
-                label="Year"
-                value={row.year}
-                onChange={(value) =>
-                  updateAwardRow(index, { year: value })
-                }
-                disabled={disabled}
-              />
-              <div className="flex items-end gap-2">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+                <div>
+                  <Label className="text-xs text-muted-foreground mb-1 block">
+                    Country
+                  </Label>
+                  <Select
+                    disabled={disabled}
+                    value={form.country}
+                    onValueChange={(value) =>
+                      setForm((prev) => ({ ...prev, country: value }))
+                    }
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="Select" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="india">India</SelectItem>
+                      <SelectItem value="us">United States</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground mb-1 block">
+                    State
+                  </Label>
+                  <Autocomplete
+                    value={form.state}
+                    onValueChange={(value) => {
+                      setForm((prev) => ({
+                        ...prev,
+                        state: value
+                      }));
+                    }}
+                    options={states}
+                    placeholder="Select state"
+                    disabled={disabled}
+                    allowCustom={false}
+                    searchPlaceholder="Search states..."
+                    emptyMessage="No states found."
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground mb-1 block">
+                    City
+                  </Label>
+                  <Input
+                    value={form.city}
+                    onChange={(e) =>
+                      setForm((prev) => ({ ...prev, city: e.target.value }))
+                    }
+                    placeholder="Enter city name"
+                    disabled={disabled}
+                    className="h-9"
+                  />
+                </div>
                 <LabeledInput
-                  id={`award-desc-${index}`}
-                  label="Description"
-                  value={row.desc}
+                  id="pincode"
+                  label="Pin Code"
+                  type="number"
+                  value={form.pincode}
                   onChange={(value) =>
-                    updateAwardRow(index, { desc: value })
+                    setForm((prev) => ({ ...prev, pincode: value }))
                   }
-                  className="flex-1"
                   disabled={disabled}
                 />
-                <Button
-                  variant="destructive"
-                  size="icon"
-                  disabled={disabled || awards.length === 1}
-                  onClick={() => removeRow(awards, setAwards, index)}
-                  className="h-9 w-9"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
               </div>
-            </div>
-          ))}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => addRow(awards, setAwards, emptyAward)}
-            disabled={disabled}
-            className="text-primary"
-          >
-            + Add Award
-          </Button>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="online" className="space-y-5 mt-4">
+          <Card className="border-muted/60">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Online Presence</CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <LabeledInput
+                id="website"
+                label="Website"
+                value={socials.website}
+                onChange={(value) =>
+                  setSocials((prev) => ({ ...prev, website: value }))
+                }
+                disabled={disabled}
+              />
+              <LabeledInput
+                id="linkedin"
+                label="LinkedIn"
+                value={socials.linkedin}
+                onChange={(value) =>
+                  setSocials((prev) => ({ ...prev, linkedin: value }))
+                }
+                disabled={disabled}
+              />
+              <LabeledInput
+                id="twitter"
+                label="Twitter / X"
+                value={socials.twitter}
+                onChange={(value) =>
+                  setSocials((prev) => ({ ...prev, twitter: value }))
+                }
+                disabled={disabled}
+              />
+              <LabeledInput
+                id="facebook"
+                label="Facebook"
+                value={socials.facebook}
+                onChange={(value) =>
+                  setSocials((prev) => ({ ...prev, facebook: value }))
+                }
+                disabled={disabled}
+              />
+              <LabeledInput
+                id="instagram"
+                label="Instagram"
+                value={socials.instagram}
+                onChange={(value) =>
+                  setSocials((prev) => ({ ...prev, instagram: value }))
+                }
+                disabled={disabled}
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="education" className="space-y-5 mt-4">
+          <Card className="border-muted/60">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">
+                Educational Details
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {education.map((row, index) => (
+                <div
+                  key={`edu-${index}`}
+                  className="rounded-md border border-muted/40 p-3 space-y-3"
+                >
+                  <div className="grid grid-cols-1 items-end gap-4 md:grid-cols-4">
+                    <LabeledInput
+                      id={`edu-institute-${index}`}
+                      label="Institute Name"
+                      value={row.institute}
+                      onChange={(value) =>
+                        updateEducationRow(index, { institute: value })
+                      }
+                      disabled={disabled}
+                    />
+                    <LabeledInput
+                      id={`edu-qualification-${index}`}
+                      label="Qualification"
+                      value={row.qualification}
+                      onChange={(value) =>
+                        updateEducationRow(index, { qualification: value })
+                      }
+                      disabled={disabled}
+                    />
+                    <LabeledInput
+                      id={`edu-startYear-${index}`}
+                      label="Start Year"
+                      value={row.startYear}
+                      onChange={(value) =>
+                        updateEducationRow(index, { startYear: value })
+                      }
+                      disabled={disabled}
+                    />
+                    <div className="flex items-end gap-2">
+                      <LabeledInput
+                        id={`edu-endYear-${index}`}
+                        label="End Year"
+                        value={row.endYear}
+                        onChange={(value) =>
+                          updateEducationRow(index, { endYear: value })
+                        }
+                        className="flex-1"
+                        disabled={disabled}
+                      />
+                      <Button
+                        variant="destructive"
+                        size="icon"
+                        disabled={disabled || education.length === 1}
+                        onClick={() =>
+                          removeRow(education, setEducation, index)
+                        }
+                        className="h-9 w-9"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground mb-1 block">
+                      Description / Notes
+                    </Label>
+                    <Textarea
+                      disabled={disabled}
+                      value={row.description || ""}
+                      onChange={(event) =>
+                        updateEducationRow(index, {
+                          description: event.target.value,
+                        })
+                      }
+                      className="min-h-[56px]"
+                      placeholder="Highlights, awards, major learnings…"
+                    />
+                  </div>
+                </div>
+              ))}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  addRow(education, setEducation, emptyEducation)
+                }
+                disabled={disabled}
+                className="text-primary"
+              >
+                + Add Education
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card className="border-muted/60">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Experience</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {experiences.map((row, index) => (
+                <div
+                  key={`exp-${index}`}
+                  className="rounded-md border border-muted/40 p-3 space-y-3"
+                >
+                  <div className="grid grid-cols-1 items-end gap-4 md:grid-cols-5">
+                    <LabeledInput
+                      id={`exp-company-${index}`}
+                      label="Company Name"
+                      value={row.company}
+                      onChange={(value) =>
+                        updateExperienceRow(index, { company: value })
+                      }
+                      disabled={disabled}
+                    />
+                    <LabeledInput
+                      id={`exp-role-${index}`}
+                      label="Role / Title"
+                      value={row.role}
+                      onChange={(value) =>
+                        updateExperienceRow(index, { role: value })
+                      }
+                      disabled={disabled}
+                    />
+                    <LabeledInput
+                      id={`exp-startYear-${index}`}
+                      label="Start Year"
+                      value={row.startYear}
+                      onChange={(value) =>
+                        updateExperienceRow(index, { startYear: value })
+                      }
+                      disabled={disabled}
+                    />
+                    <LabeledInput
+                      id={`exp-endYear-${index}`}
+                      label="End Year"
+                      value={row.endYear}
+                      onChange={(value) =>
+                        updateExperienceRow(index, { endYear: value })
+                      }
+                      disabled={disabled}
+                    />
+                    <div className="flex items-end">
+                      <Button
+                        variant="destructive"
+                        size="icon"
+                        disabled={disabled || experiences.length === 1}
+                        onClick={() =>
+                          removeRow(experiences, setExperiences, index)
+                        }
+                        className="h-9 w-9"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground mb-1 block">
+                      Highlights & Responsibilities
+                    </Label>
+                    <Textarea
+                      disabled={disabled}
+                      value={row.description || ""}
+                      onChange={(event) =>
+                        updateExperienceRow(index, {
+                          description: event.target.value,
+                        })
+                      }
+                      className="min-h-[56px]"
+                      placeholder="Include responsibilities, teams, achievements…"
+                    />
+                  </div>
+                </div>
+              ))}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  addRow(experiences, setExperiences, emptyExperience)
+                }
+                disabled={disabled}
+                className="text-primary"
+              >
+                + Add Experience
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card className="border-muted/60">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Awards</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {awards.map((row, index) => (
+                <div
+                  key={`award-${index}`}
+                  className="grid grid-cols-1 items-end gap-4 md:grid-cols-3"
+                >
+                  <LabeledInput
+                    id={`award-title-${index}`}
+                    label="Title"
+                    value={row.title}
+                    onChange={(value) =>
+                      updateAwardRow(index, { title: value })
+                    }
+                    disabled={disabled}
+                  />
+                  <LabeledInput
+                    id={`award-year-${index}`}
+                    label="Year"
+                    value={row.year}
+                    onChange={(value) =>
+                      updateAwardRow(index, { year: value })
+                    }
+                    disabled={disabled}
+                  />
+                  <div className="flex items-end gap-2">
+                    <LabeledInput
+                      id={`award-desc-${index}`}
+                      label="Description"
+                      value={row.desc}
+                      onChange={(value) =>
+                        updateAwardRow(index, { desc: value })
+                      }
+                      className="flex-1"
+                      disabled={disabled}
+                    />
+                    <Button
+                      variant="destructive"
+                      size="icon"
+                      disabled={disabled || awards.length === 1}
+                      onClick={() => removeRow(awards, setAwards, index)}
+                      className="h-9 w-9"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => addRow(awards, setAwards, emptyAward)}
+                disabled={disabled}
+                className="text-primary"
+              >
+                + Add Award
+              </Button>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="settings" className="space-y-5 mt-4">

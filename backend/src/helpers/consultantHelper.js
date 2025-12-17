@@ -17,6 +17,7 @@ async function resolveConsultantDto(consultantId) {
     const doc = consultantId;
     const displayName = doc.displayName || doc.name || doc.fullName || `${doc.firstName || ""} ${doc.lastName || ""}`.trim();
     return {
+      ...doc,
       _id: doc._id || doc.id,
       id: doc._id || doc.id,
       name: doc.name || doc.displayName || doc.fullName || null,
@@ -61,6 +62,7 @@ async function resolveConsultantDto(consultantId) {
     const { category, subcategory } = await resolveNames(consultant.category, consultant.subcategory);
 
     return {
+      ...consultant, // Spread all raw fields first
       _id: consultant._id,
       id: consultant._id,
       name: consultant.name || null,
@@ -94,6 +96,8 @@ async function resolveConsultantDto(consultantId) {
     const linkedProfile = await Consultant.findOne({ user: consultantUser._id }).lean();
 
     return {
+      ...consultantUser,
+      ...(linkedProfile || {}),
       _id: consultantUser._id,
       id: consultantUser._id,
       name: consultantUser.fullName || null,

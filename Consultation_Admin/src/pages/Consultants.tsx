@@ -99,6 +99,7 @@ interface ConsultantModel {
   status?: string;
   image?: string;
   category?: string;
+  subcategory?: string;
 }
 
 /* ============================
@@ -260,11 +261,11 @@ const ConsultantCard: React.FC<{
   const mobile = user.mobile || "—";
   const categoryLabel =
     typeof user.category === "string"
-      ? "General"
+      ? user.category || "General"
       : (user.category as Category)?.title || "General";
   const subcategoryLabel =
     typeof user.subcategory === "string"
-      ? ""
+      ? user.subcategory || ""
       : (user.subcategory as Subcategory)?.title || "";
   const yearsOfExperience = user.yearsOfExperience ?? 0;
   const location =
@@ -509,8 +510,8 @@ const ConsultationManagement: React.FC = () => {
           clientsCount: c.clientsCount || c.clientInfo?.totalClients || c.clients || 0,
           city: c.city || "",
           state: c.state || "",
-          category: null, // Category is stored as string in Consultant model
-          subcategory: null,
+          category: c.category || null,
+          subcategory: c.subcategory || null,
           profileImage: c.image || "",
         } as User;
       });
@@ -536,8 +537,8 @@ const ConsultationManagement: React.FC = () => {
           clientsCount: c.clientsCount || c.clientInfo?.totalClients || c.clients || 0,
           city: c.city || "",
           state: c.state || "",
-          category: null,
-          subcategory: null,
+          category: c.category || null,
+          subcategory: c.subcategory || null,
           profileImage: c.image || "",
         } as User;
       });
@@ -651,6 +652,7 @@ const ConsultationManagement: React.FC = () => {
         phone: payload.mobile,
         mobile: payload.mobile,
         category: payload.category || 'General',
+        subcategory: payload.subcategory || '',
       };
 
       // Add password if provided
@@ -663,6 +665,14 @@ const ConsultationManagement: React.FC = () => {
         const categoryObj = categories.find(c => c._id === payload.category);
         if (categoryObj) {
           consultantPayload.category = categoryObj.title;
+        }
+      }
+
+      // Get subcategory name if subcategory is an ObjectId
+      if (payload.subcategory && typeof payload.subcategory === 'string') {
+        const subcategoryObj = subcategories.find(s => s._id === payload.subcategory);
+        if (subcategoryObj) {
+          consultantPayload.subcategory = subcategoryObj.title;
         }
       }
 
@@ -698,7 +708,7 @@ const ConsultationManagement: React.FC = () => {
         },
       });
     },
-    [createConsultantMutation, categories]
+    [createConsultantMutation, categories, subcategories]
   );
 
   // Delete wrapper

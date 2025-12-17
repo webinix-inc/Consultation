@@ -130,7 +130,7 @@ const createConsultantSchema = Joi.object({
   resetPasswordExpires: Joi.date().optional(),
   lastLogin: Joi.date().optional(),
   category: Joi.string().min(2).max(100).required(),
-
+  subcategory: Joi.string().allow("").max(100).optional(),
   department: Joi.string().allow("").max(100).optional(),
   specialization: Joi.string().allow("").max(100).optional(),
   regNo: Joi.string().allow("").max(120).optional(),
@@ -256,6 +256,7 @@ const updateConsultantSchema = Joi.object({
   phone: Joi.string().min(6).max(30).optional(),
   alternatePhone: Joi.string().allow("").max(30).optional(),
   category: Joi.string().min(2).max(100).optional(),
+  subcategory: Joi.string().allow("").max(100).optional(),
   department: Joi.string().allow("").max(100).optional(),
   specialization: Joi.string().allow("").max(100).optional(),
   regNo: Joi.string().allow("").max(120).optional(),
