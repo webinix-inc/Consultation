@@ -50,7 +50,7 @@ const Login = () => {
   const handleSendOtp = async () => {
     // Normalize mobile number: strip all non-digit characters
     const normalizedMobile = mobile.replace(/\D/g, '');
-    
+
     if (!normalizedMobile || normalizedMobile.length < 10) {
       toast.error("Please enter a valid mobile number");
       return;
@@ -104,7 +104,17 @@ const Login = () => {
       dispatch(loginSuccess({ token, user }));
       navigate("/dashboard");
     } catch (error: any) {
-      toast.error(error.response?.data?.message || "Login failed");
+      const errorMessage = error.response?.data?.message || "Login failed";
+
+      if (errorMessage.includes("pending approval")) {
+        navigate('/account-status?status=pending');
+        return;
+      } else if (errorMessage.includes("application has been rejected")) {
+        navigate('/account-status?status=rejected');
+        return;
+      }
+
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -125,8 +135,8 @@ const Login = () => {
       const { token, user, isNewUser, registrationToken } = response.data.data;
 
       if (isNewUser) {
-        // Redirect to complete profile
-        navigate("/complete-profile", { state: { registrationToken, mobile } });
+        toast.error("Account not found. Please sign up first.");
+        return;
       } else {
         // Check if user is admin - block admin login
         if (user.role === 'Admin') {
@@ -147,7 +157,17 @@ const Login = () => {
         navigate("/dashboard");
       }
     } catch (error: any) {
-      toast.error(error.response?.data?.message || "Failed to verify OTP");
+      const errorMessage = error.response?.data?.message || "Failed to verify OTP";
+
+      if (errorMessage.includes("pending approval")) {
+        navigate('/account-status?status=pending');
+        return;
+      } else if (errorMessage.includes("application has been rejected")) {
+        navigate('/account-status?status=rejected');
+        return;
+      }
+
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -166,10 +186,10 @@ const Login = () => {
             Solvior
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            {loginMode === 'password' 
+            {loginMode === 'password'
               ? 'Login with email/mobile and password'
-              : step === 'mobile' 
-                ? 'Enter your mobile number to login' 
+              : step === 'mobile'
+                ? 'Enter your mobile number to login'
                 : 'Enter the OTP sent to your mobile'}
           </p>
         </div>
@@ -185,11 +205,10 @@ const Login = () => {
               setOtp("");
               setStep('mobile');
             }}
-            className={`flex-1 py-2 rounded-md text-sm font-medium transition ${
-              userRole === 'Client'
-                ? 'bg-white text-[#2E7FC4] shadow-sm font-semibold'
-                : 'text-gray-600 hover:text-gray-800'
-            }`}
+            className={`flex-1 py-2 rounded-md text-sm font-medium transition ${userRole === 'Client'
+              ? 'bg-white text-[#2E7FC4] shadow-sm font-semibold'
+              : 'text-gray-600 hover:text-gray-800'
+              }`}
           >
             Client
           </button>
@@ -202,11 +221,10 @@ const Login = () => {
               setOtp("");
               setStep('mobile');
             }}
-            className={`flex-1 py-2 rounded-md text-sm font-medium transition ${
-              userRole === 'Consultant'
-                ? 'bg-white text-[#2E7FC4] shadow-sm font-semibold'
-                : 'text-gray-600 hover:text-gray-800'
-            }`}
+            className={`flex-1 py-2 rounded-md text-sm font-medium transition ${userRole === 'Consultant'
+              ? 'bg-white text-[#2E7FC4] shadow-sm font-semibold'
+              : 'text-gray-600 hover:text-gray-800'
+              }`}
           >
             Consultant
           </button>
@@ -223,11 +241,10 @@ const Login = () => {
               setMobile("");
               setOtp("");
             }}
-            className={`flex-1 py-2 rounded-md text-sm font-medium transition ${
-              loginMode === 'password'
-                ? 'bg-white text-[#2E7FC4] shadow-sm'
-                : 'text-gray-600 hover:text-gray-800'
-            }`}
+            className={`flex-1 py-2 rounded-md text-sm font-medium transition ${loginMode === 'password'
+              ? 'bg-white text-[#2E7FC4] shadow-sm'
+              : 'text-gray-600 hover:text-gray-800'
+              }`}
           >
             Password
           </button>
@@ -238,11 +255,10 @@ const Login = () => {
               setLoginId("");
               setPassword("");
             }}
-            className={`flex-1 py-2 rounded-md text-sm font-medium transition ${
-              loginMode === 'otp'
-                ? 'bg-white text-[#2E7FC4] shadow-sm'
-                : 'text-gray-600 hover:text-gray-800'
-            }`}
+            className={`flex-1 py-2 rounded-md text-sm font-medium transition ${loginMode === 'otp'
+              ? 'bg-white text-[#2E7FC4] shadow-sm'
+              : 'text-gray-600 hover:text-gray-800'
+              }`}
           >
             OTP
           </button>
@@ -357,7 +373,7 @@ const Login = () => {
         <div className="text-center text-sm text-gray-600 mt-6">
           Don't have an account?{" "}
           <Link
-            to="/signup"
+            to={`/signup?role=${userRole}`}
             className="text-[#2E7FC4] font-semibold hover:underline"
           >
             Sign Up

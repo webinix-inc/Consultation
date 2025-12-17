@@ -106,10 +106,12 @@ const signupSchema = Joi.object({
     "string.max": "Password cannot exceed 128 characters",
     "any.required": "Password is required",
   }),
-  role: Joi.string().valid("Client").required().messages({
-    "any.only": "Only Client role is allowed for direct signup",
+  role: Joi.string().valid("Client", "Consultant").required().messages({
+    "any.only": "Role must be either Client or Consultant",
     "any.required": "Role is required",
   }),
+  category: Joi.string().optional(),
+  subcategory: Joi.string().optional(),
 });
 
 module.exports = {

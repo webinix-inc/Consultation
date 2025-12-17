@@ -174,6 +174,17 @@ exports.verifyOtp = async (req, res, next) => {
     }
 
     if (account) {
+      // Check if account is active
+      if (account.status && account.status !== 'Active') {
+        if (account.status === 'Pending') {
+          throw new ApiError("Your account is pending approval.", httpStatus.FORBIDDEN);
+        } else if (account.status === 'Rejected') {
+          throw new ApiError("Your account application has been rejected.", httpStatus.FORBIDDEN);
+        }
+        // For other non-Active statuses (Inactive, Archived, etc.)
+        throw new ApiError("Account is inactive. Please contact administrator.", httpStatus.FORBIDDEN);
+      }
+
       // Update lastLogin - use updateOne to avoid validation issues with related User references
       const modelName = account.constructor.modelName;
 
@@ -307,6 +318,11 @@ exports.login = async (req, res, next) => {
 
     // Check if account is active
     if (account.status !== 'Active') {
+      if (account.status === 'Pending') {
+        throw new ApiError("Your account is pending approval.", httpStatus.FORBIDDEN);
+      } else if (account.status === 'Rejected') {
+        throw new ApiError("Your account application has been rejected.", httpStatus.FORBIDDEN);
+      }
       throw new ApiError("Account is inactive. Please contact administrator.", httpStatus.FORBIDDEN);
     }
 
@@ -463,61 +479,126 @@ exports.register = async (req, res, next) => {
 
 exports.signup = async (req, res, next) => {
   try {
-    const { fullName, email, mobile, password, role } = req.body;
+    const { fullName, email, mobile, password, role, category, subcategory } = req.body;
 
-    // Only allow Client role for direct signup
-    if (role !== 'Client') {
-      throw new ApiError("Only Client role is allowed for direct signup", httpStatus.BAD_REQUEST);
+    // Validate role
+    if (role !== 'Client' && role !== 'Consultant') {
+      throw new ApiError("Role must be either Client or Consultant", httpStatus.BAD_REQUEST);
     }
 
     // Normalize mobile number: strip all non-digit characters
     const normalizedMobile = mobile.replace(/\D/g, '');
 
-    // Check if client already exists
-    const Client = require("../../../models/client.model");
-    const existingClient = await Client.findOne({
-      $or: [{ email: email.toLowerCase() }, { mobile: normalizedMobile }]
-    });
-
-    if (existingClient) {
-      throw new ApiError("Client with this email or mobile already exists", httpStatus.CONFLICT);
-    }
-
-    // Create Client with password
-    const newClient = await Client.create({
-      fullName,
-      email: email.toLowerCase(),
-      mobile: normalizedMobile,
-      passwordHash: password, // Will be hashed by pre-save hook
-      status: 'Active'
-    });
-
-    // Trigger Notification for Admins
-    try {
-      const Notification = require("../../../models/notification.model");
-      await Notification.create({
-        name: "New Registration",
-        message: `Client ${fullName} has signed up.`,
-        recipientRole: "Admin",
-        type: "registration",
-        avatar: "https://via.placeholder.com/40"
+    if (role === 'Consultant') {
+      // Check if consultant already exists
+      const Consultant = require("../../../models/consultant.model").Consultant;
+      const existingConsultant = await Consultant.findOne({
+        $or: [{ email: email.toLowerCase() }, { phone: normalizedMobile }, { mobile: normalizedMobile }]
       });
-    } catch (notifErr) {
-      console.error("Failed to create registration notification:", notifErr);
-    }
 
-    const token = newClient.generateAuthToken();
-
-    return sendSuccess(res, SUCCESS.USER_CREATED, {
-      token,
-      user: {
-        id: newClient._id,
-        name: newClient.fullName,
-        email: newClient.email,
-        role: 'Client',
-        mobile: newClient.mobile,
+      if (existingConsultant) {
+        throw new ApiError("Consultant with this email or mobile already exists", httpStatus.CONFLICT);
       }
-    }, httpStatus.CREATED);
+
+      // Resolve Category Title if ID is provided
+      let categoryName = category || 'General';
+      const objectIdPattern = /^[0-9a-fA-F]{24}$/;
+      if (category && objectIdPattern.test(category)) {
+        try {
+          const Category = require("../../../models/category.model");
+          const categoryDoc = await Category.findById(category);
+          if (categoryDoc) {
+            categoryName = categoryDoc.title;
+          }
+        } catch (err) {
+          // Ignore lookup error, treat as raw string
+        }
+      }
+
+      // Create Consultant
+      const newConsultant = await Consultant.create({
+        name: fullName,
+        email: email.toLowerCase(),
+        phone: normalizedMobile,
+        mobile: normalizedMobile,
+        passwordHash: password, // Will be hashed by pre-save hook
+        category: categoryName,
+        subcategory: subcategory || '',
+        status: 'Pending'
+      });
+
+      // Trigger Notification for Admins
+      try {
+        const Notification = require("../../../models/notification.model");
+        await Notification.create({
+          name: "New Registration",
+          message: `Consultant ${fullName} has signed up.`,
+          recipientRole: "Admin",
+          type: "registration",
+          avatar: "https://via.placeholder.com/40"
+        });
+      } catch (notifErr) {
+        console.error("Failed to create registration notification:", notifErr);
+      }
+
+      const token = newConsultant.generateAuthToken();
+
+      return sendSuccess(res, SUCCESS.USER_CREATED, {
+        token,
+        user: {
+          id: newConsultant._id,
+          name: newConsultant.name || fullName,
+          email: newConsultant.email,
+          role: 'Consultant',
+          mobile: newConsultant.mobile || newConsultant.phone,
+        }
+      }, httpStatus.CREATED);
+
+    } else {
+      // Client Signup Logic (Existing)
+      const Client = require("../../../models/client.model");
+      const existingClient = await Client.findOne({
+        $or: [{ email: email.toLowerCase() }, { mobile: normalizedMobile }]
+      });
+
+      if (existingClient) {
+        throw new ApiError("Client with this email or mobile already exists", httpStatus.CONFLICT);
+      }
+
+      const newClient = await Client.create({
+        fullName,
+        email: email.toLowerCase(),
+        mobile: normalizedMobile,
+        passwordHash: password, // Will be hashed by pre-save hook
+        status: 'Active'
+      });
+
+      try {
+        const Notification = require("../../../models/notification.model");
+        await Notification.create({
+          name: "New Registration",
+          message: `Client ${fullName} has signed up.`,
+          recipientRole: "Admin",
+          type: "registration",
+          avatar: "https://via.placeholder.com/40"
+        });
+      } catch (notifErr) {
+        console.error("Failed to create registration notification:", notifErr);
+      }
+
+      const token = newClient.generateAuthToken();
+
+      return sendSuccess(res, SUCCESS.USER_CREATED, {
+        token,
+        user: {
+          id: newClient._id,
+          name: newClient.fullName,
+          email: newClient.email,
+          role: 'Client',
+          mobile: newClient.mobile,
+        }
+      }, httpStatus.CREATED);
+    }
 
   } catch (error) {
     next(error);

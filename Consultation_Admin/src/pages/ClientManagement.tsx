@@ -124,6 +124,7 @@ const ClientManagement = () => {
     });
 
     const paginatedData = (filteredData ?? []).slice((page - 1) * perPage, page * perPage);
+    const totalPages = Math.ceil((filteredData?.length || 0) / perPage) || 1;
 
     return (
         <div className="w-full p-6 space-y-6">
@@ -193,9 +194,9 @@ const ClientManagement = () => {
                                         <td className="p-3">{user.createdAt ? new Date(user.createdAt).toLocaleDateString() : "N/A"}</td>
                                         <td className="p-3">
                                             <span className={`px-2 py-1 rounded-full text-xs font-medium ${user.verificationStatus === 'Blocked' ? 'bg-red-100 text-red-700' :
-                                                user.verificationStatus === 'Approved' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
+                                                user.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
                                                 }`}>
-                                                {user.verificationStatus || 'Pending'}
+                                                {user.status || 'NA'}
                                             </span>
                                         </td>
 

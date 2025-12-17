@@ -24,6 +24,7 @@ import SettingsPage from "./pages/Settings";
 import AppointmentManagement from "./pages/AppointmentManagement";
 import SolviorHero from "./pages/Home";
 import CompleteProfile from "./pages/CompleteProfile";
+import AccountStatus from "./pages/AccountStatus";
 import Signup from "./pages/Signup";
 import MyConsultants from "./pages/MyConsultants";
 import ConsultantPublicProfile from "./pages/ConsultantPublicProfile";
@@ -85,6 +86,7 @@ const App = () => {
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/complete-profile" element={<CompleteProfile />} />
+        <Route path="/account-status" element={<AccountStatus />} />
 
 
         {/* Routes with Layout */}

@@ -12,16 +12,12 @@ const {
 // GET /api/v1/subcategories
 router.get(
   "/",
-  authenticateToken,
-  authorizeRoles("Admin", "Consultant"),
   controller.list
 );
 
 // GET /api/v1/subcategories/:id
 router.get(
   "/:id",
-  authenticateToken,
-  authorizeRoles("Admin", "Consultant"),
   validateParams(subcategoryIdSchema),
   controller.getById
 );

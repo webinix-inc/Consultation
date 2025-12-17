@@ -1,14 +1,20 @@
 import { useEffect, useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { useDispatch } from "react-redux";
 import { loginSuccess } from "@/features/auth/authSlice";
 import type { AppDispatch } from "@/app/store";
 import AuthAPI from "@/api/auth.api";
+import CategoryAPI from "@/api/category.api";
+import SubcategoryAPI from "@/api/subcategory.api";
+import { useQuery } from "@tanstack/react-query";
 import Logo from "@/assets/images/logo.png";
 
 const Signup = () => {
+  const [searchParams] = useSearchParams();
+  const [userRole, setUserRole] = useState<'Client' | 'Consultant'>((searchParams.get("role") as 'Client' | 'Consultant') || 'Client');
+
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [mobile, setMobile] = useState("");
@@ -16,6 +22,22 @@ const Signup = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const [category, setCategory] = useState("");
+  const [subcategory, setSubcategory] = useState("");
+
+  const { data: categories = [] } = useQuery({
+    queryKey: ["categories"],
+    queryFn: CategoryAPI.getAll,
+    select: (res: any) => res?.data ?? res ?? [],
+  });
+
+  const { data: subcategories = [] } = useQuery({
+    queryKey: ["subcategories"],
+    queryFn: () => SubcategoryAPI.getAll(),
+    select: (res: any) => res?.data ?? res ?? [],
+  });
+
+  console.log("subcategories", subcategories);
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
   const dispatch = useDispatch<AppDispatch>();
@@ -61,21 +83,41 @@ const Signup = () => {
       return;
     }
 
+    if (userRole === 'Consultant' && (!category || !subcategory)) {
+      toast.error("Please select a category and subcategory");
+      return;
+    }
+
     setLoading(true);
     try {
-      const response = await AuthAPI.signup({
+      // Resolve Category and Subcategory Titles for payload
+      const categoryObj = categories.find((c: any) => c._id === category);
+      const categoryTitle = categoryObj?.title;
+
+      // subcategory state holds the title already (from the select value below)
+
+      const payload: any = {
         fullName,
         email,
         mobile,
         password,
-        role: "Client",
-      });
+        role: userRole,
+        category: userRole === 'Consultant' ? categoryTitle : undefined,
+        subcategory: userRole === 'Consultant' ? subcategory : undefined,
+      };
+
+      const response = await AuthAPI.signup(payload);
 
       const { token, user } = response.data.data;
 
-      dispatch(loginSuccess({ token, user }));
-      toast.success("Account created successfully!");
-      navigate("/dashboard");
+      if (user.role === 'Consultant') {
+        toast.success("Account created successfully! It is pending approval.");
+        navigate("/account-status?status=pending");
+      } else {
+        dispatch(loginSuccess({ token, user }));
+        toast.success("Account created successfully!");
+        navigate("/dashboard");
+      }
     } catch (error: any) {
       toast.error(error.response?.data?.message || "Signup failed");
     } finally {
@@ -101,6 +143,80 @@ const Signup = () => {
         </div>
 
         <div className="space-y-5">
+
+          {/* Role Selector */}
+          <div className="flex gap-2 mb-4 bg-blue-50 p-1 rounded-lg border border-blue-100">
+            <button
+              onClick={() => setUserRole('Client')}
+              className={`flex-1 py-2 rounded-md text-sm font-medium transition ${userRole === 'Client'
+                ? 'bg-white text-[#2E7FC4] shadow-sm font-semibold'
+                : 'text-gray-600 hover:text-gray-800'
+                }`}
+            >
+              Client
+            </button>
+            <button
+              onClick={() => setUserRole('Consultant')}
+              className={`flex-1 py-2 rounded-md text-sm font-medium transition ${userRole === 'Consultant'
+                ? 'bg-white text-[#2E7FC4] shadow-sm font-semibold'
+                : 'text-gray-600 hover:text-gray-800'
+                }`}
+            >
+              Consultant
+            </button>
+          </div>
+
+          {userRole === 'Consultant' && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Category
+                </label>
+                <select
+                  className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#2E7FC4] text-gray-700 bg-white"
+                  value={category}
+                  onChange={(e) => {
+                    setCategory(e.target.value);
+                    setSubcategory(""); // Reset subcategory
+                  }}
+                >
+                  <option value="">Select Category</option>
+                  {categories.map((cat: any) => (
+                    <option key={cat._id} value={cat._id}>
+                      {cat.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Subcategory
+                </label>
+                <select
+                  className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#2E7FC4] text-gray-700 bg-white disabled:bg-gray-100 disabled:text-gray-400"
+                  value={subcategory}
+                  onChange={(e) => setSubcategory(e.target.value)}
+                  disabled={!category}
+                >
+                  <option value="">Select Subcategory</option>
+                  {subcategories
+                    .filter((sub: any) => {
+                      if (!category) return false;
+                      const pVal = sub.parentCategory;
+                      const pId = pVal?._id || pVal;
+                      return String(pId) === String(category);
+                    })
+                    .map((sub: any) => (
+                      <option key={sub._id} value={sub.title}>
+                        {sub.title}
+                      </option>
+                    ))}
+                </select>
+              </div>
+            </>
+          )}
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Full Name
