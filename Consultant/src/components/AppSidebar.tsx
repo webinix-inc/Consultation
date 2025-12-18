@@ -25,7 +25,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import Logo from "@/assets/images/logo.png";
+import Logo from "@/assets/images/logo.jpg";
 import { useAuth } from "@/hooks/useAuth";
 import { useSelector } from "react-redux";
 import type { RootState } from "@/app/store";

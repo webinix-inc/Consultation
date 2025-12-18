@@ -7,7 +7,7 @@ import { useDispatch } from "react-redux";
 import { loginSuccess } from "@/features/auth/authSlice";
 import type { AppDispatch } from "@/app/store";
 import AuthAPI from "@/api/auth.api";
-import Logo from "@/assets/images/logo.png";
+import Logo from "@/assets/images/logo.jpg";
 
 const Login = () => {
   const [userRole, setUserRole] = useState<'Client' | 'Consultant'>('Client');

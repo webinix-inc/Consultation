@@ -406,7 +406,7 @@ export default function AIOBHero() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {categories.slice(0, 6).map((category: any, index: number) => (
-                <div key={category._id || index} className="bg-white rounded-2xl overflow-hidden shadow-lg border border-slate-100 group hover:-translate-y-1 transition-transform duration-300">
+                <div key={category._id || index} className="bg-white rounded-2xl overflow-hidden shadow-lg border border-slate-100 group hover:-translate-y-1 transition-transform duration-300 flex flex-col">
                   <div className="relative h-64 overflow-hidden bg-gradient-to-br from-blue-500 to-indigo-600">
                     <div className="absolute top-4 left-4 z-10 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full flex items-center gap-1 shadow-sm">
                       <svg className="w-4 h-4 text-yellow-500 fill-current" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg>
@@ -417,14 +417,17 @@ export default function AIOBHero() {
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent z-0 opacity-90"></div>
                     <div className="w-full h-full flex items-center justify-center">
                       <div className="text-white text-6xl font-bold opacity-20">
-                        {category.title?.[0] || "C"}
+                        {category.title || "C"}
                       </div>
                     </div>
                     <h3 className="absolute bottom-4 left-4 text-white text-xl font-bold z-10">{category.title || "Category"}</h3>
                   </div>
-                  <div className="p-6">
-                    <p className="text-slate-500 text-sm leading-relaxed mb-4">
-                      {category.description || `${category.title} consultation services with expert guidance.`}
+                  <div className="p-6 flex flex-col flex-grow">
+                    <p className="text-blue-600 font-bold text-xs uppercase tracking-wider mb-2">
+                      {`${category.title}`}
+                    </p>
+                    <p className="text-slate-500 text-sm leading-relaxed mb-6 line-clamp-3 flex-grow">
+                      {`${category.description}`}
                     </p>
                     <a
                       href="#"
@@ -432,7 +435,7 @@ export default function AIOBHero() {
                         e.preventDefault();
                         navigate("/login");
                       }}
-                      className="inline-flex items-center gap-2 text-blue-600 text-sm font-semibold hover:gap-3 transition-all"
+                      className="inline-flex items-center gap-2 text-blue-600 text-sm font-semibold hover:gap-3 transition-all mt-auto"
                     >
                       Learn More
                       <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
