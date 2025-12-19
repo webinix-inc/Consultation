@@ -34,6 +34,7 @@ import ClientBookings from "./pages/ClientBookings";
 import ClientDocuments from "./pages/ClientDocuments";
 import ClientPayments from "./pages/ClientPayments";
 import Consultants from "./pages/Consultants";
+import VideoCallPage from "./pages/VideoCallPage";
 
 const queryClient = new QueryClient();
 
@@ -147,6 +148,13 @@ const App = () => {
           } />
 
         </Route>
+
+
+        <Route path="/video-call/:id" element={
+          <RoleRoute allowedRoles={['Client', 'Consultant', 'Admin']}>
+            <VideoCallPage />
+          </RoleRoute>
+        } />
 
         {/* 404 */}
         <Route path="*" element={<NotFound />} />

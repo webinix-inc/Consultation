@@ -36,10 +36,10 @@ export default function Consultants() {
     queryKey: ["consultants", "public", searchTerm, selectedCategory],
     queryFn: async () => {
       try {
-        const params: any = { status: "Approved" };
-        if (searchTerm) params.search = searchTerm;
+        const params: any = { status: "Active" };
+        if (searchTerm) params.q = searchTerm;
         if (selectedCategory) params.category = selectedCategory;
-        
+
         const response = await axiosInstance.get("/consultants/public", { params });
         let data = [];
         if (response.data?.data && Array.isArray(response.data.data)) {
@@ -129,38 +129,67 @@ export default function Consultants() {
   useEffect(() => {
     if (selectedConsultant && showBookingModal) {
       const consultantId = selectedConsultant._id || selectedConsultant.id;
-      
-      // Extract category ID - handle both object and string formats
+
+      // Extract category - handle both object and string formats
       let categoryId = "";
+      let categoryTitle = "";
+
       if (selectedConsultant.category) {
         if (typeof selectedConsultant.category === 'object') {
           categoryId = selectedConsultant.category._id || selectedConsultant.category.id || "";
+          categoryTitle = selectedConsultant.category.title || "";
         } else {
-          categoryId = String(selectedConsultant.category);
+          // If string, assume it's the title
+          categoryTitle = String(selectedConsultant.category);
         }
       }
-      
-      // Try to find category from activeConsultants first (more reliable)
-      const matchingConsultant = activeConsultants.find((c: any) => {
-        const cId = c._id || c.id;
-        return String(cId) === String(consultantId);
-      });
-      
-      if (matchingConsultant) {
-        const catId = matchingConsultant.category?._id || matchingConsultant.category?.id || matchingConsultant.category;
-        if (catId) {
-          categoryId = String(catId);
+
+      // If we only have title but no ID, try to find ID from categories list
+      if (!categoryId && categoryTitle && categories.length > 0) {
+        const foundCat = categories.find((cat: any) => cat.title === categoryTitle);
+        if (foundCat) {
+          categoryId = foundCat._id || foundCat.id;
         }
       }
-      
+
+      // Fallback: Try to find from activeConsultants logic if still not found
+      let matchingConsultant = null;
+      if (!categoryId) {
+        matchingConsultant = activeConsultants.find((c: any) => {
+          const cId = c._id || c.id;
+          return String(cId) === String(consultantId);
+        });
+
+        if (matchingConsultant) {
+          const cat = matchingConsultant.category;
+          if (cat) {
+            if (typeof cat === 'object') {
+              categoryId = cat._id || cat.id || "";
+            } else {
+              // If it's a string title, look it up again in categories
+              const foundCat = categories.find((c: any) => c.title === cat);
+              if (foundCat) {
+                categoryId = foundCat._id || foundCat.id;
+              }
+            }
+          }
+        }
+      } else {
+        // Just find it for logging purposes if needed, or leave null
+        matchingConsultant = activeConsultants.find((c: any) => {
+          const cId = c._id || c.id;
+          return String(cId) === String(consultantId);
+        });
+      }
+
       // Set consultant immediately
       setSched((s) => ({ ...s, consultant: String(consultantId) }));
-      
+
       // Set category if available
       if (categoryId) {
         setSelectedCategoryForBooking(String(categoryId));
       }
-      
+
       console.log("Auto-populating booking:", {
         consultantId,
         categoryId,
@@ -175,7 +204,7 @@ export default function Consultants() {
   // If consultant is pre-selected from card, always include it and lock it
   const filteredConsultants = useMemo(() => {
     let filtered: any[] = [];
-    
+
     // If consultant is pre-selected from card, always include it first
     if (selectedConsultant && sched.consultant) {
       const consultantId = selectedConsultant._id || selectedConsultant.id;
@@ -183,7 +212,7 @@ export default function Consultants() {
         const cId = c._id || c.id;
         return String(cId) === String(consultantId);
       });
-      
+
       if (selected) {
         filtered = [selected];
       } else {
@@ -208,14 +237,14 @@ export default function Consultants() {
         // If no category selected, show all active consultants
         filtered = [...activeConsultants];
       }
-      
+
       // If consultant is already selected, ensure it's in the list
       if (sched.consultant) {
         const selected = activeConsultants.find((c: any) => {
           const cId = c._id || c.id;
           return String(cId) === String(sched.consultant);
         });
-        
+
         if (selected && !filtered.find((c: any) => {
           const cId = c._id || c.id;
           return String(cId) === String(sched.consultant);
@@ -225,7 +254,7 @@ export default function Consultants() {
         }
       }
     }
-    
+
     return filtered;
   }, [activeConsultants, selectedCategoryForBooking, sched.consultant, selectedConsultant]);
 
@@ -285,7 +314,7 @@ export default function Consultants() {
     today.setHours(0, 0, 0, 0);
     const selectedDate = new Date(sched.date);
     selectedDate.setHours(0, 0, 0, 0);
-    
+
     if (selectedDate < today) {
       toast.error("Cannot book appointments in the past. Please select a future date");
       return;
@@ -304,15 +333,15 @@ export default function Consultants() {
   // Get selected consultant details for confirmation
   const selectedConsultantForBooking = useMemo(() => {
     if (!sched.consultant) return null;
-    
+
     // First try to find in activeConsultants
     const found = activeConsultants.find((c: any) => {
       const cId = c._id || c.id;
       return String(cId) === String(sched.consultant);
     });
-    
+
     if (found) return found;
-    
+
     // Fallback to selectedConsultant if it matches
     if (selectedConsultant) {
       const consultantId = selectedConsultant._id || selectedConsultant.id;
@@ -329,7 +358,7 @@ export default function Consultants() {
         };
       }
     }
-    
+
     return null;
   }, [sched.consultant, activeConsultants, selectedConsultant]);
 
@@ -347,11 +376,11 @@ export default function Consultants() {
       script.src = "https://checkout.razorpay.com/v1/checkout.js";
       script.async = true;
       document.body.appendChild(script);
-      
+
       script.onload = () => {
         console.log("Razorpay script loaded");
       };
-      
+
       return () => {
         if (document.body.contains(script)) {
           document.body.removeChild(script);
@@ -406,7 +435,7 @@ export default function Consultants() {
     today.setHours(0, 0, 0, 0);
     const selectedDate = new Date(sched.date);
     selectedDate.setHours(0, 0, 0, 0);
-    
+
     if (selectedDate < today) {
       toast.error("Cannot book appointments in the past. Please select a future date");
       setIsProcessingPayment(false);
@@ -463,7 +492,7 @@ export default function Consultants() {
 
       const appointmentResponse = await AppointmentAPI.create(appointmentPayload);
       const appointmentId = appointmentResponse?.data?._id || appointmentResponse?._id || appointmentResponse?.data?.id;
-      
+
       if (!appointmentId) {
         toast.error("Failed to create appointment. Please try again");
         setIsProcessingPayment(false);
@@ -561,7 +590,7 @@ export default function Consultants() {
           color: "#0d6efd",
         },
         modal: {
-          ondismiss: function() {
+          ondismiss: function () {
             toast.error("Payment cancelled");
             setIsProcessingPayment(false);
             // Optionally delete the pending appointment
@@ -669,7 +698,7 @@ export default function Consultants() {
             >
               <option value="">All Categories</option>
               {categories.map((cat: any) => (
-                <option key={cat._id} value={cat._id}>
+                <option key={cat._id} value={cat.title}>
                   {cat.title}
                 </option>
               ))}
@@ -697,7 +726,7 @@ export default function Consultants() {
               const clientsCount = consultant.clientInfo?.totalClients || consultant.clients || 0;
               const experience = consultant.yearsOfExperience ? `${consultant.yearsOfExperience}+ years of experience` : "Experienced professional";
               const consultantId = consultant._id || consultant.id;
-              
+
               return (
                 <div key={consultantId || index} className="bg-white rounded-2xl overflow-hidden shadow-sm border border-slate-100 hover:shadow-xl transition-shadow duration-300 flex flex-col">
                   <div className="relative h-72 overflow-hidden bg-slate-100">
@@ -707,10 +736,10 @@ export default function Consultants() {
                       </svg>
                       <span className="text-xs font-bold text-slate-800">{rating.toFixed(1)}</span>
                     </div>
-                    <img 
-                      src={consultantImage} 
-                      alt={consultantName} 
-                      className="w-full h-full object-cover object-top" 
+                    <img
+                      src={consultantImage}
+                      alt={consultantName}
+                      className="w-full h-full object-cover object-top"
                       onError={(e) => {
                         const target = e.target as HTMLImageElement;
                         target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(consultantName)}&background=0d6efd&color=fff`;
@@ -829,7 +858,7 @@ export default function Consultants() {
             sched={sched}
             isPending={isProcessingPayment}
             paymentMethod="Razorpay"
-            setPaymentMethod={() => {}}
+            setPaymentMethod={() => { }}
             consultationFee={consultationFee}
             platformFee={platformFee}
             totalFee={totalFee}

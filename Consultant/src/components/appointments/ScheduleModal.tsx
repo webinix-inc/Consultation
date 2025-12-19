@@ -126,6 +126,30 @@ export function ScheduleModal({
                                     </div>
 
                                     <div className="space-y-1.5">
+                                        <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider">Subcategory <span className="text-red-500">*</span></label>
+                                        <input
+                                            type="text"
+                                            className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm bg-gray-50 text-gray-600 cursor-not-allowed focus:outline-none"
+                                            value={(() => {
+                                                const c = consultants.find((c: any) => (c._id || c.id) === sched.consultant);
+                                                if (!c) return "";
+                                                // Handle both object (populated) and string formats
+                                                if (c.subcategory && typeof c.subcategory === 'object') {
+                                                    return c.subcategory.title || "";
+                                                }
+                                                return c.subcategory || "";
+                                            })()}
+                                            readOnly
+                                            disabled
+                                        />
+                                        {isPreSelected && (
+                                            <p className="text-xs text-gray-500 mt-1">
+                                                Subcategory is pre-selected from consultant
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    <div className="space-y-1.5">
                                         <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider">Consultant <span className="text-red-500">*</span></label>
                                         <select
                                             className={`w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${isPreSelected ? 'bg-gray-50 text-gray-600 cursor-not-allowed' : 'bg-white'} disabled:bg-gray-50 disabled:text-gray-400`}

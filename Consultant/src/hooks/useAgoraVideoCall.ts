@@ -105,6 +105,15 @@ export function useAgoraVideoCall({
 
   const joinChannel = async () => {
     try {
+      // Prevent multiple joins
+      if (
+        clientRef.current &&
+        (clientRef.current.connectionState === 'CONNECTED' || clientRef.current.connectionState === 'CONNECTING')
+      ) {
+        console.warn('Already connected or connecting to channel');
+        return;
+      }
+
       setLoading(true);
       setError(null);
 
@@ -135,6 +144,12 @@ export function useAgoraVideoCall({
 
       setIsJoined(true);
     } catch (err: any) {
+      // If error is "already in connecting/connected state", just ignore
+      if (err.code === 'INVALID_OPERATION' && err.message?.includes('connected')) {
+        setIsJoined(true);
+        return;
+      }
+
       setError(err.message || 'Failed to join channel');
       console.error('Error joining channel:', err);
     } finally {
