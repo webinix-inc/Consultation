@@ -483,11 +483,6 @@ export default function Consultants() {
         reason: sched.reason || "",
         notes: sched.notes || "",
         fee: fee,
-        payment: {
-          amount: fee,
-          status: "Pending",
-          method: "Razorpay",
-        },
       };
 
       const appointmentResponse = await AppointmentAPI.create(appointmentPayload);

@@ -10,9 +10,8 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
 
+import { useSearchParams } from "react-router-dom";
 import AppointmentAPI from "@/api/appointment.api";
-import UserAPI from "@/api/user.api";
-import CategoryAPI from "@/api/category.api";
 
 // This is the data shape for the UI table
 interface Appointment {
@@ -23,6 +22,7 @@ interface Appointment {
   consultant: string; // Name
   consultantId?: string; // ID
   category: string;
+  subcategory?: string;
   session: "Video Call" | "In-Person" | "Phone";
   date: string | Date;
   time: string; // Display time (e.g., "9:00 AM")
@@ -57,26 +57,7 @@ const AppointmentManagement: React.FC = () => {
     return [];
   }, [appointmentsResponse]);
 
-  const { data: usersResponse } = useQuery({
-    queryKey: ["users"],
-    queryFn: () => UserAPI.getAllUsers(),
-  });
 
-  const { data: categoriesResponse } = useQuery({
-    queryKey: ["categories"],
-    queryFn: () => CategoryAPI.getAll(),
-  });
-
-  // --- Process users into clients and consultants ---
-  const users = useMemo(() => usersResponse?.data || [], [usersResponse]);
-  const allCategories = useMemo(() => categoriesResponse?.data || [], [categoriesResponse]);
-
-  const { activeClients, activeConsultants } = useMemo(() => {
-    return {
-      activeClients: users.filter((u: any) => u.role === "Client" && u.status === "Active"),
-      activeConsultants: users.filter((u: any) => u.role === "Consultant" && u.status === "Active")
-    };
-  }, [users]);
 
 
 
@@ -101,17 +82,12 @@ const AppointmentManagement: React.FC = () => {
 
   // (FIXED) Map API appointments to UI shape
   const mappedAppointments: Appointment[] = useMemo(() => {
-    // Build maps for fast lookup
-    const clientMap = new Map(activeClients.map((c: any) => [String(c._id || c.id), c.fullName]));
-    const consultantMap = new Map(activeConsultants.map((c: any) => [String(c._id || c.id), c]));
-
     return appointments.map((it: any) => {
       const consultantId = String(it.consultant?._id || it.consultant?.id || it.consultant);
       const clientId = String(it.client?._id || it.client?.id || it.client);
 
-      const consultantUser: any = consultantMap.get(consultantId);
-      const clientName = clientMap.get(clientId) || it.clientName || "Unknown Client";
-      const consultantName = consultantUser?.fullName || it.consultantName || "Unknown Consultant";
+      const clientName = it.client?.fullName || it.client?.name || "Unknown Client";
+      const consultantName = it.consultant?.fullName || it.consultant?.name || "Unknown Consultant";
 
       // Helper to normalize time string
       const normalizeTimeString = (t: string) => {
@@ -177,7 +153,8 @@ const AppointmentManagement: React.FC = () => {
         clientId: clientId,
         consultant: consultantName,
         consultantId: consultantId,
-        category: consultantUser?.category?.title || consultantUser?.subcategory?.title || it.category || "N/A",
+        category: it.category || "General",
+        subcategory: it.consultant?.subcategory || it.consultantSnapshot?.subcategory || "",
         session: it.session || "Video Call",
         date: dateStr,
         time: timeDisplay,
@@ -189,15 +166,23 @@ const AppointmentManagement: React.FC = () => {
         fee: it.fee || 0,
       } as Appointment;
     });
-  }, [appointments, activeClients, activeConsultants]);
+  }, [appointments]);
 
   // Filtering (search + filter buttons + status filter)
+  const [searchParams] = useSearchParams();
+  const subcategoryParam = searchParams.get("subcategoryName");
+
   const filteredAppointments = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
     return mappedAppointments.filter((a) => {
+      // Filter by Subcategory if param exists
+      if (subcategoryParam && a.subcategory !== subcategoryParam && a.subcategory !== decodeURIComponent(subcategoryParam)) {
+        return false;
+      }
+
       if (statusFilter && a.status !== statusFilter) return false;
 
       if (activeFilter === "today") {
@@ -218,12 +203,13 @@ const AppointmentManagement: React.FC = () => {
         a.client || "",
         a.consultant || "",
         a.category || "",
+        a.subcategory || "",
         a.reason || "",
         a.notes || "",
       ].join(" ").toLowerCase();
       return fields.includes(q);
     });
-  }, [mappedAppointments, searchQuery, activeFilter, statusFilter]);
+  }, [mappedAppointments, searchQuery, activeFilter, statusFilter, subcategoryParam]);
 
   // Pagination
   const totalResults = filteredAppointments.length;

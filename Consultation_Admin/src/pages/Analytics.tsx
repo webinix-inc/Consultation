@@ -1,44 +1,35 @@
 import React from "react";
 import { ArrowUpRight, RefreshCw, Download } from "lucide-react";
 import { motion } from "framer-motion";
+import { useQuery } from "@tanstack/react-query";
+import AnalyticsAPI from "../api/analytics.api";
 
 // Local screenshot the user uploaded (developer: transform this path to a url in your environment)
 const screenshotPath = "/mnt/data/Screenshot 2025-11-21 142640.png";
 
 const AnalyticsDashboard: React.FC = () => {
-  const categoryData = [
-    { name: "Legal", revenue: 65000, sessions: 87, rate: "₹300/hr avg", growth: "+15%" },
-    { name: "Finance", revenue: 52000, sessions: 145, rate: "₹200/hr avg", growth: "+23%" },
-    { name: "IT", revenue: 45000, sessions: 167, rate: "₹175/hr avg", growth: "+18%" },
-    { name: "Health", revenue: 38000, sessions: 198, rate: "₹150/hr avg", growth: "+12%" },
-    { name: "Construction", revenue: 42000, sessions: 89, rate: "₹125/hr avg", growth: "+8%" },
-    { name: "Farming", revenue: 28000, sessions: 67, rate: "₹110/hr avg", growth: "+5%" },
-  ];
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ["admin-analytics"],
+    queryFn: AnalyticsAPI.overview,
+  });
 
-  const consultants = [
-    { rank: 1, name: "Lisa Johnson", category: "Legal", rating: 4.9, sessions: 75, revenue: 22500 },
-    { rank: 2, name: "Michael Chen", category: "Finance", rating: 4.8, sessions: 93, revenue: 18600 },
-    { rank: 3, name: "Dr. Sarah Wilson", category: "Health", rating: 4.9, sessions: 108, revenue: 16200 },
-    { rank: 4, name: "David Lee", category: "IT", rating: 4.7, sessions: 90, revenue: 15750 },
-    { rank: 5, name: "Amanda Rodriguez", category: "Construction", rating: 4.6, sessions: 110, revenue: 13750 },
-  ];
+  const analyticsData = data?.data || {};
 
-  const months = [
-    { name: "Jan", revenue: 85000, appt: 245 },
-    { name: "Feb", revenue: 92000, appt: 267 },
-    { name: "Mar", revenue: 78000, appt: 223 },
-    { name: "Apr", revenue: 105000, appt: 298 },
-    { name: "May", revenue: 118000, appt: 334 },
-    { name: "Jun", revenue: 125000, appt: 365 },
-  ];
+  const categoryData = analyticsData.categoryPerformance || [];
+  const consultants = analyticsData.topConsultants || [];
+  const months = analyticsData.monthlyTrends || [];
 
-  const maxMonthRevenue = Math.max(...months.map((m) => m.revenue));
-  const maxCategoryRevenue = Math.max(...categoryData.map((c) => c.revenue));
+  const maxMonthRevenue = Math.max(...months.map((m: any) => m.revenue), 1);
+  const maxCategoryRevenue = Math.max(...categoryData.map((c: any) => c.revenue), 1);
 
   const fadeUp = {
     hidden: { opacity: 0, y: 16 },
     show: { opacity: 1, y: 0, transition: { duration: 0.28 } },
   };
+
+  if (isLoading) {
+    return <div className="p-6 text-center">Loading analytics...</div>;
+  }
 
   return (
     <div className="min-h-screen bg-white p-6">
@@ -50,7 +41,10 @@ const AnalyticsDashboard: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3">
-          <button className="p-2 border rounded-md hover:bg-gray-100 transition">
+          <button
+            onClick={() => refetch()}
+            className="p-2 border rounded-md hover:bg-gray-100 transition"
+          >
             <RefreshCw size={16} />
           </button>
           <button className="flex items-center gap-2 px-3 py-2 bg-white border rounded-md text-sm font-medium hover:bg-gray-50 transition">
@@ -78,7 +72,7 @@ const AnalyticsDashboard: React.FC = () => {
             </div>
 
             <div className="mt-4 space-y-3">
-              {months.map((m) => {
+              {months.map((m: any) => {
                 const widthPercent = Math.round((m.revenue / maxMonthRevenue) * 100);
                 return (
                   <div key={m.name} className="flex items-center gap-4">
@@ -110,7 +104,7 @@ const AnalyticsDashboard: React.FC = () => {
             </div>
 
             <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-              {categoryData.map((c) => {
+              {categoryData.map((c: any) => {
                 const pct = Math.round((c.revenue / maxCategoryRevenue) * 100);
                 return (
                   <div key={c.name} className="flex items-center justify-between border rounded-lg p-3 hover:bg-gray-50 transition">
@@ -139,7 +133,7 @@ const AnalyticsDashboard: React.FC = () => {
           </div>
 
           <div className="mt-4 space-y-3">
-            {consultants.map((c) => (
+            {consultants.map((c: any) => (
               <div key={c.rank} className="flex items-center justify-between border-b last:border-0 pb-2">
                 <div className="flex items-center gap-3">
                   <span className={`w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-700 text-sm font-semibold`}>{c.rank}</span>

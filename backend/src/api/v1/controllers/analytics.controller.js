@@ -2,16 +2,29 @@ const User = require("../../../models/user.model");
 const { Consultant } = require("../../../models/consultant.model");
 const Appointment = require("../../../models/appointment.model");
 const Category = require("../../../models/category.model");
+const Transaction = require("../../../models/transaction.model");
 const { sendSuccess } = require("../../../utils/response");
 
 exports.overview = async (req, res, next) => {
   try {
+    const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+
+    const Client = require("../../../models/client.model");
+
     const [totalConsultants, totalAppointments, activeClients, monthlyRevenue] = await Promise.all([
       Consultant.countDocuments({ status: { $in: ["Active"] } }),
       Appointment.countDocuments({}),
-      User.countDocuments({ status: "Active" }),
-      Category.aggregate([
-        { $group: { _id: null, revenue: { $sum: "$monthlyRevenue" } } },
+      Client.countDocuments({ status: "Active" }),
+      // Calculate Admin Revenue (Platform Fees) from Transactions
+      Transaction.aggregate([
+        {
+          $match: {
+            createdAt: { $gte: startOfMonth },
+            status: "Success",
+            type: "Payment"
+          }
+        },
+        { $group: { _id: null, revenue: { $sum: "$platformFee" } } },
       ]).then((r) => (r[0]?.revenue || 0)),
     ]);
 
@@ -20,6 +33,8 @@ exports.overview = async (req, res, next) => {
       .limit(6)
       .select("title monthlyRevenue consultants clients rating")
       .lean();
+
+
 
     // Aggregate appointment counts by category
     const categoryAppointmentCounts = await Appointment.aggregate([
@@ -41,20 +56,55 @@ exports.overview = async (req, res, next) => {
       appointmentCount: appointmentCountMap[cat.title] || 0,
     }));
 
-    const recentAppointments = await Appointment.find({})
+    const recentAppointmentsRaw = await Appointment.find({})
       .sort({ createdAt: -1 })
       .limit(5)
-      .select("client consultant category date timeStart status");
+      .lean();
+
+    const recentAppointments = await Promise.all(recentAppointmentsRaw.map(async (appt) => {
+      // Populate Client Name
+      let clientName = "Unknown Client";
+      // Try User first
+      let clientDoc = await User.findById(appt.client).select("fullName");
+      if (!clientDoc) {
+        // Try Client model
+        clientDoc = await Client.findById(appt.client).select("fullName");
+      }
+      if (clientDoc) clientName = clientDoc.fullName;
+
+      // Populate Consultant Name
+      let consultantName = "Unknown Consultant";
+      // Try Consultant model first (more likely)
+      let consultantDoc = await Consultant.findById(appt.consultant).select("name firstName lastName fullName");
+      if (!consultantDoc) {
+        // Try User model
+        consultantDoc = await User.findById(appt.consultant).select("fullName");
+      }
+      if (consultantDoc) {
+        consultantName = consultantDoc.name || consultantDoc.fullName || `${consultantDoc.firstName} ${consultantDoc.lastName}`;
+      }
+
+      return {
+        _id: appt._id,
+        client: clientName,
+        consultant: consultantName,
+        category: appt.category,
+        date: appt.date,
+        timeStart: appt.timeStart, // Legacy
+        status: appt.status,
+        // Convert startAt if needed or just use legacy fields if available
+      };
+    }));
 
     // Calculate monthly revenue trends (last 6 months)
     const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     const now = new Date();
     const monthlyTrends = [];
-    
+
     for (let i = 5; i >= 0; i--) {
       const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59, 999);
-      
+
       const [revenueResult, apptCount] = await Promise.all([
         Appointment.aggregate([
           {
@@ -75,7 +125,7 @@ exports.overview = async (req, res, next) => {
           ]
         })
       ]);
-      
+
       monthlyTrends.push({
         name: monthNames[monthStart.getMonth()],
         revenue: revenueResult[0]?.revenue || 0,
@@ -84,7 +134,6 @@ exports.overview = async (req, res, next) => {
     }
 
     // Calculate category performance with revenue, sessions, and growth
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
 
@@ -136,7 +185,7 @@ exports.overview = async (req, res, next) => {
         const currentSessions = currentMonthStats[0]?.sessions || 0;
         const lastRevenue = lastMonthStats[0]?.revenue || 0;
         const avgRate = currentSessions > 0 ? Math.round(currentRevenue / currentSessions) : 0;
-        const growth = lastRevenue > 0 
+        const growth = lastRevenue > 0
           ? Math.round(((currentRevenue - lastRevenue) / lastRevenue) * 100)
           : 0;
 
@@ -173,15 +222,15 @@ exports.overview = async (req, res, next) => {
     ]);
 
     const consultantIds = topConsultantsRaw.map(c => c._id);
-    const consultantDetails = await Consultant.find({ 
+    const consultantDetails = await Consultant.find({
       $or: [
         { _id: { $in: consultantIds } },
         { user: { $in: consultantIds } }
       ]
     })
-    .populate("user", "fullName")
-    .select("user category subcategory rating")
-    .lean();
+      .populate("user", "fullName")
+      .select("user category subcategory rating")
+      .lean();
 
     const consultantMap = consultantDetails.reduce((acc, consultant) => {
       const id = consultant._id.toString();
@@ -252,6 +301,10 @@ exports.consultantStats = async (req, res, next) => {
     const endOfDay = new Date();
     endOfDay.setHours(23, 59, 59, 999);
 
+    // Cast IDs to ObjectId for Aggregation
+    const mongoose = require("mongoose");
+    const consultantObjectIds = consultantIds.map(id => new mongoose.Types.ObjectId(id));
+
     // Execute queries individually for better debugging
     const totalAppointments = await Appointment.countDocuments({ consultant: { $in: consultantIds } });
     console.log("📊 [Analytics] Total Appointments:", totalAppointments);
@@ -271,37 +324,93 @@ exports.consultantStats = async (req, res, next) => {
     const inactiveClients = await require("../../../models/clientConsultant.model").countDocuments({ consultant: { $in: consultantIds }, status: "Inactive" });
     console.log("📊 [Analytics] Inactive Clients:", inactiveClients);
 
-    const monthlyRevenueResult = await Appointment.aggregate([
+    const monthlyRevenueResult = await Transaction.aggregate([
       {
         $match: {
-          consultant: { $in: consultantIds },
-          startAt: { $gte: startOfMonth },
-          status: { $in: ["Completed", "Confirmed"] }
+          $or: [
+            { consultant: { $in: consultantObjectIds } },
+            { user: { $in: consultantObjectIds } }
+          ],
+          createdAt: { $gte: startOfMonth },
+          status: "Success",
+          type: "Payment"
         }
       },
-      { $group: { _id: null, revenue: { $sum: "$fee" } } },
+      {
+        $group: {
+          _id: null,
+          revenue: {
+            $sum: { $ifNull: ["$netAmount", "$amount"] }
+          }
+        }
+      },
     ]);
+
     const monthlyRevenue = monthlyRevenueResult[0]?.revenue || 0;
-    console.log("📊 [Analytics] Monthly Revenue:", monthlyRevenue);
+    console.log("📊 [Analytics] Monthly Net Revenue:", monthlyRevenue);
+
+    // Calculate Total Revenue (All Time)
+    const totalRevenueResult = await Transaction.aggregate([
+      {
+        $match: {
+          $or: [
+            { consultant: { $in: consultantObjectIds } },
+            { user: { $in: consultantObjectIds } }
+          ],
+          status: "Success",
+          type: "Payment"
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          revenue: {
+            $sum: { $ifNull: ["$netAmount", "$amount"] }
+          },
+          count: { $sum: 1 } // Debug: count transactions
+        }
+      },
+    ]);
+    const totalRevenue = totalRevenueResult[0]?.revenue || 0;
+    console.log("📊 [Analytics] Total Net Revenue:", totalRevenue);
+    console.log("📊 [Analytics] All Time Transaction Count:", totalRevenueResult[0]?.count || 0);
+    console.log("📊 [Analytics] Consultant IDs used:", consultantIds);
 
     const totalClients = activeClients + inactiveClients;
     const activePercent = totalClients > 0 ? Math.round((activeClients / totalClients) * 100) : 0;
     const inactivePercent = totalClients > 0 ? Math.round((inactiveClients / totalClients) * 100) : 0;
 
-    const recentAppointments = await Appointment.find({ consultant: { $in: consultantIds } })
+    const recentAppointmentsRaw = await Appointment.find({ consultant: { $in: consultantIds } })
       .sort({ startAt: -1 })
       .limit(5)
-      .populate("client", "fullName email avatar profileImage")
-      .select("client date timeStart status session category");
+      .select("client date timeStart status session category")
+      .lean();
 
-    // Format recent appointments for frontend
-    const formattedRecent = recentAppointments.map(appt => ({
-      name: appt.client?.fullName || "Unknown Client",
-      with: "You",
-      tag: appt.category || "General",
-      time: appt.timeStart,
-      status: appt.status,
-      avatar: appt.client?.avatar || appt.client?.profileImage || "https://via.placeholder.com/40"
+    const formattedRecent = await Promise.all(recentAppointmentsRaw.map(async (appt) => {
+      // Find Client Name & Avatar
+      let clientName = "Unknown Client";
+      let clientAvatar = "https://via.placeholder.com/40";
+
+      // Try User first
+      let clientDoc = await User.findById(appt.client).select("fullName avatar profileImage");
+      if (!clientDoc) {
+        // Try Client model
+        clientDoc = await require("../../../models/client.model").findById(appt.client).select("fullName avatar profileImage");
+      }
+
+      if (clientDoc) {
+        clientName = clientDoc.fullName;
+        clientAvatar = clientDoc.avatar || clientDoc.profileImage || clientAvatar;
+      }
+
+      return {
+        name: clientName,
+        with: "You",
+        tag: appt.category || "General",
+        time: appt.timeStart,
+        status: appt.status,
+        avatar: clientAvatar
+      };
     }));
 
     // Calculate monthly revenue trends (last 6 months)
@@ -311,21 +420,26 @@ exports.consultantStats = async (req, res, next) => {
     for (let i = 5; i >= 0; i--) {
       const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59, 999);
-      
-      const revenueResult = await Appointment.aggregate([
+
+      const revenueResult = await Transaction.aggregate([
         {
           $match: {
-            consultant: { $in: consultantIds },
-            $or: [
-              { startAt: { $gte: monthStart, $lte: monthEnd } },
-              { date: { $gte: monthStart.toISOString().split('T')[0], $lte: monthEnd.toISOString().split('T')[0] } }
-            ],
-            status: { $in: ["Completed", "Confirmed"] }
+            consultant: { $in: consultantObjectIds },
+            createdAt: { $gte: monthStart, $lte: monthEnd },
+            status: "Success",
+            type: "Payment"
           }
         },
-        { $group: { _id: null, revenue: { $sum: "$fee" } } },
+        {
+          $group: {
+            _id: null,
+            revenue: {
+              $sum: { $ifNull: ["$netAmount", "$amount"] }
+            }
+          }
+        },
       ]);
-      
+
       monthlyRevenueTrends.push({
         name: monthNames[monthStart.getMonth()],
         revenue: revenueResult[0]?.revenue || 0
@@ -340,7 +454,7 @@ exports.consultantStats = async (req, res, next) => {
       dayStart.setHours(0, 0, 0, 0);
       const dayEnd = new Date(dayStart);
       dayEnd.setHours(23, 59, 59, 999);
-      
+
       const count = await Appointment.countDocuments({
         consultant: { $in: consultantIds },
         $or: [
@@ -348,7 +462,7 @@ exports.consultantStats = async (req, res, next) => {
           { date: dayStart.toISOString().split('T')[0] }
         ]
       });
-      
+
       weeklyAppointments.push(count);
     }
 
@@ -357,14 +471,14 @@ exports.consultantStats = async (req, res, next) => {
       consultant: { $in: consultantIds },
       status: "Completed"
     });
-    
+
     const totalBookedAppointments = await Appointment.countDocuments({
       consultant: { $in: consultantIds },
       status: { $in: ["Confirmed", "Completed", "Upcoming"] }
     });
-    
-    const sessionCompletionRate = totalBookedAppointments > 0 
-      ? Math.round((completedAppointments / totalBookedAppointments) * 100) 
+
+    const sessionCompletionRate = totalBookedAppointments > 0
+      ? Math.round((completedAppointments / totalBookedAppointments) * 100)
       : 0;
 
     // Average rating (if consultant model has rating field)
@@ -380,7 +494,7 @@ exports.consultantStats = async (req, res, next) => {
     // Rebooking rate (clients who book again within 30 days)
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    
+
     const rebookedClientsResult = await Appointment.aggregate([
       {
         $match: {
@@ -401,12 +515,12 @@ exports.consultantStats = async (req, res, next) => {
         }
       }
     ]);
-    
+
     const totalUniqueClients = await Appointment.distinct("client", {
       consultant: { $in: consultantIds },
       createdAt: { $gte: thirtyDaysAgo }
     });
-    
+
     const rebookingRate = totalUniqueClients.length > 0
       ? Math.round((rebookedClientsResult.length / totalUniqueClients.length) * 100)
       : 0;
@@ -431,7 +545,9 @@ exports.consultantStats = async (req, res, next) => {
         { id: "total", title: "Total Appointments", value: String(totalAppointments), delta: "+0%", up: true },
         { id: "today", title: "Today Appointments", value: String(todayAppointments), delta: "+0%", up: true },
         { id: "active", title: "Active Clients", value: String(activeClients), delta: "+0%", up: true },
-        { id: "revenue", title: "Monthly Revenue", value: `₹${monthlyRevenue.toLocaleString()}`, delta: revenueDeltaStr, up: parseFloat(revenueDelta) >= 0 },
+        // Send Total Revenue instead of Monthly if that's what user prefers, or we can send both. 
+        // Changing to Total Revenue as per user expectation of seeing lifetime earnings here.
+        { id: "revenue", title: "Total Revenue", value: `₹${totalRevenue.toLocaleString()}`, delta: revenueDeltaStr, up: parseFloat(revenueDelta) >= 0 },
       ],
       clientStats: {
         total: totalClients,
@@ -483,26 +599,79 @@ exports.clientStats = async (req, res, next) => {
     const myConsultants = await require("../../../models/clientConsultant.model").countDocuments({ client: userId, status: "Active" });
     console.log("📊 [Analytics] Client My Consultants:", myConsultants);
 
-    const totalSpentResult = await Appointment.aggregate([
-      { $match: { client: userId, status: { $in: ["Completed", "Confirmed"] } } },
-      { $group: { _id: null, total: { $sum: "$fee" } } },
+    const mongoose = require("mongoose");
+    const userObjectId = new mongoose.Types.ObjectId(userId);
+
+    const totalSpentResult = await Transaction.aggregate([
+      { $match: { user: userObjectId, status: "Success", type: "Payment" } },
+      { $group: { _id: null, total: { $sum: "$amount" } } },
     ]);
     const totalSpent = totalSpentResult[0]?.total || 0;
     console.log("📊 [Analytics] Client Total Spent:", totalSpent);
 
-    const recentAppointments = await Appointment.find({ client: userId, status: "Upcoming" })
+    const recentAppointmentsRaw = await Appointment.find({
+      client: userId,
+      status: { $in: ["Upcoming", "Confirmed"] },
+      startAt: { $gte: today }
+    })
       .sort({ startAt: 1 })
       .limit(5)
-      .populate("consultant", "fullName email avatar profileImage")
-      .select("consultant date timeStart status category");
+      .select("consultant date timeStart startAt status category consultantSnapshot")
+      .lean();
 
-    const formattedRecent = recentAppointments.map(appt => ({
-      name: appt.consultant?.fullName || "Unknown Consultant",
-      with: "You",
-      tag: appt.category || "General",
-      time: `${appt.date} ${appt.timeStart}`,
-      status: appt.status,
-      avatar: appt.consultant?.avatar || appt.consultant?.profileImage || "https://via.placeholder.com/40"
+    const User = require("../../../models/user.model");
+    const Consultant = require("../../../models/consultant.model").Consultant;
+
+    const formattedRecent = await Promise.all(recentAppointmentsRaw.map(async (appt) => {
+      let displayTime = "";
+      if (appt.startAt) {
+        const d = new Date(appt.startAt);
+        const dateStr = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+        const timeStr = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+        displayTime = `${dateStr}, ${timeStr}`;
+      } else if (appt.date && appt.timeStart) {
+        displayTime = `${appt.date} ${appt.timeStart}`;
+      }
+
+      // Robust Consultant Lookup
+      let cName = "Unknown Consultant";
+      let cAvatar = "https://via.placeholder.com/40";
+      let cEmail = "";
+
+      // 1. Try User
+      let cDoc = await User.findById(appt.consultant).select("fullName email profileImage avatar");
+      if (cDoc) {
+        cName = cDoc.fullName;
+        cEmail = cDoc.email;
+        cAvatar = cDoc.profileImage || cDoc.avatar || cAvatar;
+      } else {
+        // 2. Try Consultant
+        cDoc = await Consultant.findById(appt.consultant).select("name firstName lastName fullName email image");
+        if (cDoc) {
+          cName = cDoc.name || cDoc.fullName || `${cDoc.firstName} ${cDoc.lastName}`.trim();
+          cEmail = cDoc.email;
+          cAvatar = cDoc.image || cAvatar;
+        } else {
+          // 3. Try Snapshot
+          if (appt.consultantSnapshot) {
+            cName = appt.consultantSnapshot.name || cName;
+            cEmail = appt.consultantSnapshot.email || cEmail;
+          }
+        }
+      }
+
+      if (cAvatar.includes("via.placeholder")) {
+        cAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(cName)}&background=random`;
+      }
+
+      return {
+        name: cName,
+        with: "You",
+        tag: appt.category || "General",
+        time: displayTime,
+        status: appt.status,
+        avatar: cAvatar
+      };
     }));
 
     return sendSuccess(res, "Client stats fetched", {
@@ -536,25 +705,78 @@ exports.getClientStatsById = async (req, res, next) => {
 
     const myConsultants = await require("../../../models/clientConsultant.model").countDocuments({ client: userId, status: "Active" });
 
-    const totalSpentResult = await Appointment.aggregate([
-      { $match: { client: userId, status: { $in: ["Completed", "Confirmed"] } } },
-      { $group: { _id: null, total: { $sum: "$fee" } } },
+    const mongoose = require("mongoose");
+    const userObjectId = new mongoose.Types.ObjectId(userId);
+
+    const totalSpentResult = await Transaction.aggregate([
+      { $match: { user: userObjectId, status: "Success", type: "Payment" } },
+      { $group: { _id: null, total: { $sum: "$amount" } } },
     ]);
     const totalSpent = totalSpentResult[0]?.total || 0;
 
-    const recentAppointments = await Appointment.find({ client: userId, status: "Upcoming" })
+    const recentAppointmentsRaw = await Appointment.find({
+      client: userId,
+      status: { $in: ["Upcoming", "Confirmed"] },
+      startAt: { $gte: today }
+    })
       .sort({ startAt: 1 })
       .limit(5)
-      .populate("consultant", "fullName email avatar profileImage")
-      .select("consultant date timeStart status category");
+      .select("consultant date timeStart startAt status category consultantSnapshot")
+      .lean();
 
-    const formattedRecent = recentAppointments.map(appt => ({
-      name: appt.consultant?.fullName || "Unknown Consultant",
-      with: "You",
-      tag: appt.category || "General",
-      time: `${appt.date} ${appt.timeStart}`,
-      status: appt.status,
-      avatar: appt.consultant?.avatar || appt.consultant?.profileImage || "https://via.placeholder.com/40"
+    const User = require("../../../models/user.model");
+    const Consultant = require("../../../models/consultant.model").Consultant;
+
+    const formattedRecent = await Promise.all(recentAppointmentsRaw.map(async (appt) => {
+      let displayTime = "";
+      if (appt.startAt) {
+        const d = new Date(appt.startAt);
+        const dateStr = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+        const timeStr = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+        displayTime = `${dateStr}, ${timeStr}`;
+      } else if (appt.date && appt.timeStart) {
+        displayTime = `${appt.date} ${appt.timeStart}`;
+      }
+
+      // Robust Consultant Lookup
+      let cName = "Unknown Consultant";
+      let cAvatar = "https://via.placeholder.com/40";
+      let cEmail = "";
+
+      // 1. Try User
+      let cDoc = await User.findById(appt.consultant).select("fullName email profileImage avatar");
+      if (cDoc) {
+        cName = cDoc.fullName;
+        cEmail = cDoc.email;
+        cAvatar = cDoc.profileImage || cDoc.avatar || cAvatar;
+      } else {
+        // 2. Try Consultant
+        cDoc = await Consultant.findById(appt.consultant).select("name firstName lastName fullName email image");
+        if (cDoc) {
+          cName = cDoc.name || cDoc.fullName || `${cDoc.firstName} ${cDoc.lastName}`.trim();
+          cEmail = cDoc.email;
+          cAvatar = cDoc.image || cAvatar;
+        } else {
+           // 3. Try Snapshot
+           if (appt.consultantSnapshot) {
+             cName = appt.consultantSnapshot.name || cName;
+             cEmail = appt.consultantSnapshot.email || cEmail;
+           }
+        }
+      }
+
+      if (cAvatar.includes("via.placeholder")) {
+        cAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(cName)}&background=random`;
+      }
+
+      return {
+        name: cName,
+        with: "You",
+        tag: appt.category || "General",
+        time: displayTime,
+        status: appt.status,
+        avatar: cAvatar
+      };
     }));
 
     return sendSuccess(res, "Client stats fetched", {

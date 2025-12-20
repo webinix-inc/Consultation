@@ -35,6 +35,7 @@ import { INDIAN_STATES } from "@/constants/indianStates";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Bell, Calendar } from "lucide-react";
 import { NotificationsTab, AvailabilityTab } from "@/pages/Settings";
+import TransactionAPI from "@/api/transaction.api";
 
 type Edu = { institute: string; qualification: string; year: string };
 type Exp = { company: string; years: string; year: string };
@@ -299,7 +300,7 @@ export default function Profile() {
   const [photo, setPhoto] = useState<string | null>(null);
   const [form, setForm] = useState<ProfileForm>(initialProfileForm);
   const [profileTab, setProfileTab] = useState<
-    "basic" | "address" | "online" | "education" | "settings"
+    "basic" | "address" | "online" | "education" | "settings" | "payments"
   >("basic");
   const [settingsSubTab, setSettingsSubTab] = useState<"notifications" | "schedule">("notifications");
 
@@ -326,6 +327,46 @@ export default function Profile() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [consultantId, setConsultantId] = useState<string | null>(null);
+  const [transactions, setTransactions] = useState<any[]>([]);
+
+  const fetchTransactions = useCallback(async () => {
+    try {
+      const res = await TransactionAPI.getTransactions({ limit: 100 });
+      if (res && res.data) {
+        setTransactions(res.data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch transactions:", error);
+      toast.error("Failed to load transaction history");
+    }
+  }, []);
+
+  useEffect(() => {
+    if (profileTab === "payments") {
+      fetchTransactions();
+    }
+  }, [profileTab, fetchTransactions]);
+
+  const paymentStats = useMemo(() => {
+    let earned = 0;
+    let paid = 0;
+
+    transactions.forEach((t) => {
+      if (t.type === "Payment" && t.status === "Success") {
+        // Use netAmount if available (new system), otherwise amount (legacy)
+        const val = (t.netAmount !== undefined && t.netAmount !== null) ? t.netAmount : t.amount;
+        earned += (val || 0);
+      } else if (t.type === "Payout") {
+        paid += t.amount;
+      }
+    });
+
+    return {
+      totalEarnings: earned,
+      totalPaidOut: paid,
+      balance: earned - paid
+    };
+  }, [transactions]);
 
   // Get logged-in user from localStorage
   const getCurrentFromStorage = () => {
@@ -1090,12 +1131,13 @@ export default function Profile() {
       </div>
 
       <Tabs value={profileTab} onValueChange={(v) => setProfileTab(v as any)} className="w-full">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="basic">Basic Info</TabsTrigger>
           <TabsTrigger value="address">Address</TabsTrigger>
           <TabsTrigger value="online">Online Presence</TabsTrigger>
           <TabsTrigger value="education">Education & Experience</TabsTrigger>
           <TabsTrigger value="settings">Settings</TabsTrigger>
+          <TabsTrigger value="payments">Payments</TabsTrigger>
         </TabsList>
 
         <TabsContent value="basic" className="space-y-5 mt-4">
@@ -1807,6 +1849,96 @@ export default function Profile() {
               </Card>
             </TabsContent>
           </Tabs>
+        </TabsContent>
+
+        <TabsContent value="payments" className="space-y-5 mt-4">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <Card className="border-muted/60">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Earnings</CardTitle>
+                <div className="h-4 w-4 text-muted-foreground">$</div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(paymentStats.totalEarnings)}
+                </div>
+                <p className="text-xs text-muted-foreground">Successful payments received</p>
+              </CardContent>
+            </Card>
+            <Card className="border-muted/60">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Paid Out</CardTitle>
+                <div className="h-4 w-4 text-muted-foreground">↗</div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(paymentStats.totalPaidOut)}
+                </div>
+                <p className="text-xs text-muted-foreground">Amount transferred to you</p>
+              </CardContent>
+            </Card>
+            <Card className="border-muted/60">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Balance Due</CardTitle>
+                <div className="h-4 w-4 text-muted-foreground">=</div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(paymentStats.balance)}
+                </div>
+                <p className="text-xs text-muted-foreground">Pending payout</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card className="border-muted/60">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Transaction History</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {transactions.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">No transactions found.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Date</th>
+                        <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Type</th>
+                        <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Amount</th>
+                        <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Status</th>
+                        <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Details</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {transactions.map((t) => (
+                        <tr key={t._id} className="border-b transition-colors hover:bg-muted/50">
+                          <td className="p-4 align-middle">
+                            {t.createdAt ? new Date(t.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '-'}
+                          </td>
+                          <td className="p-4 align-middle">
+                            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold
+                                            ${t.type === 'Payment' ? 'bg-green-100 text-green-800' :
+                                t.type === 'Payout' ? 'bg-blue-100 text-blue-800' :
+                                  'bg-gray-100 text-gray-800'}`}>
+                              {t.type}
+                            </span>
+                          </td>
+                          <td className="p-4 align-middle font-medium">
+                            {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(t.amount)}
+                          </td>
+                          <td className="p-4 align-middle">{t.status}</td>
+                          <td className="p-4 align-middle text-muted-foreground">
+                            {t.metadata?.notes || t.appointment?.reason || '-'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>

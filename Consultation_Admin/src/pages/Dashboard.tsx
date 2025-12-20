@@ -18,6 +18,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import AnalyticsAPI from "@/api/analytics.api";
 import UserAPI from "@/api/user.api";
+import ConsultantAPI from "@/api/consultant.api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -124,26 +125,23 @@ const AdminDashboard: React.FC = () => {
     refetchOnWindowFocus: true,
   });
 
-  // Fetch all users and filter for consultants
+  // Fetch consultants directly
   const { data: consultantsData } = useQuery({
-    queryKey: ["all-users"],
-    queryFn: () => UserAPI.getAllUsers(),
+    queryKey: ["all-consultants"],
+    queryFn: () => ConsultantAPI.getAllConsultants({ limit: 6, sort: "-createdAt" }), // Fetch 6 most recent
     refetchOnWindowFocus: true,
   });
 
   const consultants = useMemo(() => {
     if (!consultantsData?.data) return [];
-    console.log('Consultants raw data:', consultantsData.data); // Debug log
 
     return consultantsData.data
-      .filter((user: any) => user.role === 'Consultant' && user.verificationStatus === 'Approved')
-      .slice(0, 6)
-      .map((user: any) => ({
-        id: user._id || user.id,
-        name: user.fullName || "Consultant",
-        field: user.category?.title || user.subcategory?.title || "General",
-        // Check multiple possible fields for availability
-        status: (user.status === 'Active') ? "Available" : "Unavailable"
+      .map((expert: any) => ({
+        id: expert._id || expert.id,
+        name: expert.name || expert.fullName || "Consultant",
+        field: expert.category || "General",
+        // Map status to UI friendly string
+        status: (expert.status === 'Active' || expert.status === 'Approved') ? "Available" : "Unavailable"
       }));
   }, [consultantsData]);
 
@@ -177,26 +175,14 @@ const AdminDashboard: React.FC = () => {
   //   ];
   // }, [data]);
 
-  // In Dashboard.tsx, update the cardData useMemo hook
   const cardData = useMemo(() => {
     const cards = data?.data?.cards || {};
-    const allUsers = consultantsData?.data || [];
-
-    // Count active clients
-    const activeClientsCount = allUsers.filter(
-      (user: any) => user.role === 'Client' && user.status === 'Active'
-    ).length;
-
-    // Count total consultants
-    const totalConsultantsCount = allUsers.filter(
-      (user: any) => user.role === 'Consultant'
-    ).length;
 
     return [
       {
         id: "consultants",
         title: "Total Consultants",
-        value: String(totalConsultantsCount || 0),
+        value: String(cards.totalConsultants || 0),
         delta: "+12%",
         up: true,
         icon: Users,
@@ -216,7 +202,7 @@ const AdminDashboard: React.FC = () => {
       {
         id: "clients",
         title: "Active Clients",
-        value: String(activeClientsCount || 0),
+        value: String(cards.activeClients || 0),
         delta: "+18%",
         up: true,
         icon: Users,
@@ -234,7 +220,7 @@ const AdminDashboard: React.FC = () => {
         data: sparkline(24, 55),
       },
     ];
-  }, [data, consultantsData]);
+  }, [data]);
 
   // const appointments = useMemo(
   //   () =>
@@ -253,23 +239,6 @@ const AdminDashboard: React.FC = () => {
 
 
 
-  // In Dashboard.tsx, around line 30
-  // Add this query to fetch all users
-  const { data: allUsersData } = useQuery({
-    queryKey: ["all-users-for-appointments"],
-    queryFn: () => UserAPI.getAllUsers(),
-    refetchOnWindowFocus: true,
-  });
-
-  // Create a map of user IDs to their full names
-  const userMap = useMemo(() => {
-    if (!allUsersData?.data) return {};
-    return allUsersData.data.reduce((acc: Record<string, string>, user: any) => {
-      acc[user._id] = user.fullName || `User ${user._id.slice(0, 6)}`;
-      return acc;
-    }, {});
-  }, [allUsersData]);
-
   // Update the appointments mapping
   const appointments = useMemo(() => {
     if (!data?.data?.recentAppointments) return [];
@@ -277,19 +246,16 @@ const AdminDashboard: React.FC = () => {
     return data.data.recentAppointments
       .slice(0, 4)
       .map((appointment: any) => {
-        const clientName = userMap[appointment.client] || `Client (${String(appointment.client || '').slice(0, 6)}...)`;
-        const consultantName = userMap[appointment.consultant] || `Consultant (${String(appointment.consultant || '').slice(0, 6)}...)`;
-
         return {
           id: appointment._id,
-          name: clientName,
-          consultant: consultantName,
+          name: appointment.client || "Unknown Client",
+          consultant: appointment.consultant || "Unknown Consultant",
           category: appointment.category,
           time: appointment.timeStart,
           status: appointment.status,
         };
       });
-  }, [data, userMap]);
+  }, [data]);
 
 
 

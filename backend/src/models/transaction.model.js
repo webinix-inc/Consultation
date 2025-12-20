@@ -57,6 +57,14 @@ const transactionSchema = new mongoose.Schema(
             category: String,
             subcategory: String,
         },
+        platformFee: {
+            type: Number,
+            default: 0,
+        },
+        netAmount: {
+            type: Number,
+            default: 0,
+        },
     },
     {
         timestamps: true,

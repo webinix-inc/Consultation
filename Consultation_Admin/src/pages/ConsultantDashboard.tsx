@@ -44,6 +44,16 @@ import ConsultantAPI from "@/api/consultant.api";
 import { Autocomplete } from "@/components/ui/autocomplete";
 import { INDIAN_STATES } from "@/constants/indianStates";
 import { NotificationsTab, AvailabilityTab } from "@/components/ConsultantSettingsTabs";
+import TransactionAPI from "@/api/transaction.api";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 type EducationRow = {
   institute: string;
@@ -273,7 +283,7 @@ const ConsultantDashboard = () => {
     "profile" | "commission" | "appointments"
   >("profile");
   const [profileSubTab, setProfileSubTab] = useState<
-    "basic" | "address" | "online" | "education" | "schedule" | "notifications"
+    "basic" | "address" | "online" | "education" | "schedule" | "notifications" | "payments"
   >("basic");
   const [editing, setEditing] = useState(false);
   const [photo, setPhoto] = useState<string | null>(null);
@@ -298,6 +308,73 @@ const ConsultantDashboard = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [consultantId, setConsultantId] = useState<string | null>(null);
+
+  // Payment states
+  const [transactions, setTransactions] = useState<any[]>([]);
+  const [isPayoutOpen, setIsPayoutOpen] = useState(false);
+  const [payoutAmount, setPayoutAmount] = useState("");
+  const [payoutNotes, setPayoutNotes] = useState("");
+  const [isRecordingPayout, setIsRecordingPayout] = useState(false);
+
+  const fetchTransactions = useCallback(async () => {
+    if (!consultantId) return;
+    try {
+      const res = await TransactionAPI.getTransactions({
+        consultant: consultantId,
+        limit: 100 // Fetch acceptable number for history
+      });
+      setTransactions(res.data || []);
+    } catch (err) {
+      console.error("Failed to fetch transactions", err);
+    }
+  }, [consultantId]);
+
+  useEffect(() => {
+    if (activeTab === "profile" && profileSubTab === "payments") {
+      fetchTransactions();
+    }
+  }, [activeTab, profileSubTab, fetchTransactions]);
+
+  const handleRecordPayout = async () => {
+    if (!consultantId || !payoutAmount) return;
+    setIsRecordingPayout(true);
+    try {
+      await TransactionAPI.createPayout({
+        consultantId,
+        amount: Number(payoutAmount),
+        notes: payoutNotes
+      });
+      toast.success("Payout recorded successfully");
+      setIsPayoutOpen(false);
+      setPayoutAmount("");
+      setPayoutNotes("");
+      fetchTransactions(); // Refresh list
+    } catch (err) {
+      toast.error("Failed to record payout");
+    } finally {
+      setIsRecordingPayout(false);
+    }
+  };
+
+  const paymentStats = useMemo(() => {
+    const earnings = transactions
+      .filter(t => t.type === "Payment" && t.status === "Success")
+      .reduce((acc, curr) => {
+        // Use netAmount if available (new system), otherwise amount (legacy)
+        const val = (curr.netAmount !== undefined && curr.netAmount !== null) ? curr.netAmount : curr.amount;
+        return acc + (val || 0);
+      }, 0);
+
+    const payouts = transactions
+      .filter(t => t.type === "Payout")
+      .reduce((acc, curr) => acc + (curr.amount || 0), 0);
+
+    return {
+      totalEarnings: earnings,
+      totalPaidOut: payouts,
+      balance: earnings - payouts
+    };
+  }, [transactions]);
 
   useEffect(() => {
     if (!userId) {
@@ -857,13 +934,14 @@ const ConsultantDashboard = () => {
                 </div>
 
                 <Tabs value={profileSubTab} onValueChange={(v) => setProfileSubTab(v as any)} className="w-full">
-                  <TabsList className="grid w-full grid-cols-6">
+                  <TabsList className="grid w-full grid-cols-7">
                     <TabsTrigger value="basic">Basic Info</TabsTrigger>
                     <TabsTrigger value="address">Address</TabsTrigger>
                     <TabsTrigger value="online">Online Presence</TabsTrigger>
                     <TabsTrigger value="education">Education & Experience</TabsTrigger>
                     <TabsTrigger value="schedule">Schedule</TabsTrigger>
                     <TabsTrigger value="notifications">Notifications</TabsTrigger>
+                    <TabsTrigger value="payments">Payments</TabsTrigger>
                   </TabsList>
 
                   <TabsContent value="basic" className="space-y-5 mt-4">
@@ -1521,6 +1599,139 @@ const ConsultantDashboard = () => {
                   <TabsContent value="notifications" className="space-y-5 mt-4">
                     {/* Consultant Settings Section - Notifications */}
                     <NotificationsTab consultantId={consultantId || undefined} readOnly={true} />
+                  </TabsContent>
+                  <TabsContent value="payments" className="space-y-5 mt-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <Card>
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-sm font-medium text-muted-foreground">
+                            Total Earnings
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold">₹{paymentStats.totalEarnings}</div>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-sm font-medium text-muted-foreground">
+                            Total Paid Out
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold">₹{paymentStats.totalPaidOut}</div>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-sm font-medium text-muted-foreground">
+                            Balance Due
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className={`text-2xl font-bold ${paymentStats.balance > 0 ? "text-green-600" : "text-gray-900"}`}>
+                            ₹{paymentStats.balance}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    <div className="flex justify-between items-center">
+                      <h3 className="text-lg font-medium">Transaction History</h3>
+                      <Dialog open={isPayoutOpen} onOpenChange={setIsPayoutOpen}>
+                        <DialogTrigger asChild>
+                          <Button>Record Payout</Button>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-[600px] fixed top-1/2 left-1/2 transform -translate-x-1/4 -translate-y-1/4">
+                          <DialogHeader>
+                            <DialogTitle>Record Manual Payout</DialogTitle>
+                            <DialogDescription>
+                              Record a payment made to the consultant outside the system (e.g., Bank Transfer).
+                            </DialogDescription>
+                          </DialogHeader>
+                          <div className="grid gap-4 py-4">
+                            <div className="grid gap-2">
+                              <Label htmlFor="amount">Amount (INR)</Label>
+                              <Input
+                                id="amount"
+                                type="number"
+                                value={payoutAmount}
+                                onChange={(e) => setPayoutAmount(e.target.value)}
+                                placeholder="Enter amount"
+                              />
+                            </div>
+                            <div className="grid gap-2">
+                              <Label htmlFor="notes">Notes / Reference ID</Label>
+                              <Textarea
+                                id="notes"
+                                value={payoutNotes}
+                                onChange={(e) => setPayoutNotes(e.target.value)}
+                                placeholder="E.g., Bank Transfer Ref #123456"
+                              />
+                            </div>
+                          </div>
+                          <DialogFooter>
+                            <Button variant="outline" onClick={() => setIsPayoutOpen(false)}>Cancel</Button>
+                            <Button onClick={handleRecordPayout} disabled={isRecordingPayout}>
+                              {isRecordingPayout && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                              Record Payout
+                            </Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
+                    </div>
+
+                    <Card>
+                      <div className="relative w-full overflow-auto">
+                        <table className="w-full caption-bottom text-sm text-left">
+                          <thead className="[&_tr]:border-b">
+                            <tr className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted">
+                              <th className="h-12 px-4 align-middle font-medium text-muted-foreground">Date</th>
+                              <th className="h-12 px-4 align-middle font-medium text-muted-foreground">Type</th>
+                              <th className="h-12 px-4 align-middle font-medium text-muted-foreground">Amount</th>
+                              <th className="h-12 px-4 align-middle font-medium text-muted-foreground">Status</th>
+                              <th className="h-12 px-4 align-middle font-medium text-muted-foreground">User / Reference</th>
+                            </tr>
+                          </thead>
+                          <tbody className="[&_tr:last-child]:border-0">
+                            {transactions.length === 0 ? (
+                              <tr>
+                                <td colSpan={5} className="p-4 text-center text-muted-foreground">
+                                  No transactions found.
+                                </td>
+                              </tr>
+                            ) : (
+                              transactions.map((t) => (
+                                <tr key={t._id} className="border-b transition-colors hover:bg-muted/50">
+                                  <td className="p-4 align-middle">{formatDateTime(t.createdAt)}</td>
+                                  <td className="p-4 align-middle">
+                                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${t.type === "Payment"
+                                      ? "bg-green-100 text-green-800"
+                                      : "bg-blue-100 text-blue-800"
+                                      }`}>
+                                      {t.type}
+                                    </span>
+                                  </td>
+                                  <td className="p-4 align-middle font-medium">₹{t.amount}</td>
+                                  <td className="p-4 align-middle">{t.status}</td>
+                                  <td className="p-4 align-middle">
+                                    <div className="flex flex-col">
+                                      {t.user?.fullName || t.userSnapshot?.name || "N/A"}
+                                      {t.metadata?.referenceId && (
+                                        <span className="text-xs text-muted-foreground">Ref: {t.metadata.referenceId}</span>
+                                      )}
+                                      {t.metadata?.notes && (
+                                        <span className="text-xs text-muted-foreground">{t.metadata.notes}</span>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </Card>
                   </TabsContent>
                 </Tabs>
               </div>

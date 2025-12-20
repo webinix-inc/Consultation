@@ -1,0 +1,25 @@
+--- TRANSACTIONS ---
+ID: 694562de8ab4ebf9078563c4
+  User: 69428fa76b08a5f0e66c7719 (object)
+  Consultant: 69424c3a55c9a065ec577fdf (object)
+  Amount: 1000, Net: undefined
+  Type: Payment, Status: Success
+
+ID: 69457118303c018497110b29
+  User: 69428fa76b08a5f0e66c7719 (object)
+  Consultant: 69424c3a55c9a065ec577fdf (object)
+  Amount: 1000, Net: 850
+  Type: Payment, Status: Success
+
+ID: 6946aaca6c9a4266684d1e9e
+  User: 69428fa76b08a5f0e66c7719 (object)
+  Consultant: 69429a61c6924dec12a128e2 (object)
+  Amount: 800, Net: 800
+  Type: Payment, Status: Success
+
+ID: 6946ab3e6c9a4266684d209a
+  User: 69428fa76b08a5f0e66c7719 (object)
+  Consultant: 69429a61c6924dec12a128e2 (object)
+  Amount: 800, Net: 736
+  Type: Payment, Status: Success
+

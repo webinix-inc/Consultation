@@ -36,12 +36,19 @@ function normalize(s: string) {
         .replace(/[^a-z0-9]+/g, "");
 }
 
+function getInitials(name: string) {
+    if (!name) return "??";
+    const parts = name.trim().split(" ");
+    if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
 export type PaymentItem = {
     id: string;
     initials: string;
     doctor: string;
-    dept: "Health" | "Finance" | "Legal" | "IT";
-    status: "Completed";
+    dept: string; // Changed to string to support all categories
+    status: string;
     title: string;
     date: string;
     method: string;
@@ -51,12 +58,17 @@ export type PaymentItem = {
     session: string;
 };
 
-const deptPill: Record<PaymentItem["dept"], string> = {
-    Health: "bg-blue-600/10 text-blue-700 border-blue-200",
-    Finance: "bg-amber-500/10 text-amber-700 border-amber-200",
-    Legal: "bg-violet-600/10 text-violet-700 border-violet-200",
-    IT: "bg-emerald-600/10 text-emerald-700 border-emerald-200",
-};
+// Robust pill mapping with fallback
+function getDeptPill(dept: string) {
+    const map: Record<string, string> = {
+        Health: "bg-blue-600/10 text-blue-700 border-blue-200",
+        Finance: "bg-amber-500/10 text-amber-700 border-amber-200",
+        Legal: "bg-violet-600/10 text-violet-700 border-violet-200",
+        IT: "bg-emerald-600/10 text-emerald-700 border-emerald-200",
+        General: "bg-gray-600/10 text-gray-700 border-gray-200"
+    };
+    return map[dept] || map["General"];
+}
 
 /* --------------------------------------
    Sub-components
@@ -78,7 +90,7 @@ function Modal({
     if (!open) return null;
     return (
         <div className="fixed inset-0 z-50">
-            <div className="absolute inset-0 bg-blue/60 backdrop-blur-[1px]" onClick={onClose} />
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-[1px]" onClick={onClose} />
             <div className="absolute inset-0 grid place-items-center p-4">
                 <div className="relative w-[640px] max-w-[95vw] rounded-xl bg-white shadow-xl border">
                     <div className="flex items-start justify-between p-4 border-b">
@@ -111,7 +123,7 @@ function PaymentRow({
     return (
         <div className="rounded-xl border bg-white p-4 flex flex-col md:flex-row md:items-start md:justify-between gap-3">
             <div className="flex gap-3">
-                <div className="h-10 w-10 rounded-md bg-muted grid place-items-center text-xs font-medium text-muted-foreground">
+                <div className="h-10 w-10 shrink-0 rounded-md bg-muted grid place-items-center text-xs font-medium text-muted-foreground">
                     {p.initials}
                 </div>
                 <div className="space-y-1">
@@ -121,14 +133,21 @@ function PaymentRow({
                             variant="outline"
                             className={cn(
                                 "px-2 py-0.5 text-xs rounded-full",
-                                deptPill[p.dept]
+                                getDeptPill(p.dept)
                             )}
                         >
                             {p.dept}
                         </Badge>
                         <Badge
                             variant="outline"
-                            className="px-2 py-0.5 text-xs rounded-full bg-emerald-100 text-emerald-700 border-emerald-200"
+                            className={cn(
+                                "px-2 py-0.5 text-xs rounded-full border",
+                                p.status === "Success" || p.status === "Completed"
+                                    ? "bg-emerald-100 text-emerald-700 border-emerald-200"
+                                    : p.status === "Pending"
+                                        ? "bg-yellow-100 text-yellow-700 border-yellow-200"
+                                        : "bg-red-100 text-red-700 border-red-200"
+                            )}
                         >
                             {p.status}
                         </Badge>
@@ -194,31 +213,38 @@ function filterPayments(items: PaymentItem[], q: string) {
 export default function ClientPayments() {
     const [q, setQ] = useState("");
     const [filter, setFilter] = useState("All Payments");
-    const [open, setOpen] = useState<any | null>(null);
+    const [open, setOpen] = useState<PaymentItem | null>(null);
 
+    // Correct API Method: getTransactions
     const { data: transactionsData, isLoading: loadingTransactions } = useQuery({
         queryKey: ["clientTransactions"],
-        queryFn: () => TransactionAPI.getAll(),
+        queryFn: () => TransactionAPI.getTransactions(),
     });
 
     const transactions = transactionsData?.data || [];
 
-    const mappedTransactions = transactions.map((t: any) => ({
+    const mappedTransactions: PaymentItem[] = useMemo(() => transactions.map((t: any) => ({
         id: t._id,
-        initials: new Date(t.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
-        doctor: t.consultantSnapshot?.name || "Unknown",
-        dept: t.consultantSnapshot?.category || "General",
+        initials: getInitials(t.consultantSnapshot?.name || t.consultant?.fullName || t.consultant?.name || "Unknown"),
+        doctor: t.consultantSnapshot?.name || t.consultant?.fullName || t.consultant?.name || "Unknown",
+        dept: t.consultantSnapshot?.category || t.consultant?.category || "General",
         status: t.status,
-        title: `${t.consultantSnapshot?.subcategory || "General"} • ${t.appointment?.reason || "Consultation"}`,
+        title: `${t.consultantSnapshot?.subcategory || t.consultant?.subcategory || t.consultant?.title || "Consultation"} • ${t.appointment?.reason || "Session"}`,
         date: new Date(t.createdAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
         method: t.paymentMethod,
         txn: t.transactionId || "N/A",
-        invoice: t.metadata?.invoiceId || "N/A",
+        invoice: t.metadata?.invoiceId || "INV-" + t._id.substring(18),
         price: t.amount || 0,
         session: t.appointment?.session || "Video Call",
-    }));
+    })), [transactions]);
 
-    const filtered = useMemo(() => filterPayments(mappedTransactions, q), [mappedTransactions, q]);
+    const filtered = useMemo(() => {
+        let items = mappedTransactions;
+        if (filter !== "All Payments") {
+            items = items.filter(t => t.status === filter);
+        }
+        return filterPayments(items, q);
+    }, [mappedTransactions, q, filter]);
 
     if (loadingTransactions) {
         return <div className="p-8 text-center text-muted-foreground">Loading payments...</div>;
@@ -241,7 +267,7 @@ export default function ClientPayments() {
                 <CardContent className="space-y-3">
                     <div className="flex items-center justify-between gap-2">
                         <div className="relative w-full">
-                            <LucideSearch className="absolute left-3 top-1/2 -translate-y-1/4 h-4 w-4 text-muted-foreground" />
+                            <LucideSearch className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                             <Input
                                 value={q}
                                 onChange={(e) => setQ(e.target.value)}
@@ -250,7 +276,7 @@ export default function ClientPayments() {
                             />
                         </div>
                         <Select value={filter} onValueChange={setFilter}>
-                            <SelectTrigger className="w-[150px]">
+                            <SelectTrigger className="w-[180px]">
                                 <SelectValue placeholder="All Payments" />
                             </SelectTrigger>
                             <SelectContent>
@@ -263,11 +289,13 @@ export default function ClientPayments() {
                     </div>
 
                     <div className="space-y-3">
-                        {filtered.map((p: any) => (
+                        {filtered.map((p) => (
                             <PaymentRow key={p.id} p={p} onOpen={setOpen} />
                         ))}
                         {filtered.length === 0 && (
-                            <div className="text-sm text-muted-foreground">No payments found.</div>
+                            <div className="text-sm text-muted-foreground text-center py-8">
+                                No payments found matching your criteria.
+                            </div>
                         )}
                     </div>
                 </CardContent>
@@ -286,14 +314,19 @@ export default function ClientPayments() {
                                 <div>
                                     <div className="font-medium">{open.doctor}</div>
                                     <div className="text-xs text-muted-foreground">
-                                        {open.dept === "Health" ? "Cardiology" : open.dept}
+                                        {open.dept}
                                     </div>
                                 </div>
                                 <Badge
                                     variant="outline"
-                                    className="bg-emerald-100 text-emerald-700 border-emerald-200"
+                                    className={cn(
+                                        "bg-white",
+                                        open.status === "Success" || open.status === "Completed"
+                                            ? "text-emerald-700 border-emerald-200 bg-emerald-50"
+                                            : "text-gray-700 border-gray-200"
+                                    )}
                                 >
-                                    ● Completed
+                                    ● {open.status}
                                 </Badge>
                             </div>
 
@@ -351,10 +384,10 @@ export default function ClientPayments() {
                         <div className="pt-2 border-t flex items-center justify-between">
                             <div className="flex items-center gap-2">
                                 <Button variant="outline" className="gap-2" size="sm">
-                                    <Download className="h-4 w-4" /> Download Invoice
+                                    <Download className="h-4 w-4" /> Invoice
                                 </Button>
                                 <Button variant="outline" className="gap-2" size="sm">
-                                    <Receipt className="h-4 w-4" /> Download Receipt
+                                    <Receipt className="h-4 w-4" /> Receipt
                                 </Button>
                             </div>
                             <Button

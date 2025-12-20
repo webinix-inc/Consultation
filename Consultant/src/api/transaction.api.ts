@@ -1,7 +1,7 @@
 import axiosInstance from "./axiosInstance";
 
 const TransactionAPI = {
-    getAll: async (params?: any) => {
+    getTransactions: async (params?: { page?: number; limit?: number; type?: string }) => {
         const res = await axiosInstance.get("/transactions", { params });
         return res.data;
     },

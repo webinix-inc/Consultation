@@ -54,6 +54,13 @@ function normalize(s: string) {
         .replace(/[^a-z0-9]+/g, "");
 }
 
+function getInitials(name: string) {
+    if (!name) return "??";
+    const parts = name.trim().split(" ");
+    if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
 /* --------------------------------------
    Top heading + client header (persistent for all tabs)
 -------------------------------------- */
@@ -273,7 +280,11 @@ function PaymentDetailsModal({
                         <div className="font-semibold text-base">{data.doctor}</div>
                         <div className="text-sm text-muted-foreground">{data.subcategory || "General"}</div>
                     </div>
-                    <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1">
+                    <Badge className={cn(
+                        "text-white gap-1",
+                        data.status === "Success" || data.status === "Completed" ? "bg-emerald-600 hover:bg-emerald-700" :
+                            data.status === "Pending" ? "bg-amber-600 hover:bg-amber-700" : "bg-red-600 hover:bg-red-700"
+                    )}>
                         <CheckCircle2 className="h-3 w-3" /> {data.status || "Completed"}
                     </Badge>
                 </div>
@@ -448,7 +459,7 @@ function BookingRow({
                 <div className="font-semibold pr-2">₹{b.price}</div>
                 {!past ? (
                     <>
-                        
+
                         <Button
                             size="sm"
                             variant="ghost"
@@ -935,7 +946,7 @@ export type PaymentItem = {
     initials: string;
     doctor: string;
     dept: "Health" | "Finance" | "Legal" | "IT";
-    status: "Completed";
+    status: "Completed" | "Success" | "Pending" | "Failed" | "Refunded";
     title: string;
     date: string;
     method: string;
@@ -978,7 +989,14 @@ function PaymentRow({
                         </Badge>
                         <Badge
                             variant="outline"
-                            className="px-2 py-0.5 text-xs rounded-full bg-emerald-100 text-emerald-700 border-emerald-200"
+                            className={cn(
+                                "px-2 py-0.5 text-xs rounded-full border",
+                                p.status === "Success" || p.status === "Completed"
+                                    ? "bg-emerald-100 text-emerald-700 border-emerald-200"
+                                    : p.status === "Pending"
+                                        ? "bg-yellow-100 text-yellow-700 border-yellow-200"
+                                        : "bg-red-100 text-red-700 border-red-200"
+                            )}
                         >
                             {p.status}
                         </Badge>
@@ -1045,15 +1063,15 @@ function PaymentsTab({ transactions }: { transactions: any[] }) {
     // Assuming API returns data compatible or we map it here
     const mappedTransactions = transactions.map(t => ({
         id: t._id,
-        initials: new Date(t.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
-        doctor: t.consultantSnapshot?.name || "Unknown",
-        dept: t.consultantSnapshot?.category || "General",
+        initials: getInitials(t.consultantSnapshot?.name || t.consultant?.fullName || t.consultant?.name || "Unknown"),
+        doctor: t.consultantSnapshot?.name || t.consultant?.fullName || t.consultant?.name || "Unknown",
+        dept: t.consultantSnapshot?.category || t.consultant?.category || "General",
         status: t.status,
-        title: `${t.consultantSnapshot?.subcategory || "General"} • ${t.appointment?.reason || "Consultation"}`,
+        title: `${t.consultantSnapshot?.subcategory || t.consultant?.subcategory || t.consultant?.title || "Consultation"} • ${t.appointment?.reason || "Session"}`,
         date: new Date(t.createdAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
         method: t.paymentMethod,
         txn: t.transactionId || "N/A",
-        invoice: t.metadata?.invoiceId || "N/A",
+        invoice: t.metadata?.invoiceId || "INV-" + t._id.substring(18),
         price: t.amount || 0,
         session: t.appointment?.session || "Video Call",
     }));
@@ -1240,7 +1258,7 @@ export default function Consultant_ClientProfile() {
 
     const { data: transactionsData, isLoading: loadingTransactions } = useQuery({
         queryKey: ["clientTransactions"],
-        queryFn: () => TransactionAPI.getAll(),
+        queryFn: () => TransactionAPI.getTransactions(),
     });
 
     // Filter transactions for this client

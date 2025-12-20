@@ -52,22 +52,64 @@ exports.createOrder = async (req, res, next) => {
 
     const order = await razorpay.orders.create(options);
 
-    // Create pending transaction record
-    const transaction = await Transaction.create({
-      user: clientId || user._id || user.id,
-      consultant: consultantId || null,
-      appointment: appointmentId || null,
-      amount: amount,
-      currency: "INR",
-      type: "Payment",
+    // Check if a pending transaction already exists for this appointment
+    let transaction = await Transaction.findOne({
+      appointment: appointmentId,
       status: "Pending",
-      paymentMethod: "Razorpay",
-      transactionId: order.id,
-      metadata: {
+      type: "Payment"
+    });
+
+    // Calculate Commission
+    let platformFee = 0;
+    let netAmount = amount;
+
+    if (consultantId) {
+      try {
+        const { Consultant } = require("../../../models/consultant.model");
+        const consultantDoc = await Consultant.findById(consultantId);
+        if (consultantDoc && consultantDoc.commission && consultantDoc.commission.platformPercent > 0) {
+          const percent = consultantDoc.commission.platformPercent;
+          platformFee = Math.round((amount * percent) / 100);
+          netAmount = amount - platformFee;
+        }
+      } catch (err) {
+        console.error("Error calculating commission:", err);
+        // Default to 0 fee if error
+      }
+    }
+
+    if (transaction) {
+      // Update existing transaction with new order details
+      transaction.transactionId = order.id;
+      transaction.amount = amount;
+      transaction.platformFee = platformFee;
+      transaction.netAmount = netAmount;
+      transaction.metadata = {
+        ...transaction.metadata,
         razorpayOrderId: order.id,
         razorpayReceipt: order.receipt,
-      },
-    });
+      };
+      await transaction.save();
+    } else {
+      // Create pending transaction record
+      transaction = await Transaction.create({
+        user: clientId || user._id || user.id,
+        consultant: consultantId || null,
+        appointment: appointmentId || null,
+        amount: amount,
+        platformFee: platformFee,
+        netAmount: netAmount,
+        currency: "INR",
+        type: "Payment",
+        status: "Pending",
+        paymentMethod: "Razorpay",
+        transactionId: order.id,
+        metadata: {
+          razorpayOrderId: order.id,
+          razorpayReceipt: order.receipt,
+        },
+      });
+    }
 
     return sendSuccess(res, "Order created successfully", {
       orderId: order.id,
@@ -139,7 +181,7 @@ exports.verifyPayment = async (req, res, next) => {
     if (appointmentId) {
       const Appointment = require("../../../models/appointment.model");
       const appointment = await Appointment.findById(appointmentId);
-      
+
       if (appointment) {
         appointment.payment = {
           amount: transaction.amount,
@@ -154,10 +196,10 @@ exports.verifyPayment = async (req, res, next) => {
         try {
           const Notification = require("../../../models/notification.model");
           const User = require("../../../models/user.model");
-          
+
           const client = await User.findById(appointment.client);
           const consultant = await User.findById(appointment.consultant);
-          
+
           const clientName = client?.fullName || "Client";
           const consultantName = consultant?.fullName || "Consultant";
 

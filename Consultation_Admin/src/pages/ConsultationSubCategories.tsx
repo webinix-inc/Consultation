@@ -78,17 +78,17 @@ const ConsultationSubCategories: React.FC = () => {
   });
 
   const handleEdit = (subcat: any) => {
-    const parentCategoryId = typeof subcat.parentCategory === 'object' 
-      ? subcat.parentCategory._id 
+    const parentCategoryId = typeof subcat.parentCategory === 'object'
+      ? subcat.parentCategory._id
       : subcat.parentCategory;
-    setEditingSubcategory({ 
-      id: subcat._id, 
-      title: subcat.title, 
+    setEditingSubcategory({
+      id: subcat._id,
+      title: subcat.title,
       description: subcat.description || "",
       parentCategory: parentCategoryId
     });
-    setForm({ 
-      name: subcat.title, 
+    setForm({
+      name: subcat.title,
       desc: subcat.description || "",
       selectedCategory: parentCategoryId || ""
     });
@@ -278,7 +278,10 @@ const ConsultationSubCategories: React.FC = () => {
                 >
                   Consultants
                 </button>
-                <button className="w-full border border-gray-300 rounded-md py-1.5 text-sm text-gray-700 hover:bg-gray-100 transition">
+                <button
+                  onClick={() => navigate(`/appointments?subcategoryName=${encodeURIComponent(subcat.title)}`)}
+                  className="w-full border border-gray-300 rounded-md py-1.5 text-sm text-gray-700 hover:bg-gray-100 transition"
+                >
                   Bookings
                 </button>
               </div>
@@ -325,7 +328,7 @@ const ConsultationSubCategories: React.FC = () => {
                 onSubmit={(e) => {
                   e.preventDefault();
                   const selectedCategoryId = form.selectedCategory || categoryId;
-                  
+
                   if (!selectedCategoryId) {
                     toast.error("Please select a category");
                     return;
@@ -334,8 +337,8 @@ const ConsultationSubCategories: React.FC = () => {
                   if (editingSubcategory) {
                     updateSubcategory({
                       id: editingSubcategory.id,
-                      data: { 
-                        title: form.name, 
+                      data: {
+                        title: form.name,
                         description: form.desc,
                         parentCategory: selectedCategoryId
                       },

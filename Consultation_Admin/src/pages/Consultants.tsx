@@ -585,15 +585,23 @@ const ConsultationManagement: React.FC = () => {
     }
     // Note: Subcategory filtering may not work for Consultant model as it doesn't store subcategory
     // This would need to be handled differently if subcategories are needed
-    if (subcategoryParam) {
-      // Subcategory filtering disabled for Consultant model
-      // filtered = filtered.filter((u) => {
-      //   const subId = (u.subcategory as Subcategory)?._id || (u.subcategory as unknown as ID);
-      //   return subId === subcategoryParam;
-      // });
+    if (subcategoryName) {
+      filtered = filtered.filter((u) => {
+        const uSub = typeof u.subcategory === "string" ? u.subcategory : (u.subcategory as Subcategory)?.title || "";
+        return uSub === decodeURIComponent(subcategoryName);
+      });
+    } else if (subcategoryParam) {
+      // Find subcategory title by ID
+      const targetSub = subcategories.find(s => s._id === subcategoryParam);
+      if (targetSub) {
+        filtered = filtered.filter((u) => {
+          const uSub = typeof u.subcategory === "string" ? u.subcategory : (u.subcategory as Subcategory)?.title || "";
+          return uSub === targetSub.title;
+        });
+      }
     }
     return filtered;
-  }, [allConsultants, searchQuery, categoryFilter, subcategoryParam]);
+  }, [allConsultants, searchQuery, categoryFilter, subcategoryParam, subcategoryName, subcategories]);
 
   const pendingConsultants = useMemo(() => {
     let filtered = allPendingConsultants.slice();

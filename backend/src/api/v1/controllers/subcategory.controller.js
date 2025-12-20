@@ -1,57 +1,51 @@
 const SubCategory = require("../../../models/subcategory.model");
 const { Consultant } = require("../../../models/consultant.model");
-const User = require("../../../models/user.model");
+const ClientConsultant = require("../../../models/clientConsultant.model");
+const Transaction = require("../../../models/transaction.model");
 const { sendSuccess, ApiError } = require("../../../utils/response");
 const httpStatus = require("../../../constants/httpStatus");
 
+
 // Helper function to calculate stats for a subcategory
 const calculateSubcategoryStats = async (subcategoryId, subcategoryTitle) => {
-  // Count consultants linked to this subcategory (by category field matching subcategory title)
+  // 1. Count Active Consultants in to this subcategory (by title string)
+  const consultantsCount = await Consultant.countDocuments({
+    subcategory: subcategoryTitle,
+    status: { $in: ["Active", "Approved"] }
+  });
+
+  // 2. Find Consultants IDs to link clients/revenue
   const consultants = await Consultant.find({
-    category: subcategoryTitle,
-    status: "Active",
-  });
+    subcategory: subcategoryTitle
+  }).select('_id');
+  const consultantIds = consultants.map(c => c._id);
 
-  // Count users with Consultant role linked to this subcategory
-  const consultantUsers = await User.find({
-    role: "Consultant",
-    subcategory: subcategoryId,
-    status: "Active",
-  });
+  // 3. Count Active Clients (linked to these consultants)
+  const clientsCount = consultantIds.length > 0 ? await ClientConsultant.countDocuments({
+    consultant: { $in: consultantIds },
+    status: "Active"
+  }) : 0;
 
-  // Total consultant count = Consultant model + User model with Consultant role
-  const consultantCount = consultants.length + consultantUsers.length;
-
-  // Count users with Client role linked to this subcategory
-  const clientUsers = await User.find({
-    role: "Client",
-    subcategory: subcategoryId,
-    status: "Active",
-  });
-
-  // Calculate total clients from all consultants (from Consultant model)
-  const clientsFromConsultants = consultants.reduce(
-    (sum, consultant) =>
-      sum + (consultant.clientInfo?.totalClients || consultant.clients || 0),
-    0
-  );
-
-  // Total client count = clients from Consultant model + users with Client role
-  const totalClients = clientsFromConsultants + clientUsers.length;
-
-  // Calculate monthly revenue (simplified - sum of base fees * client count)
-  // In a real system, this would come from appointment/revenue data
-  const monthlyRevenue = consultants.reduce((sum, consultant) => {
-    const baseFee = consultant.pricing?.baseFee || consultant.fees || 0;
-    const clients = consultant.clientInfo?.totalClients || consultant.clients || 0;
-    // Simplified calculation: assume average 2 appointments per client per month
-    return sum + baseFee * clients * 2;
-  }, 0);
+  // 4. Calculate Revenue from successful transactions
+  let revenue = 0;
+  if (consultantIds.length > 0) {
+    const revenueResult = await Transaction.aggregate([
+      {
+        $match: {
+          consultant: { $in: consultantIds },
+          status: "Success",
+          type: "Payment"
+        }
+      },
+      { $group: { _id: null, total: { $sum: "$amount" } } }
+    ]);
+    revenue = revenueResult[0]?.total || 0;
+  }
 
   return {
-    consultants: consultantCount,
-    clients: totalClients,
-    monthlyRevenue: Math.round(monthlyRevenue),
+    consultants: consultantsCount,
+    clients: clientsCount,
+    monthlyRevenue: revenue,
   };
 };
 
@@ -64,25 +58,19 @@ exports.list = async (req, res, next) => {
     }
     const subcategories = await SubCategory.find(filter)
       .populate("parentCategory", "title")
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
 
-    // Calculate stats for each subcategory and update the database
+    // Calculate stats for each subcategory
     const subcategoriesWithStats = await Promise.all(
       subcategories.map(async (subcat) => {
         const stats = await calculateSubcategoryStats(
           subcat._id,
           subcat.title
         );
-        
-        // Update the subcategory with calculated stats
-        await SubCategory.findByIdAndUpdate(subcat._id, {
-          consultants: stats.consultants,
-          clients: stats.clients,
-          monthlyRevenue: stats.monthlyRevenue,
-        });
 
         return {
-          ...subcat.toObject(),
+          ...subcat,
           consultants: stats.consultants,
           clients: stats.clients,
           monthlyRevenue: stats.monthlyRevenue,
@@ -102,7 +90,8 @@ exports.getById = async (req, res, next) => {
     const subcategory = await SubCategory.findById(id).populate(
       "parentCategory",
       "title"
-    );
+    ).lean();
+
     if (!subcategory) {
       throw new ApiError("Subcategory not found", httpStatus.NOT_FOUND);
     }
@@ -112,15 +101,8 @@ exports.getById = async (req, res, next) => {
       subcategory.title
     );
 
-    // Update the subcategory with calculated stats
-    await SubCategory.findByIdAndUpdate(id, {
-      consultants: stats.consultants,
-      clients: stats.clients,
-      monthlyRevenue: stats.monthlyRevenue,
-    });
-
     return sendSuccess(res, "Subcategory fetched", {
-      ...subcategory.toObject(),
+      ...subcategory,
       ...stats,
     });
   } catch (error) {

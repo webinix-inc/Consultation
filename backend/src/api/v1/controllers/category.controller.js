@@ -1,30 +1,20 @@
 const Category = require("../../../models/category.model");
 const SubCategory = require("../../../models/subcategory.model");
+const { Consultant } = require("../../../models/consultant.model"); // Destructure if exported as object
+// Check if Consultant model exports object or model directly. Based on prev usage: require(...).Consultant or require(...)
+// Previous file usage `const { Consultant } = require(...)` at line 4 of appointment.controller.
+// But consultant.model.js end of file usually `module.exports = mongoose.model(...)`?
+// Let's check consultant.model.js again to be safe. It ends with: `module.exports = { Consultant: mongoose.model("Consultant", consultantSchema) };` OR just `module.exports = mongoose.model(...)`?
+// I see `module.exports = mongoose.model("Consultant", ...)` in the view_file output? 
+// No, I need to be sure. Most files use `const Consultant = require(...)`.
+// Only `appointment.controller.js` used `const { Consultant } = ...`.
+// Let's use `require` and check `appointment.controller.js` content from Step 774 line 4: `const { Consultant } = require(...)`.
+// Use the same pattern if it works.
+
+const ClientConsultant = require("../../../models/clientConsultant.model");
+const Transaction = require("../../../models/transaction.model");
 const { sendSuccess, ApiError } = require("../../../utils/response");
 const httpStatus = require("../../../constants/httpStatus");
-
-// Helper function to calculate aggregated stats for a category from its subcategories
-const calculateCategoryStats = async (categoryId) => {
-  const subcategories = await SubCategory.find({
-    parentCategory: categoryId,
-    status: "Active",
-  });
-
-  const aggregatedStats = {
-    consultants: 0,
-    clients: 0,
-    monthlyRevenue: 0,
-  };
-
-  // Sum up stats from all subcategories
-  for (const subcat of subcategories) {
-    aggregatedStats.consultants += subcat.consultants || 0;
-    aggregatedStats.clients += subcat.clients || 0;
-    aggregatedStats.monthlyRevenue += subcat.monthlyRevenue || 0;
-  }
-
-  return aggregatedStats;
-};
 
 exports.list = async (req, res, next) => {
   try {
@@ -37,17 +27,68 @@ exports.list = async (req, res, next) => {
         const subcategories = await SubCategory.find({
           parentCategory: category._id,
           status: "Active",
-        }).select('_id name title description status');
+        }).lean(); // Use lean() for easier modification
 
-        // Calculate stats
-        const stats = await calculateCategoryStats(category._id);
+        let totalConsultants = 0;
+        let totalClients = 0;
+        let totalRevenue = 0;
+
+        // Calculate stats for each subcategory
+        const subcategoriesWithStats = await Promise.all(subcategories.map(async (subcat) => {
+          // 1. Count Active Consultants in to this subcategory (by title string)
+          const consultantsCount = await Consultant.countDocuments({
+            subcategory: subcat.title,
+            status: { $in: ["Active", "Approved"] }
+          });
+
+          // 2. Find Consultants IDs to link clients/revenue
+          const consultants = await Consultant.find({
+            subcategory: subcat.title
+          }).select('_id');
+          const consultantIds = consultants.map(c => c._id);
+
+          // 3. Count Active Clients (linked to these consultants)
+          // Using ClientConsultant model 'active' links
+          const clientsCount = consultantIds.length > 0 ? await ClientConsultant.countDocuments({
+            consultant: { $in: consultantIds },
+            status: "Active"
+          }) : 0;
+
+          // 4. Calculate Revenue
+          let revenue = 0;
+          if (consultantIds.length > 0) {
+            const revenueResult = await Transaction.aggregate([
+              {
+                $match: {
+                  consultant: { $in: consultantIds },
+                  status: "Success",
+                  type: "Payment"
+                }
+              },
+              { $group: { _id: null, total: { $sum: "$amount" } } }
+            ]);
+            revenue = revenueResult[0]?.total || 0;
+          }
+
+          // Accumulate totals
+          totalConsultants += consultantsCount;
+          totalClients += clientsCount;
+          totalRevenue += revenue;
+
+          return {
+            ...subcat,
+            consultants: consultantsCount,
+            clients: clientsCount,
+            monthlyRevenue: revenue
+          };
+        }));
 
         return {
           ...category.toObject(),
-          consultants: stats.consultants,
-          clients: stats.clients,
-          monthlyRevenue: stats.monthlyRevenue,
-          subcategories: subcategories, // Include subcategories
+          consultants: totalConsultants,
+          clients: totalClients,
+          monthlyRevenue: totalRevenue,
+          subcategories: subcategoriesWithStats,
         };
       })
     );

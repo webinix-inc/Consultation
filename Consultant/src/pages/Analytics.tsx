@@ -1,37 +1,48 @@
 import React from "react";
 import { RefreshCw, Download } from "lucide-react";
 import { motion } from "framer-motion";
+import { useQuery } from "@tanstack/react-query";
+import DashboardAPI from "@/api/dashboard.api";
 
 // design reference (will be served from your environment)
 const designRef = "/mnt/data/Screenshot 2025-11-21 142130.png";
 
 const AnalyticsDashboard: React.FC = () => {
-  // sample data matching the new design
-  const months = [
-    { name: "May", revenue: 220000 },
-    { name: "Jun", revenue: 275000 },
-    { name: "Jul", revenue: 320000 },
-    { name: "Aug", revenue: 370000 },
-    { name: "Sep", revenue: 350000 },
-    { name: "Oct", revenue: 380000 },
-  ];
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ["consultant-analytics"],
+    queryFn: DashboardAPI.getConsultantStats,
+  });
 
-  const weeklyAppointments = [8, 12, 10, 16, 12, 7, 3];
+  const statsData = data || {};
 
-  const performance = {
-    sessionCompletion: 96,
-    avgRating: 4.8,
-    responseTime: 2, // in hours (we'll display < 2 hours)
-    rebookingRate: 78,
+  // Map API data to UI requirements
+  const months = statsData.monthlyRevenueTrends || [];
+  const weeklyAppointments = statsData.weeklyAppointments || [0, 0, 0, 0, 0, 0, 0];
+  const performance = statsData.performance || {
+    sessionCompletion: 0,
+    avgRating: 0,
+    responseTime: 0,
+    rebookingRate: 0,
   };
+  const metrics = statsData.metrics || {
+    monthlyRevenue: 0,
+    monthlyRevenueDelta: "+0%",
+    totalSessions: 0,
+    totalSessionsDelta: "+0%",
+  };
+
+  // Find dynamic max values for charts
+  const maxRevenue = Math.max(...months.map((m: any) => m.revenue), 1);
+  const maxAppt = Math.max(...weeklyAppointments, 1);
 
   const fadeUp = {
     hidden: { opacity: 0, y: 12 },
     show: { opacity: 1, y: 0, transition: { duration: 0.28 } },
   };
 
-  const maxRevenue = Math.max(...months.map((m) => m.revenue));
-  const maxAppt = Math.max(...weeklyAppointments);
+  if (isLoading) {
+    return <div className="p-6 text-center">Loading analytics...</div>;
+  }
 
   return (
     <div className="min-h-screen bg-white p-6 space-y-6">
@@ -42,7 +53,10 @@ const AnalyticsDashboard: React.FC = () => {
           <p className="text-sm text-gray-500">Home &gt; Analytics</p>
         </div>
         <div className="flex items-center gap-3">
-          <button className="p-2 border rounded-md hover:bg-gray-100 transition">
+          <button
+            onClick={() => refetch()}
+            className="p-2 border rounded-md hover:bg-gray-100 transition"
+          >
             <RefreshCw size={16} />
           </button>
           <button className="flex items-center gap-2 px-3 py-2 bg-white border rounded-md text-sm font-medium hover:bg-gray-50 transition">
@@ -56,10 +70,10 @@ const AnalyticsDashboard: React.FC = () => {
         <motion.div variants={fadeUp} initial="hidden" animate="show" className="bg-white rounded-lg p-4 shadow-sm border flex items-center justify-between">
           <div>
             <p className="text-xs text-gray-500">Monthly Revenue</p>
-            <h3 className="text-xl font-semibold">₹ 1,56,523</h3>
+            <h3 className="text-xl font-semibold">{new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(metrics.monthlyRevenue)}</h3>
           </div>
           <div className="flex flex-col items-end">
-            <div className="text-sm text-green-600 font-semibold">+12%</div>
+            <div className={`text-sm font-semibold ${metrics.monthlyRevenueDelta.includes('-') ? 'text-red-600' : 'text-green-600'}`}>{metrics.monthlyRevenueDelta}</div>
             {/* tiny sparkline */}
             <svg width="140" height="36" viewBox="0 0 140 36" className="mt-2">
               <polyline fill="none" stroke="#f472b6" strokeWidth="2" points="0,24 20,18 40,20 60,16 80,18 100,20 120,14 140,6" />
@@ -70,10 +84,10 @@ const AnalyticsDashboard: React.FC = () => {
         <motion.div variants={fadeUp} initial="hidden" animate="show" className="bg-white rounded-lg p-4 shadow-sm border flex items-center justify-between">
           <div>
             <p className="text-xs text-gray-500">Total Sessions</p>
-            <h3 className="text-xl font-semibold">4</h3>
+            <h3 className="text-xl font-semibold">{metrics.totalSessions}</h3>
           </div>
           <div className="flex flex-col items-end">
-            <div className="text-sm text-green-600 font-semibold">+20%</div>
+            <div className={`text-sm font-semibold ${metrics.totalSessionsDelta.includes('-') ? 'text-red-600' : 'text-green-600'}`}>{metrics.totalSessionsDelta}</div>
             <svg width="140" height="36" viewBox="0 0 140 36" className="mt-2">
               <polyline fill="none" stroke="#60a5fa" strokeWidth="2" points="0,20 20,20 40,18 60,18 80,16 100,16 120,14 140,12" />
             </svg>
@@ -119,9 +133,9 @@ const AnalyticsDashboard: React.FC = () => {
                   const h = 160; // chart height
                   const left = 40;
                   const top = 20;
-                  const pts = months.map((m, i) => {
-                    const x = left + (i * w) / (months.length - 1);
-                    const y = top + (1 - m.revenue / maxRevenue) * h;
+                  const pts = months.map((m: any, i: number) => {
+                    const x = left + (i * w) / Math.max(months.length - 1, 1);
+                    const y = top + (1 - (m.revenue || 0) / maxRevenue) * h;
                     return `${x},${y}`;
                   });
                   const areaPath = `M ${left + 0},${top + h} L ${pts.join(" ")} L ${left + w},${top + h} Z`;
@@ -136,8 +150,8 @@ const AnalyticsDashboard: React.FC = () => {
                 })()}
 
                 {/* x labels */}
-                {months.map((m, i) => (
-                  <text key={m.name} x={40 + (i * 520) / (months.length - 1)} y={210} fontSize={12} fill="#6b7280" textAnchor="middle">
+                {months.map((m: any, i: number) => (
+                  <text key={m.name || i} x={40 + (i * 520) / Math.max(months.length - 1, 1)} y={210} fontSize={12} fill="#6b7280" textAnchor="middle">
                     {m.name}
                   </text>
                 ))}
@@ -155,10 +169,10 @@ const AnalyticsDashboard: React.FC = () => {
 
               {/* simple bar chart */}
               <div className="h-44 flex items-end gap-2 px-2">
-                {weeklyAppointments.map((v, i) => (
+                {weeklyAppointments.map((v: number, i: number) => (
                   <div key={i} className="flex-1 flex flex-col items-center">
                     <div style={{ height: `${(v / maxAppt) * 100}%` }} className="w-full bg-green-400 rounded-t-md" />
-                    <div className="text-xs text-gray-600 mt-2">{["Mon","Tue","Wed","Thu","Fri","Sat","Sun"][i]}</div>
+                    <div className="text-xs text-gray-600 mt-2">{["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][i]}</div>
                   </div>
                 ))}
               </div>
@@ -218,22 +232,22 @@ const AnalyticsDashboard: React.FC = () => {
         <motion.div variants={fadeUp} initial="hidden" animate="show" className="bg-white rounded-xl border shadow-sm p-4">
           <div className="flex items-center justify-between mb-3">
             <h4 className="font-semibold text-gray-800">Summary</h4>
-            <img src={designRef} alt="design" className="w-20 h-12 object-cover rounded-md" />
+            <div className="bg-gray-200 w-20 h-12 rounded-md flex items-center justify-center text-xs text-gray-500 italic">Ref Image</div>
           </div>
 
           <div className="space-y-3">
             <div className="text-sm text-gray-600">Monthly Revenue</div>
-            <div className="text-lg font-semibold">₹ 3,80,000</div>
-            <div className="text-sm text-green-600">+8% vs last month</div>
+            <div className="text-lg font-semibold">{new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(metrics.monthlyRevenue)}</div>
+            <div className={`text-sm ${metrics.monthlyRevenueDelta.includes('-') ? 'text-red-600' : 'text-green-600'}`}>{metrics.monthlyRevenueDelta} vs last month</div>
 
             <div className="border-t pt-3">
-              <div className="text-sm text-gray-600">Active Consultants</div>
-              <div className="text-lg font-semibold">24</div>
+              <div className="text-sm text-gray-600">Active Clients</div>
+              <div className="text-lg font-semibold">{statsData.clientStats?.active || 0}</div>
             </div>
 
             <div className="border-t pt-3">
               <div className="text-sm text-gray-600">Total Appointments</div>
-              <div className="text-lg font-semibold">1,240</div>
+              <div className="text-lg font-semibold">{metrics.totalSessions}</div>
             </div>
           </div>
         </motion.div>

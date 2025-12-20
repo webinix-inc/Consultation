@@ -194,7 +194,6 @@ function AppointmentItem({ a }: { a: any }) {
         </Avatar>
         <div>
           <div className="font-medium leading-tight">{a.name}</div>
-          <div className="text-xs text-muted-foreground leading-tight">with {a.with}</div>
         </div>
       </div>
       <div className="col-span-3 hidden sm:flex">
@@ -225,7 +224,7 @@ const ConsultantDashboard = () => {
     { id: "total", title: "Total Appointments", value: "0", delta: "+0%", up: true },
     { id: "today", title: "Today Appointments", value: "0", delta: "+0%", up: true },
     { id: "active", title: "Active Clients", value: "0", delta: "+0%", up: true },
-    { id: "revenue", title: "Monthly Revenue", value: "₹0", delta: "+0%", up: true },
+    { id: "revenue", title: "Total Revenue", value: "₹0", delta: "+0%", up: true },
   ];
 
   const clientStats = data?.clientStats || {
@@ -286,7 +285,7 @@ const ConsultantDashboard = () => {
           <CardHeader className="pb-0">
             <div className="flex items-center justify-between">
               <CardTitle className="text-base">Client</CardTitle>
-              <Button variant="outline" size="sm">View All</Button>
+              <Button variant="outline" onClick={() => navigate("/clients")} size="sm">View All</Button>
             </div>
           </CardHeader>
           <CardContent>
