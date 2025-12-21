@@ -1,12 +1,14 @@
-import React from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import ConsultantAPI from "@/api/consultant.api";
 import CategoryAPI from "@/api/category.api";
 import axiosInstance from "@/api/axiosInstance";
+import { Menu, X } from "lucide-react";
 
 export default function AIOBHero() {
   const navigate = useNavigate();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // Fetch consultants from API (only Approved status) - using public endpoint
   const { data: consultantsData, isLoading: isLoadingConsultants } = useQuery({
@@ -63,11 +65,13 @@ export default function AIOBHero() {
       {/* Hero Section - Dark Background */}
       <section className="min-h-screen bg-[#020617] text-white relative flex flex-col">
         {/* Top navigation */}
-        <header className="max-w-7xl mx-auto px-6 py-6 flex items-center justify-between w-full relative z-10">
-          <div className="flex items-center gap-3">
+        <header className="max-w-7xl mx-auto px-6 py-6 flex items-center justify-between w-full relative z-50">
+          <div className="flex items-center gap-3 relative z-50">
             <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center font-bold text-lg text-white">S</div>
             <span className="font-semibold text-xl tracking-tight">AIOB</span>
           </div>
+
+          {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-300">
             <a href="/" className="hover:text-white transition-colors">Home</a>
             <a href="/consultants" className="hover:text-white transition-colors">Consultants</a>
@@ -76,33 +80,78 @@ export default function AIOBHero() {
             <a href="#" className="hover:text-white transition-colors">Blog</a>
             <a href="#" className="hover:text-white transition-colors">Contact</a>
           </nav>
-          <div className="ml-4">
-            {(() => {
-              // Check if user is logged in from localStorage
-              const token = localStorage.getItem("token");
-              const userStr = localStorage.getItem("user");
-              const isLoggedIn = !!token && !!userStr;
 
-              if (isLoggedIn) {
+          <div className="flex items-center gap-4">
+            <div className="hidden md:block">
+              {(() => {
+                // Check if user is logged in from localStorage
+                const token = localStorage.getItem("token");
+                const userStr = localStorage.getItem("user");
+                const isLoggedIn = !!token && !!userStr;
+
+                if (isLoggedIn) {
+                  return (
+                    <button
+                      onClick={() => navigate("/dashboard")}
+                      className="bg-[#0d6efd] text-white px-6 py-2.5 rounded-full text-sm font-medium hover:bg-[#0b5ed7] transition-all shadow-lg hover:shadow-blue-500/25"
+                    >
+                      Dashboard
+                    </button>
+                  );
+                }
                 return (
                   <button
-                    onClick={() => navigate("/dashboard")}
-                    className="hidden md:inline-block bg-[#0d6efd] text-white px-6 py-2.5 rounded-full text-sm font-medium hover:bg-[#0b5ed7] transition-all shadow-lg hover:shadow-blue-500/25"
+                    onClick={() => navigate("/login")}
+                    className="bg-[#0d6efd] text-white px-6 py-2.5 rounded-full text-sm font-medium hover:bg-[#0b5ed7] transition-all shadow-lg hover:shadow-blue-500/25"
                   >
-                    Dashboard
+                    Login
                   </button>
                 );
-              }
-              return (
-                <button
-                  onClick={() => navigate("/login")}
-                  className="hidden md:inline-block bg-[#0d6efd] text-white px-6 py-2.5 rounded-full text-sm font-medium hover:bg-[#0b5ed7] transition-all shadow-lg hover:shadow-blue-500/25"
-                >
-                  Login
-                </button>
-              );
-            })()}
+              })()}
+            </div>
+
+            {/* Mobile Menu Toggle */}
+            <button
+              className="md:hidden text-white p-2 relative z-50 focus:outline-none"
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            >
+              {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+            </button>
           </div>
+
+          {/* Mobile Menu Overlay */}
+          {isMobileMenuOpen && (
+            <div className="fixed inset-0 bg-[#020617] z-40 flex flex-col justify-center items-center gap-8 md:hidden animate-in fade-in zoom-in duration-300">
+              <nav className="flex flex-col items-center gap-6 text-lg font-medium text-slate-300">
+                <a href="/" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-white transition-colors">Home</a>
+                <a href="/consultants" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-white transition-colors">Consultants</a>
+                <a href="#services" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-white transition-colors">Services</a>
+                <a href="#" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-white transition-colors">Portfolios</a>
+                <a href="#" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-white transition-colors">Blog</a>
+                <a href="#" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-white transition-colors">Contact</a>
+              </nav>
+
+              <div className="mt-4">
+                {(() => {
+                  const token = localStorage.getItem("token");
+                  const userStr = localStorage.getItem("user");
+                  const isLoggedIn = !!token && !!userStr;
+
+                  return (
+                    <button
+                      onClick={() => {
+                        navigate(isLoggedIn ? "/dashboard" : "/login");
+                        setIsMobileMenuOpen(false);
+                      }}
+                      className="bg-[#0d6efd] text-white px-8 py-3 rounded-full text-base font-medium hover:bg-[#0b5ed7] transition-all shadow-lg hover:shadow-blue-500/25"
+                    >
+                      {isLoggedIn ? "Dashboard" : "Login"}
+                    </button>
+                  );
+                })()}
+              </div>
+            </div>
+          )}
         </header>
 
         {/* Hero Content */}
@@ -110,7 +159,7 @@ export default function AIOBHero() {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center w-full">
             {/* Left content */}
             <div className="lg:col-span-7 space-y-8">
-              <h1 className="text-5xl md:text-7xl leading-[1.1] font-bold tracking-tight text-white max-w-3xl">
+              <h1 className="text-4xl sm:text-5xl md:text-7xl leading-[1.1] font-bold tracking-tight text-white max-w-3xl">
                 Maximise growth
                 <br />
                 qualified business
@@ -159,7 +208,7 @@ export default function AIOBHero() {
                   <img
                     src="https://images.unsplash.com/photo-1556761175-5973dc0f32e7?ixlib=rb-4.0.3&auto=format&fit=crop&w=1632&q=80"
                     alt="Business consulting team"
-                    className="w-full h-[500px] object-cover"
+                    className="w-full h-[300px] sm:h-[400px] md:h-[500px] object-cover"
                   />
 
                   {/* Play button overlay */}
@@ -199,7 +248,7 @@ export default function AIOBHero() {
       </section>
 
       {/* Features Section - Light Background */}
-      <section className="bg-slate-50 py-24 px-6 relative overflow-hidden">
+      <section className="bg-slate-50 py-16 md:py-24 px-6 relative overflow-hidden">
         {/* Decorative background elements for this section */}
         <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
           <div className="absolute top-[20%] right-[-5%] w-[300px] h-[300px] bg-blue-100 rounded-full blur-[80px] opacity-60"></div>
@@ -212,7 +261,7 @@ export default function AIOBHero() {
               <span className="text-blue-600 font-bold text-xs uppercase tracking-widest">Number #1 Solver</span>
               <span className="w-1 h-1 rounded-full bg-blue-600"></span>
             </div>
-            <h2 className="text-4xl md:text-5xl font-bold text-[#071530] mb-6 tracking-tight">
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-[#071530] mb-6 tracking-tight">
               Explore our core features
             </h2>
             <p className="text-slate-500 text-lg">
@@ -283,7 +332,7 @@ export default function AIOBHero() {
       </section>
 
       {/* Our Company Section */}
-      <section className="bg-[#eef2f6] py-24 px-6 relative overflow-hidden">
+      <section className="bg-[#eef2f6] py-16 md:py-24 px-6 relative overflow-hidden">
         <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
           {/* Left Content - Images */}
           <div className="relative">
@@ -323,7 +372,7 @@ export default function AIOBHero() {
               </span>
             </div>
 
-            <h2 className="text-4xl md:text-5xl font-bold text-[#071530] leading-[1.15]">
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-[#071530] leading-[1.15]">
               Crafting success tailored solution for each & every challenges
             </h2>
 
@@ -381,13 +430,13 @@ export default function AIOBHero() {
       </section>
 
       {/* Specialized Expertise Section */}
-      <section className="bg-white py-24 px-6 relative overflow-hidden">
+      <section className="bg-white py-16 md:py-24 px-6 relative overflow-hidden">
         <div className="max-w-7xl mx-auto relative z-10">
           <div className="text-center max-w-2xl mx-auto mb-16">
             <div className="inline-flex items-center justify-center px-4 py-1.5 rounded-full border border-slate-200 bg-white mb-6">
               <span className="text-slate-600 font-medium text-xs tracking-wide">Consultation Categories</span>
             </div>
-            <h2 className="text-4xl md:text-5xl font-bold text-[#071530] mb-6 tracking-tight">
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-[#071530] mb-6 tracking-tight">
               Specialized Expertise
             </h2>
             <p className="text-slate-500 text-lg">
@@ -449,13 +498,13 @@ export default function AIOBHero() {
       </section>
 
       {/* Top Consultants Section */}
-      <section className="bg-[#e4e9f0] py-24 px-6 relative overflow-hidden">
+      <section className="bg-[#e4e9f0] py-16 md:py-24 px-6 relative overflow-hidden">
         <div className="max-w-7xl mx-auto relative z-10">
           <div className="text-center max-w-2xl mx-auto mb-16">
             <div className="inline-flex items-center justify-center px-4 py-1.5 rounded-full border border-slate-300 bg-[#e4e9f0] mb-6">
               <span className="text-slate-600 font-medium text-xs tracking-wide">Expert Team</span>
             </div>
-            <h2 className="text-4xl md:text-5xl font-bold text-[#071530] mb-6 tracking-tight">
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-[#071530] mb-6 tracking-tight">
               Top Consultants
             </h2>
             <p className="text-slate-500 text-lg">
@@ -539,7 +588,7 @@ export default function AIOBHero() {
       </section>
 
       {/* Fun Facts Section */}
-      <section className="bg-[#e4e9f0] py-20 px-6">
+      <section className="bg-[#e4e9f0] py-16 md:py-20 px-6">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-12">
             <span className="text-blue-600 font-bold text-xs uppercase tracking-[0.2em] relative inline-block mb-4">
@@ -547,7 +596,7 @@ export default function AIOBHero() {
               Fun Facts
               <span className="text-xl leading-none align-middle ml-2 text-blue-400">•</span>
             </span>
-            <h2 className="text-3xl md:text-5xl font-bold text-[#071530] max-w-2xl mx-auto leading-tight">
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-[#071530] max-w-2xl mx-auto leading-tight">
               Exploring fun tidbits and fascinating facts
             </h2>
           </div>
@@ -560,7 +609,7 @@ export default function AIOBHero() {
               { val: "100+", label: "Awards archived" }
             ].map((item, i) => (
               <div key={i} className="p-10 text-center relative group">
-                <div className="text-5xl font-bold text-[#071530] mb-2">{item.val}</div>
+                <div className="text-4xl md:text-5xl font-bold text-[#071530] mb-2">{item.val}</div>
                 <div className="text-slate-500 font-medium text-sm">{item.label}</div>
 
                 {/* Decorative circle on divider - hidden on mobile, visible on desktop except last item */}
@@ -576,7 +625,7 @@ export default function AIOBHero() {
       </section>
 
       {/* Skills & Experience Section */}
-      <section className="relative py-24 px-6 min-h-[600px] flex items-center">
+      <section className="relative py-16 md:py-24 px-6 min-h-[500px] flex items-center">
         {/* Background Image with Overlay */}
         <div className="absolute inset-0 z-0">
           <img
@@ -593,7 +642,7 @@ export default function AIOBHero() {
 
           {/* Right Content */}
           <div className="bg-white/10 backdrop-blur-md border border-white/20 p-10 md:p-14 rounded-3xl shadow-2xl text-white">
-            <h2 className="text-4xl md:text-5xl font-bold mb-6">Skill and experience</h2>
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-6">Skill and experience</h2>
             <p className="text-blue-100 text-lg mb-10 leading-relaxed font-light">
               In today's dynamic business environment, the key to success lies in strategic planning and operational excellence.
             </p>
@@ -630,14 +679,14 @@ export default function AIOBHero() {
       </section>
 
       {/* Testimonials Section */}
-      <section className="bg-[#f8fafc] py-24 px-6 relative overflow-hidden">
+      <section className="bg-[#f8fafc] py-16 md:py-24 px-6 relative overflow-hidden">
         <div className="max-w-7xl mx-auto relative z-10">
           <div className="flex flex-col md:flex-row justify-between items-end mb-16 gap-6">
             <div>
               <div className="text-blue-600 font-bold text-xs uppercase tracking-[0.2em] mb-3 flex items-center gap-2">
                 <span className="text-xl leading-none">•</span> TESTIMONIALS <span className="text-xl leading-none">•</span>
               </div>
-              <h2 className="text-4xl md:text-5xl font-bold text-[#071530]">
+              <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-[#071530]">
                 Listening to our clients
               </h2>
             </div>
@@ -726,7 +775,7 @@ export default function AIOBHero() {
       </section>
 
       {/* Contact Section */}
-      <section className="bg-[#020617] py-24 px-6 relative overflow-hidden text-white">
+      <section className="bg-[#020617] py-16 md:py-24 px-6 relative overflow-hidden text-white">
         <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
 
           {/* Left Info */}
@@ -735,7 +784,7 @@ export default function AIOBHero() {
               Get in Touch
             </div>
 
-            <h2 className="text-5xl md:text-6xl font-bold mb-6 leading-tight">
+            <h2 className="text-4xl sm:text-5xl md:text-6xl font-bold mb-6 leading-tight">
               Let's Start a <br />
               <span className="italic font-light">Conversation</span>
             </h2>
