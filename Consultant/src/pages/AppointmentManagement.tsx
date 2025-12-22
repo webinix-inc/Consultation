@@ -178,7 +178,7 @@ const AppointmentManagementConsultant: React.FC = () => {
   const [paymentMethod, setPaymentMethod] = useState("Card");
 
   const queryClient = useQueryClient();
-  
+
   // Check if consultantId was passed via navigation state
   const consultantIdFromState = (location.state as any)?.consultantId;
 

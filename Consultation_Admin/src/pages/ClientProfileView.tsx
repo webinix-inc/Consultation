@@ -50,8 +50,12 @@ function PageHeading({ profile, onBack }: { profile: any; onBack: () => void }) 
 
             <div className="rounded-xl border bg-blue-50/80 p-4 sm:p-5 flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3 grow">
-                    <div className="h-16 w-16 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 text-xl font-bold border-2 border-white shadow-sm">
-                        {(profile.fullName || profile.name || "C").charAt(0).toUpperCase()}
+                    <div className="h-16 w-16 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 text-xl font-bold border-2 border-white shadow-sm overflow-hidden">
+                        {profile.avatar || profile.profileImage ? (
+                            <img src={profile.avatar || profile.profileImage} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                            (profile.fullName || profile.name || "C").charAt(0).toUpperCase()
+                        )}
                     </div>
                     <div>
                         <div className="text-lg font-semibold">{profile.fullName || profile.name}</div>

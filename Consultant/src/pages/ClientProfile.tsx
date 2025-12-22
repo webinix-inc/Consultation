@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,13 @@ import {
   Phone,
   Clock,
   Pencil,
+  Upload,
+  Loader2,
+  Trash2,
 } from "lucide-react";
+import { useDispatch } from "react-redux";
+import { updateUser } from "@/features/auth/authSlice";
+import UploadAPI from "@/api/upload.api";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import DashboardAPI from "@/api/dashboard.api";
 import ClientAPI from "@/api/client.api";
@@ -24,6 +30,56 @@ import { cn } from "@/lib/utils";
    Top heading + client header (persistent for all tabs)
 -------------------------------------- */
 function PageHeading({ profile }: { profile: any }) {
+  const [isUploading, setIsUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const queryClient = useQueryClient();
+  const dispatch = useDispatch();
+
+  const updateProfileMutation = useMutation({
+    mutationFn: (data: any) => ClientAPI.updateProfile(data),
+    onSuccess: (data: any, variables: any) => {
+      toast.success("Profile photo updated");
+      // Update Redux state if avatar was updated
+      if (variables.avatar !== undefined) {
+        dispatch(updateUser({
+          id: profile._id,
+          name: profile.fullName,
+          role: 'Client',
+          avatar: variables.avatar,
+          ...variables
+        }));
+      }
+      queryClient.invalidateQueries({ queryKey: ["clientProfile"] });
+    },
+    onError: () => {
+      toast.error("Failed to update profile photo");
+    }
+  });
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setIsUploading(true);
+      try {
+        const response = await UploadAPI.uploadImage(e.target.files[0]);
+        await updateProfileMutation.mutateAsync({ avatar: response.data.url });
+      } catch (error) {
+        console.error("Upload failed", error);
+        toast.error("Failed to upload image");
+      } finally {
+        setIsUploading(false);
+      }
+    }
+  };
+
+  const handleDeletePhoto = async () => {
+    if (!confirm("Are you sure you want to remove your profile photo?")) return;
+    try {
+      await updateProfileMutation.mutateAsync({ avatar: "" });
+    } catch (error) {
+      console.error("Delete failed", error);
+    }
+  };
+
   if (!profile) return null;
 
   return (
@@ -33,27 +89,55 @@ function PageHeading({ profile }: { profile: any }) {
         <p className="text-xs text-muted-foreground">Home » Clients</p>
       </div>
 
-      <div className="rounded-xl border bg-blue-50/80 p-4 sm:p-5 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <img
-            src={profile.avatar || "https://randomuser.me/api/portraits/men/32.jpg"}
-            alt="avatar"
-            className="h-18 w-18 rounded-full border"
-          />
-        </div>
-        <div className="flex items-center gap-3 grow">
-          <div>
+      <div className="rounded-xl border bg-blue-50/80 p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="relative group">
+            <div className="h-20 w-20 rounded-full border bg-white overflow-hidden flex items-center justify-center">
+              {profile.avatar || profile.profileImage ? (
+                <img
+                  src={profile.avatar || profile.profileImage}
+                  alt="avatar"
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <User className="h-10 w-10 text-gray-300" />
+              )}
+            </div>
+            {/* Hover Overlay for Upload */}
+            <div className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer" onClick={() => fileRef.current?.click()}>
+              {isUploading ? (
+                <Loader2 className="h-6 w-6 text-white animate-spin" />
+              ) : (
+                <Upload className="h-6 w-6 text-white" />
+              )}
+            </div>
+            <input
+              type="file"
+              ref={fileRef}
+              className="hidden"
+              accept="image/*"
+              onChange={handleImageUpload}
+              disabled={isUploading}
+            />
+          </div>
+
+          <div className="text-center sm:text-left">
             <div className="text-lg font-semibold">{profile.fullName}</div>
             <div className="text-xs text-muted-foreground">
               {profile.email}
             </div>
-            <div className="mt-1 flex items-center">
+            <div className="mt-1 flex items-center justify-center sm:justify-start gap-2">
               <Badge
                 variant="outline"
                 className="bg-emerald-50 text-emerald-700 border-emerald-400 "
               >
                 Active Member
               </Badge>
+              {(profile.avatar || profile.profileImage) && (
+                <Button variant="ghost" size="icon" className="h-6 w-6 text-red-500 hover:bg-red-50" onClick={handleDeletePhoto} title="Remove photo">
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+              )}
             </div>
           </div>
         </div>
@@ -412,11 +496,11 @@ export default function ClientProfile() {
   }
 
   if (isProfileError) {
-    const errorMessage = (profileError as any)?.response?.data?.message || 
-                        (profileError as any)?.message || 
-                        "Failed to load profile";
+    const errorMessage = (profileError as any)?.response?.data?.message ||
+      (profileError as any)?.message ||
+      "Failed to load profile";
     const statusCode = (profileError as any)?.response?.status;
-    
+
     return (
       <div className="p-8 text-center space-y-4">
         <div className="text-red-600 font-semibold">Error loading profile</div>
@@ -424,15 +508,15 @@ export default function ClientProfile() {
           {errorMessage} {statusCode && `(Status: ${statusCode})`}
         </div>
         <div className="text-xs text-muted-foreground">
-          {(profileError as any)?.response?.status === 404 && 
+          {(profileError as any)?.response?.status === 404 &&
             "The profile endpoint was not found. Please check if the backend server is running and the route is configured correctly."}
-          {(profileError as any)?.response?.status === 403 && 
+          {(profileError as any)?.response?.status === 403 &&
             "Access denied. You may not have permission to view this profile."}
-          {(profileError as any)?.response?.status === 401 && 
+          {(profileError as any)?.response?.status === 401 &&
             "Authentication failed. Please log in again."}
         </div>
-        <Button 
-          onClick={() => window.location.reload()} 
+        <Button
+          onClick={() => window.location.reload()}
           variant="outline"
           className="mt-4"
         >

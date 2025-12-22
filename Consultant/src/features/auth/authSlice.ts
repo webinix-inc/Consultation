@@ -7,6 +7,7 @@ export interface AuthState {
     name: string;
     email: string;
     role: "Admin" | "Consultant" | "Client" | null;
+    [key: string]: any;
   } | null;
   token: string | null;
 }
@@ -47,8 +48,14 @@ const authSlice = createSlice({
         state.isAuthenticated = true;
       }
     },
+    updateUser: (state, action: PayloadAction<Partial<AuthState["user"]>>) => {
+      if (state.user) {
+        state.user = { ...state.user, ...action.payload };
+        localStorage.setItem("user", JSON.stringify(state.user));
+      }
+    },
   },
 });
 
-export const { loginSuccess, logout, loadUserFromStorage } = authSlice.actions;
+export const { loginSuccess, logout, loadUserFromStorage, updateUser } = authSlice.actions;
 export default authSlice.reducer;

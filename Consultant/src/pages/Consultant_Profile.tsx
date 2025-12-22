@@ -6,6 +6,8 @@ import React, {
 import {
   Card, CardContent, CardHeader, CardTitle,
 } from "@/components/ui/card";
+import { useDispatch } from "react-redux";
+import { updateUser } from "@/features/auth/authSlice";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,6 +38,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Bell, Calendar } from "lucide-react";
 import { NotificationsTab, AvailabilityTab } from "@/pages/Settings";
 import TransactionAPI from "@/api/transaction.api";
+import UploadAPI from "@/api/upload.api";
 
 type Edu = { institute: string; qualification: string; year: string };
 type Exp = { company: string; years: string; year: string };
@@ -298,6 +301,7 @@ export default function Profile() {
 
   const [editing, setEditing] = useState(false);
   const [photo, setPhoto] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
   const [form, setForm] = useState<ProfileForm>(initialProfileForm);
   const [profileTab, setProfileTab] = useState<
     "basic" | "address" | "online" | "education" | "settings" | "payments"
@@ -325,6 +329,7 @@ export default function Profile() {
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   const navigate = useNavigate();
+  const dispatch = useDispatch();
   const queryClient = useQueryClient();
   const [consultantId, setConsultantId] = useState<string | null>(null);
   const [transactions, setTransactions] = useState<any[]>([]);
@@ -810,11 +815,27 @@ export default function Profile() {
 
   const handlePick = () => fileRef.current?.click();
 
-  const onFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const onFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    const preview = URL.createObjectURL(file);
-    setPhoto(preview);
+
+    setIsUploading(true);
+    try {
+      const response = await UploadAPI.uploadImage(file);
+      const newImageUrl = response.data.url;
+      setPhoto(newImageUrl);
+
+      // Update local storage and redux immediately for better UX
+      // Update both keys to ensure compatibility with all components
+      dispatch(updateUser({ image: newImageUrl, profileImage: newImageUrl }));
+
+      toast.success("Image uploaded successfully");
+    } catch (error) {
+      console.error("Failed to upload image:", error);
+      toast.error("Failed to upload image");
+    } finally {
+      setIsUploading(false);
+    }
   };
 
 
@@ -894,12 +915,19 @@ export default function Profile() {
         return result;
       }
     },
-    onSuccess: () => {
-      toast.success(consultantId ? "Consultant updated successfully" : "Consultant profile created successfully");
+    onSuccess: (data: any) => {
+
       setEditing(false);
-      queryClient.invalidateQueries({ queryKey: ["consultant", loggedInUserId, loggedInUserEmail] });
-      queryClient.invalidateQueries({ queryKey: ["consultant", consultantId] });
-      queryClient.invalidateQueries({ queryKey: ["user", loggedInUserId] });
+      toast.success("Profile updated successfully!");
+
+      // Sync Redux state with key profile fields
+      dispatch(updateUser({
+        name: form.fullName.trim(),
+        // Map other fields if they exist in UserType (authSlice)
+      }));
+
+      queryClient.invalidateQueries({ queryKey: ["consultant"] });
+      queryClient.invalidateQueries({ queryKey: ["user"] });
       queryClient.invalidateQueries({ queryKey: ["consultants"] });
     },
     onError: (err: any) => {
@@ -1168,11 +1196,11 @@ export default function Profile() {
                     variant="outline"
                     size="sm"
                     onClick={handlePick}
-                    disabled={disabled}
+                    disabled={disabled || isUploading}
                     className="gap-2"
                   >
-                    <Upload className="h-4 w-4" />
-                    Change Image
+                    {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                    {isUploading ? "Uploading..." : "Change Image"}
                   </Button>
                   <Button
                     variant="destructive"

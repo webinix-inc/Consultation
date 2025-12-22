@@ -172,6 +172,7 @@ const ClientManagement = () => {
                         <table className="min-w-full table-auto text-sm text-left">
                             <thead className="bg-gray-200">
                                 <tr>
+                                    <th className="p-3 font-medium">Profile</th>
                                     <th className="p-3 font-medium">Full Name</th>
                                     <th className="p-3 font-medium">Email ID</th>
                                     <th className="p-3 font-medium">Mobile Number</th>
@@ -184,6 +185,21 @@ const ClientManagement = () => {
                             <tbody className="divide-y divide-gray-200">
                                 {paginatedData.map((user: any) => (
                                     <tr key={user._id} className="hover:bg-gray-50">
+                                        <td className="p-3 cursor-pointer" onClick={() => setSelectedClient(user)}>
+                                            <div className="w-10 h-10 rounded-full bg-gray-200 overflow-hidden flex-shrink-0">
+                                                {user.avatar || user.profileImage ? (
+                                                    <img
+                                                        src={user.avatar || user.profileImage}
+                                                        alt=""
+                                                        className="w-full h-full object-cover"
+                                                    />
+                                                ) : (
+                                                    <div className="w-full h-full flex items-center justify-center text-gray-400 font-semibold bg-gray-100">
+                                                        {user.fullName?.charAt(0)}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </td>
                                         <td className="p-3 cursor-pointer text-black font-medium hover:underline" onClick={() => setSelectedClient(user)}>
                                             {user.fullName}
                                         </td>

@@ -214,6 +214,9 @@ exports.verifyOtp = async (req, res, next) => {
           email: accountEmail,
           role: role,
           mobile: mobile,
+          avatar: account.avatar || account.image || account.profileImage || "",
+          image: account.image || account.avatar || account.profileImage || "",
+          profileImage: account.profileImage || account.avatar || account.image || ""
         },
         isNewUser: false
       });
@@ -345,6 +348,10 @@ exports.login = async (req, res, next) => {
         email: accountEmail,
         role: role,
         mobile: accountMobile,
+        // Include profile image
+        avatar: account.avatar || account.image || account.profileImage || "",
+        image: account.image || account.avatar || account.profileImage || "",
+        profileImage: account.profileImage || account.avatar || account.image || ""
       },
       isNewUser: false
     });

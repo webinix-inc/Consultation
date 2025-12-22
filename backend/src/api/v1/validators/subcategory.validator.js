@@ -11,6 +11,7 @@ const createSubcategorySchema = Joi.object({
   clients: Joi.number().min(0).optional(),
   monthlyRevenue: Joi.number().min(0).optional(),
   status: Joi.string().valid("Active", "Inactive").optional(),
+  image: Joi.string().allow("").optional(),
 });
 
 const updateSubcategorySchema = Joi.object({
@@ -22,6 +23,7 @@ const updateSubcategorySchema = Joi.object({
   clients: Joi.number().min(0).optional(),
   monthlyRevenue: Joi.number().min(0).optional(),
   status: Joi.string().valid("Active", "Inactive").optional(),
+  image: Joi.string().allow("").optional(),
 }).min(1);
 
 const subcategoryIdSchema = Joi.object({

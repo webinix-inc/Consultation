@@ -4,6 +4,7 @@ const categorySchema = new mongoose.Schema(
   {
     title: { type: String, required: true, trim: true },
     description: { type: String, default: "" },
+    image: { type: String, default: "" },
     rating: { type: Number, default: 0 },
     consultants: { type: Number, default: 0 },
     clients: { type: Number, default: 0 },

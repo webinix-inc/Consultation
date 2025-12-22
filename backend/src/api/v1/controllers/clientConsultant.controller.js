@@ -73,7 +73,7 @@ exports.linkClientConsultant = async (req, res, next) => {
     const rel = await ClientConsultant.findOneAndUpdate(filter, update, options)
       .populate({
         path: "client",
-        select: "fullName email mobile status category subcategory",
+        select: "fullName email mobile status category subcategory avatar",
         populate: [
           { path: "category", select: "title" },
           { path: "subcategory", select: "title" },
@@ -151,14 +151,14 @@ exports.getConsultantClients = async (req, res, next) => {
     ensureObjectId(consultantId, "Consultant ID");
 
     const Consultant = require("../../../models/consultant.model").Consultant;
-    
+
     // Try to resolve to User ID first
     let consultantUserId = await resolveToUserId(consultantId);
-    
+
     // Also check if it's a Consultant model ID directly
     let consultantDoc = null;
     let consultantDocId = null;
-    
+
     // Check if consultantId is a Consultant model ID
     consultantDoc = await Consultant.findById(consultantId).lean();
     if (consultantDoc) {
@@ -172,13 +172,13 @@ exports.getConsultantClients = async (req, res, next) => {
         if (userByEmail) consultantUserId = userByEmail._id;
       }
     }
-    
+
     // If still no User ID, try finding Consultant by User ID
     if (!consultantDoc && consultantUserId) {
       consultantDoc = await Consultant.findOne({ user: consultantUserId }).lean();
       if (consultantDoc) consultantDocId = consultantDoc._id;
     }
-    
+
     // If neither User ID nor Consultant doc found, throw error
     if (!consultantUserId && !consultantDoc) {
       throw new ApiError("Consultant not found", httpStatus.NOT_FOUND);
@@ -190,7 +190,7 @@ exports.getConsultantClients = async (req, res, next) => {
       const matchesUserId = consultantUserId && String(currentUserId) === String(consultantUserId);
       const matchesConsultantId = consultantDocId && String(currentUserId) === String(consultantDocId);
       const matchesProvidedId = String(currentUserId) === String(consultantId);
-      
+
       if (!matchesUserId && !matchesConsultantId && !matchesProvidedId) {
         throw new ApiError("Not authorized", httpStatus.FORBIDDEN);
       }
@@ -199,7 +199,7 @@ exports.getConsultantClients = async (req, res, next) => {
     // Get clients from appointments - these are clients who booked this consultant
     const Appointment = require("../../../models/appointment.model");
     const Client = require("../../../models/client.model");
-    
+
     // Build appointment query - check all possible consultant ID formats
     const appointmentQueryConditions = [];
     if (consultantUserId) {
@@ -210,14 +210,14 @@ exports.getConsultantClients = async (req, res, next) => {
     }
     // Also check the provided consultantId directly
     appointmentQueryConditions.push({ consultant: consultantId });
-    
+
     // Get unique client IDs from appointments
     const appointmentQuery = { $or: appointmentQueryConditions };
     const appointmentClientIds = await Appointment.distinct("client", appointmentQuery);
-    
+
     // Get unique client IDs (distinct already returns array)
     const uniqueClientIds = [...new Set(appointmentClientIds.map(id => String(id)))];
-    
+
     if (uniqueClientIds.length === 0) {
       return sendSuccess(res, "Clients fetched successfully", { data: [], total: 0 });
     }
@@ -225,23 +225,23 @@ exports.getConsultantClients = async (req, res, next) => {
     // Fetch client details from Client model
     // Note: Client model doesn't have category/subcategory fields
     const allClientsMap = new Map();
-    
+
     // Convert string IDs back to ObjectIds for queries
     const clientObjectIds = uniqueClientIds
       .filter(id => mongoose.Types.ObjectId.isValid(id))
       .map(id => new mongoose.Types.ObjectId(id));
-    
+
     if (clientObjectIds.length === 0) {
       return sendSuccess(res, "Clients fetched successfully", { data: [], total: 0 });
     }
-    
+
     // Fetch clients from Client model
     const clientDocs = await Client.find({
       _id: { $in: clientObjectIds }
     })
-      .select("fullName email mobile status createdAt")
+      .select("fullName email mobile status createdAt avatar")
       .lean();
-    
+
     // Add clients to map
     clientDocs.forEach((client) => {
       const id = String(client._id);
@@ -345,7 +345,7 @@ exports.getAllRelationships = async (req, res, next) => {
     }
 
     const relationships = await ClientConsultant.find(query)
-      .populate("client", "fullName email mobile status")
+      .populate("client", "fullName email mobile status avatar")
       .sort({ linkedAt: -1 })
       .lean();
 

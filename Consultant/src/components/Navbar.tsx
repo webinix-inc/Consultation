@@ -15,6 +15,14 @@ export const Navbar = () => {
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
 
+  // Debug log for user image
+  // console.log("Navbar User:", user);
+  // console.log("Image sources:", { 
+  //   avatar: (user as any)?.avatar, 
+  //   image: (user as any)?.image, 
+  //   profileImage: (user as any)?.profileImage 
+  // });
+
   const { data } = useQuery({
     queryKey: ["notifications"],
     queryFn: NotificationsAPI.getAll,
@@ -45,9 +53,9 @@ export const Navbar = () => {
         {/* User Info */}
         <div className="flex items-center gap-3 pr-5 py-2">
           <Avatar className="h-8 w-8">
-            <AvatarImage 
-              src={(user as any)?.avatar || (user as any)?.image || (user as any)?.profileImage} 
-              alt={user?.name || "User"} 
+            <AvatarImage
+              src={(user as any)?.avatar || (user as any)?.image || (user as any)?.profileImage}
+              alt={user?.name || "User"}
             />
             <AvatarFallback>{user?.name?.[0]?.toUpperCase() || "U"}</AvatarFallback>
           </Avatar>

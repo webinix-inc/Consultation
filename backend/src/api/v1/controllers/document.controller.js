@@ -2,6 +2,7 @@ const { Document } = require("../../../models/document.model");
 const { sendSuccess, ApiError } = require("../../../utils/response");
 const httpStatus = require("../../../constants/httpStatus");
 const { deleteFile, extractKeyFromUrl } = require("../../../services/s3.service");
+const { getSignedUrl } = require("../../../services/cloudinary.service");
 
 /**
  * Get all documents with filters
@@ -35,17 +36,42 @@ exports.getAll = async (req, res, next) => {
 
     const documents = await Document.find(filter)
       .populate("client", "fullName email")
-      .populate("consultant", "fullName email")
+      .populate("consultant", "name displayName firstName lastName email")
       .populate("appointment", "date startTime endTime")
-      .populate("uploadedBy", "fullName email")
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
 
     const total = await Document.countDocuments(filter);
 
+    // Generate signed URLs for document access
+    const documentsWithSignedUrls = documents.map(doc => {
+      const docObj = doc.toObject();
+
+      // Extract public_id from fileKey and determine resource type from fileUrl
+      if (docObj.fileKey && docObj.fileUrl) {
+        try {
+          // Detect resource type from original URL
+          let resourceType = 'raw'; // default
+          if (docObj.fileUrl.includes('/image/upload/')) {
+            resourceType = 'image';
+          } else if (docObj.fileUrl.includes('/raw/upload/')) {
+            resourceType = 'raw';
+          } else if (docObj.fileUrl.includes('/video/upload/')) {
+            resourceType = 'video';
+          }
+
+          docObj.fileUrl = getSignedUrl(docObj.fileKey, { resource_type: resourceType });
+        } catch (error) {
+          console.error("Error generating signed URL for document:", docObj._id, error);
+        }
+      }
+
+      return docObj;
+    });
+
     return sendSuccess(res, "Documents fetched successfully", {
-      documents,
+      documents: documentsWithSignedUrls,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
@@ -70,9 +96,8 @@ exports.getOne = async (req, res, next) => {
 
     const document = await Document.findById(id)
       .populate("client", "fullName email")
-      .populate("consultant", "fullName email")
-      .populate("appointment", "date startTime endTime")
-      .populate("uploadedBy", "fullName email");
+      .populate("consultant", "name displayName firstName lastName email")
+      .populate("appointment", "date startTime endTime");
 
     if (!document) {
       throw new ApiError("Document not found", httpStatus.NOT_FOUND);
@@ -140,8 +165,7 @@ exports.create = async (req, res, next) => {
 
     const populatedDoc = await Document.findById(document._id)
       .populate("client", "fullName email")
-      .populate("consultant", "fullName email")
-      .populate("uploadedBy", "fullName email");
+      .populate("consultant", "name displayName firstName lastName email");
 
     return sendSuccess(res, "Document created successfully", populatedDoc, httpStatus.CREATED);
   } catch (error) {
@@ -180,8 +204,7 @@ exports.update = async (req, res, next) => {
 
     const updatedDoc = await Document.findById(id)
       .populate("client", "fullName email")
-      .populate("consultant", "fullName email")
-      .populate("uploadedBy", "fullName email");
+      .populate("consultant", "name displayName firstName lastName email");
 
     return sendSuccess(res, "Document updated successfully", updatedDoc);
   } catch (error) {

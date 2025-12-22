@@ -137,7 +137,7 @@ exports.create = async (req, res, next) => {
     }
 
     const consultant = await Consultant.create(consultantData);
-    
+
     // Return consultant data with generated password if applicable
     const consultantResponse = consultant.toObject();
     if (generatedPassword) {
@@ -183,6 +183,21 @@ exports.update = async (req, res, next) => {
     if (!updated) {
       throw new ApiError("Consultant not found", httpStatus.NOT_FOUND);
     }
+
+    // Sync with User model if user reference exists
+    if (updated.user) {
+      const User = require("../../../models/user.model");
+      const userUpdate = {};
+
+      if (updateData.image) userUpdate.profileImage = updateData.image;
+      if (updateData.name) userUpdate.fullName = updateData.name;
+      // if (updateData.phone) userUpdate.mobile = updateData.phone; // Optional: sync phone/mobile
+
+      if (Object.keys(userUpdate).length > 0) {
+        await User.findByIdAndUpdate(updated.user, userUpdate);
+      }
+    }
+
     return sendSuccess(res, "Consultant updated", updated);
   } catch (error) {
     next(error);
@@ -193,7 +208,7 @@ exports.remove = async (req, res, next) => {
   try {
     const { id } = req.params;
     const consultant = await Consultant.findById(id);
-    
+
     if (!consultant) {
       throw new ApiError("Consultant not found", httpStatus.NOT_FOUND);
     }

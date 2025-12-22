@@ -10,6 +10,7 @@ const createCategorySchema = Joi.object({
   clients: Joi.number().min(0).optional(),
   monthlyRevenue: Joi.number().min(0).optional(),
   status: Joi.string().valid("Active", "Inactive").optional(),
+  image: Joi.string().allow("").optional(),
 });
 
 const updateCategorySchema = Joi.object({
@@ -20,6 +21,7 @@ const updateCategorySchema = Joi.object({
   clients: Joi.number().min(0).optional(),
   monthlyRevenue: Joi.number().min(0).optional(),
   status: Joi.string().valid("Active", "Inactive").optional(),
+  image: Joi.string().allow("").optional(),
 }).min(1);
 
 const categoryIdSchema = Joi.object({

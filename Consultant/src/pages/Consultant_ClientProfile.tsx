@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useEffect } from "react";
+import { useParams, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -37,7 +38,10 @@ import DashboardAPI from "@/api/dashboard.api";
 import AppointmentAPI from "@/api/appointment.api";
 import TransactionAPI from "@/api/transaction.api";
 import ClientAPI from "@/api/client.api";
+import DocumentAPI from "@/api/document.api";
+import UploadAPI from "@/api/upload.api";
 import { toast } from "react-hot-toast";
+import { useAuth } from "@/hooks/useAuth";
 import { UPCOMING_STATUSES, PAST_STATUSES } from "@/constants/appConstants";
 
 /* --------------------------------------
@@ -813,53 +817,45 @@ const typeBadgeCls: Record<DocItem["type"], string> = {
     Prescription: "bg-emerald-100 text-emerald-700 border-emerald-200",
     Invoice: "bg-orange-100 text-orange-700 border-orange-200",
 };
-function DocRow({ d, onDelete }: { d: DocItem; onDelete: (id: string) => void }) {
+const DocRow = ({ d, onDelete, canDelete }: { d: any; onDelete: (id: string) => void; canDelete: boolean }) => {
     return (
-        <div className="rounded-xl border bg-white p-4 flex items-start justify-between gap-3">
-            <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                    <Badge
-                        variant="outline"
-                        className={cn(
-                            "px-2 py-0.5 text-[11px] rounded-md",
-                            typeBadgeCls[d.type]
-                        )}
-                    >
-                        {d.type}
-                    </Badge>
-                    <div className="font-medium">{d.title}</div>
+        <div className="flex items-center justify-between p-3 bg-white border rounded-lg shadow-sm">
+            <div className="flex items-center gap-3">
+                <div className={cn("p-2 rounded-lg", typeBadgeCls[d.type as keyof typeof typeBadgeCls] || "bg-gray-100")}>
+                    <FileText className="w-5 h-5 text-gray-600" />
                 </div>
-                <div className="text-xs text-muted-foreground flex flex-wrap items-center gap-4">
-                    <span>
-                        Client: <span className="text-foreground">{d.client}</span>
-                    </span>
-                    <span>
-                        Consultant:{" "}
-                        <span className="text-foreground">{d.consultant}</span>
-                    </span>
-                    <span>• {d.size}</span>
-                    <span>• {d.date}</span>
+                <div>
+                    <h4 className="text-sm font-medium text-gray-900">{d.title}</h4>
+                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                        <Badge variant="outline" className="text-[10px] h-4 px-1">{d.type}</Badge>
+                        <span>• {d.size || "0 KB"}</span>
+                        <span>• {d.date}</span>
+                    </div>
                 </div>
             </div>
-            <div className="flex items-center gap-2">
-                <Button variant="outline" size="icon" className="h-8 w-8">
-                    <Eye className="h-4 w-4" />
+            <div className="flex items-center gap-3">
+                <Button variant="outline" size="icon" className="h-10 w-10 border-gray-200 hover:bg-gray-50 text-gray-700 rounded-lg" onClick={() => window.open(d.fileUrl, "_blank")}>
+                    <Eye className="w-5 h-5" />
                 </Button>
-                <Button variant="outline" size="icon" className="h-8 w-8">
-                    <Download className="h-4 w-4" />
+                <Button variant="outline" size="icon" className="h-10 w-10 border-gray-200 hover:bg-gray-50 text-gray-700 rounded-lg" onClick={() => {
+                    const link = document.createElement('a');
+                    link.href = d.fileUrl;
+                    link.download = d.title || 'document';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                }}>
+                    <Download className="w-5 h-5" />
                 </Button>
-                <Button
-                    variant="destructive"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => onDelete(d.id)}
-                >
-                    <Trash2 className="h-4 w-4" />
-                </Button>
+                {canDelete && (
+                    <Button variant="destructive" size="icon" className="h-10 w-10 bg-red-500 hover:bg-red-600 text-white rounded-lg hover:text-white" onClick={() => onDelete(d.id)}>
+                        <Trash2 className="w-5 h-5" />
+                    </Button>
+                )}
             </div>
         </div>
     );
-}
+};
 function filterDocs(docs: DocItem[], q: string, cat: string) {
     const nq = normalize(q);
     return docs.filter(
@@ -870,11 +866,118 @@ function filterDocs(docs: DocItem[], q: string, cat: string) {
                 normalize(d.client).includes(nq))
     );
 }
-function DocumentsTab() {
-    const [items, setItems] = useState<DocItem[]>([]);
+/* --------------------------------------
+   Documents Tab (list + upload modal)
+-------------------------------------- */
+function DocumentsTab({ consultantId }: { consultantId: string }) { // consultantId to check delete permission
+    const { clientId } = useParams<{ clientId: string }>();
+    const queryClient = useQueryClient();
     const [q, setQ] = useState("");
     const [cat, setCat] = useState("All Categories");
+
+    // Upload Modal State
+    const [isUploadOpen, setIsUploadOpen] = useState(false);
+    const [uploadFile, setUploadFile] = useState<File | null>(null);
+    const [uploadTitle, setUploadTitle] = useState("");
+    const [uploadType, setUploadType] = useState("Medical Report");
+    const [uploadDesc, setUploadDesc] = useState("");
+    const [isUploading, setIsUploading] = useState(false);
+    const [deleteId, setDeleteId] = useState<string | null>(null);
+
+    const { data: documentsData, isLoading } = useQuery({
+        queryKey: ["clientDocuments", clientId],
+        queryFn: () => clientId ? DocumentAPI.getAll({ client: clientId }) : Promise.resolve({ documents: [] }),
+        enabled: !!clientId
+    });
+
+    const items = useMemo(() => {
+        if (!documentsData?.documents) return [];
+        return documentsData.documents.map((d: any) => ({
+            id: d._id,
+            title: d.title,
+            type: d.type,
+            client: d.clientSnapshot?.fullName || d.client?.fullName || "Client",
+            consultant: d.consultantSnapshot?.fullName || d.consultant?.fullName || "Consultant",
+            size: d.formattedSize || "0 KB",
+            date: new Date(d.createdAt).toLocaleDateString(),
+            fileUrl: d.fileUrl,
+            consultantId: d.consultant?._id || d.consultant, // Extract consultant ID or object
+            uploadedBy: d.uploadedBy
+        }));
+    }, [documentsData]);
+
     const filtered = useMemo(() => filterDocs(items, q, cat), [items, q, cat]);
+
+    const uploadMutation = useMutation({
+        mutationFn: async () => {
+            if (!uploadFile || !clientId) throw new Error("Missing file or client");
+
+            // 1. Upload File
+            const uploadRes = await UploadAPI.uploadDocument(uploadFile);
+            const { url, key, fileName, size, mimeType } = uploadRes.data;
+
+            // 2. Create Document
+            const docPayload = {
+                title: uploadTitle,
+                type: uploadType,
+                description: uploadDesc,
+                client: clientId,
+                // consultant: // Backend handles consultant assignment based on logged-in user if role is Consultant
+                fileUrl: url,
+                fileKey: key,
+                fileName,
+                originalFileName: uploadFile.name,
+                fileSize: size,
+                mimeType
+            };
+
+            return DocumentAPI.create(docPayload);
+        },
+        onSuccess: () => {
+            toast.success("Document uploaded successfully");
+            setIsUploadOpen(false);
+            setUploadFile(null);
+            setUploadTitle("");
+            setUploadDesc("");
+            queryClient.invalidateQueries({ queryKey: ["clientDocuments"] });
+        },
+        onError: (err: any) => {
+            toast.error(err?.message || "Failed to upload document");
+        }
+    });
+
+    const deleteMutation = useMutation({
+        mutationFn: (id: string) => DocumentAPI.delete(id),
+        onSuccess: () => {
+            toast.success("Document deleted");
+            queryClient.invalidateQueries({ queryKey: ["clientDocuments"] });
+            setDeleteId(null);
+        },
+        onError: (err: any) => {
+            toast.error(err?.message || "Failed to delete document");
+        }
+    });
+
+    const handleUpload = async () => {
+        if (!uploadFile) {
+            toast.error("Please select a file");
+            return;
+        }
+        if (!uploadTitle) {
+            toast.error("Please enter a title");
+            return;
+        }
+        setIsUploading(true);
+        try {
+            await uploadMutation.mutateAsync();
+        } finally {
+            setIsUploading(false);
+        }
+    };
+
+    const handleDelete = (id: string) => {
+        setDeleteId(id);
+    };
 
     return (
         <div className="space-y-4">
@@ -887,7 +990,7 @@ function DocumentsTab() {
                 </CardHeader>
                 <CardContent className="space-y-3">
                     <div className="flex items-center justify-between gap-2">
-                        <Button className="gap-2 bg-blue-500 hover:bg-blue-600">
+                        <Button className="gap-2 bg-blue-500 hover:bg-blue-600" onClick={() => setIsUploadOpen(true)}>
                             <UploadIcon className="h-4 w-4" /> Upload Document
                         </Button>
                         <Select value={cat} onValueChange={setCat}>
@@ -902,6 +1005,9 @@ function DocumentsTab() {
                                 </SelectItem>
                                 <SelectItem value="Prescription">Prescription</SelectItem>
                                 <SelectItem value="Invoice">Invoice</SelectItem>
+                                <SelectItem value="Lab Results">Lab Results</SelectItem>
+                                <SelectItem value="Treatment Plan">Treatment Plan</SelectItem>
+                                <SelectItem value="Other">Other</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
@@ -911,29 +1017,87 @@ function DocumentsTab() {
                         <Input
                             value={q}
                             onChange={(e) => setQ(e.target.value)}
-                            placeholder="Search by consultant, invoice number..."
+                            placeholder="Search by title..."
                             className="pl-9"
                         />
                     </div>
 
                     <div className="space-y-3">
-                        {filtered.map((d) => (
-                            <DocRow
-                                key={d.id}
-                                d={d}
-                                onDelete={(id) =>
-                                    setItems((prev) => prev.filter((x) => x.id !== id))
-                                }
-                            />
-                        ))}
-                        {filtered.length === 0 && (
-                            <div className="text-sm text-muted-foreground">
-                                No documents found.
-                            </div>
-                        )}
+                        {isLoading ? <div className="text-center p-4">Loading documents...</div> :
+                            filtered.length > 0 ? filtered.map((doc: any) => (
+                                <DocRow
+                                    key={doc.id} // Changed from doc._id to doc.id based on items mapping
+                                    d={doc}
+                                    onDelete={handleDelete}
+                                    canDelete={String(doc.uploadedBy) === String(consultantId)} // Only allow delete if uploaded by current consultant
+                                />
+                            )) : (
+                                <div className="text-sm text-muted-foreground text-center py-4">
+                                    No documents found.
+                                </div>
+                            )}
                     </div>
                 </CardContent>
             </Card>
+
+            {/* Upload Modal */}
+            <Modal open={isUploadOpen} onClose={() => setIsUploadOpen(false)} title="Upload Document">
+                <div className="space-y-4">
+                    <div className="grid gap-2">
+                        <label className="text-sm font-medium">Title</label>
+                        <Input value={uploadTitle} onChange={(e) => setUploadTitle(e.target.value)} placeholder="e.g. Lab Report - Oct 24" />
+                    </div>
+
+                    <div className="grid gap-2">
+                        <label className="text-sm font-medium">Type</label>
+                        <Select value={uploadType} onValueChange={setUploadType}>
+                            <SelectTrigger>
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="Medical Report">Medical Report</SelectItem>
+                                <SelectItem value="Consultation Notes">Consultation Notes</SelectItem>
+                                <SelectItem value="Prescription">Prescription</SelectItem>
+                                <SelectItem value="Lab Results">Lab Results</SelectItem>
+                                <SelectItem value="Treatment Plan">Treatment Plan</SelectItem>
+                                <SelectItem value="Other">Other</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <div className="grid gap-2">
+                        <label className="text-sm font-medium">Description (Optional)</label>
+                        <Input value={uploadDesc} onChange={(e) => setUploadDesc(e.target.value)} placeholder="Short description..." />
+                    </div>
+
+                    <div className="grid gap-2">
+                        <label className="text-sm font-medium">File</label>
+                        <Input type="file" onChange={(e) => setUploadFile(e.target.files?.[0] || null)} />
+                    </div>
+
+                    <div className="flex justify-end gap-3 pt-2">
+                        <Button variant="outline" onClick={() => setIsUploadOpen(false)}>Cancel</Button>
+                        <Button onClick={handleUpload} disabled={isUploading} className="bg-blue-600 hover:bg-blue-700 text-white">
+                            {isUploading ? "Uploading..." : "Upload"}
+                        </Button>
+                    </div>
+                </div>
+            </Modal>
+
+            {/* Delete Confirmation Modal */}
+            <Modal open={!!deleteId} onClose={() => setDeleteId(null)} title="Delete Document">
+                <div className="space-y-4">
+                    <p className="text-sm text-muted-foreground">
+                        Are you sure you want to delete this document? This action cannot be undone.
+                    </p>
+                    <div className="flex justify-end gap-3">
+                        <Button variant="outline" onClick={() => setDeleteId(null)}>Cancel</Button>
+                        <Button variant="destructive" onClick={() => deleteId && deleteMutation.mutate(deleteId)} disabled={deleteMutation.isPending}>
+                            {deleteMutation.isPending ? "Deleting..." : "Delete"}
+                        </Button>
+                    </div>
+                </div>
+            </Modal>
         </div>
     );
 }
@@ -1219,17 +1383,16 @@ function PaymentsTab({ transactions }: { transactions: any[] }) {
     );
 }
 
-import { useParams, useSearchParams } from "react-router-dom";
-
 /* --------------------------------------
    Main Page with persistent heading + header + tabs
 -------------------------------------- */
 export default function Consultant_ClientProfile() {
     const { clientId } = useParams<{ clientId: string }>();
+    const { user } = useAuth();
     const [searchParams, setSearchParams] = useSearchParams();
-    const tab = (searchParams.get("tab") as "profile" | "documents" | "payments") || "documents";
+    const tab = (searchParams.get("tab") as "bookings" | "documents" | "payments") || "bookings";
 
-    const setTab = (t: "profile" | "documents" | "payments") => {
+    const setTab = (t: "bookings" | "documents" | "payments") => {
         setSearchParams({ tab: t });
     };
 
@@ -1268,13 +1431,24 @@ export default function Consultant_ClientProfile() {
         return all.filter((t: any) => (t.user?._id === clientId || t.user === clientId));
     }, [transactionsData, clientId]);
 
+    const { data: appointmentsData, isLoading: loadingAppointments } = useQuery({
+        queryKey: ["clientAppointments", clientId],
+        queryFn: () => clientId ? AppointmentAPI.getAll({ client: clientId }) : Promise.resolve({ data: [] }),
+        enabled: !!clientId
+    });
+
+    const appointments = useMemo(() => appointmentsData?.data || [], [appointmentsData]);
+
     if (loadingProfile) {
         return <div className="p-8 text-center">Loading profile...</div>;
     }
 
     const tabs = [
-        // { key: "profile", label: "Profile", icon: <User className="h-4 w-4" /> },
-        // Removed "Bookings" tab - appointments are shown in "My Booking" page
+        {
+            key: "bookings",
+            label: "Bookings",
+            icon: <CalendarDays className="h-4 w-4" />,
+        },
         {
             key: "documents",
             label: "Upload Document",
@@ -1311,8 +1485,9 @@ export default function Consultant_ClientProfile() {
             </div>
 
 
-            {/* Removed BookingsTab - appointments are shown in "My Booking" page */}
-            {tab === "documents" && <DocumentsTab />}
+            {/* {tab === "profile" && <ProfileTab profile={profile} stats={stats} />} */}
+            {tab === "bookings" && <BookingsTab appointments={appointments} profile={profile} />}
+            {tab === "documents" && <DocumentsTab consultantId={user?._id || user?.id || ""} />}
             {tab === "payments" && <PaymentsTab transactions={transactions} />}
         </div>
     );

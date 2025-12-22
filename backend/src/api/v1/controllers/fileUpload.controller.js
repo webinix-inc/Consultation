@@ -1,6 +1,6 @@
 const { sendSuccess, ApiError } = require("../../../utils/response");
 const httpStatus = require("../../../constants/httpStatus");
-const { uploadFile, deleteFile, getUserFolder } = require("../../../services/s3.service");
+const { deleteFile } = require("../../../services/cloudinary.service");
 
 /**
  * Upload profile image
@@ -17,7 +17,7 @@ exports.uploadImage = async (req, res, next) => {
       throw new ApiError("User not authenticated", httpStatus.UNAUTHORIZED);
     }
 
-    // File is already uploaded to S3 by multer middleware
+    // File is already uploaded to Cloudinary by middleware
     const fileUrl = req.file.location;
     const fileKey = req.file.key;
 
@@ -48,7 +48,7 @@ exports.uploadDocument = async (req, res, next) => {
       throw new ApiError("User not authenticated", httpStatus.UNAUTHORIZED);
     }
 
-    // File is already uploaded to S3 by multer middleware
+    // File is already uploaded to Cloudinary by middleware
     const fileUrl = req.file.location;
     const fileKey = req.file.key;
 
@@ -65,12 +65,12 @@ exports.uploadDocument = async (req, res, next) => {
 };
 
 /**
- * Delete file from S3
+ * Delete file from Cloudinary
  * DELETE /api/v1/upload/:key
  */
 exports.deleteFile = async (req, res, next) => {
   try {
-    const { key } = req.params;
+    const { key } = req.query;
     const userId = req.user?.id;
 
     if (!userId) {
@@ -79,11 +79,6 @@ exports.deleteFile = async (req, res, next) => {
 
     if (!key) {
       throw new ApiError("File key is required", httpStatus.BAD_REQUEST);
-    }
-
-    // Verify the file belongs to the user (security check)
-    if (!key.includes(`users/${userId}/`)) {
-      throw new ApiError("Unauthorized to delete this file", httpStatus.FORBIDDEN);
     }
 
     await deleteFile(key);

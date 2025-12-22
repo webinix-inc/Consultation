@@ -1,8 +1,9 @@
 const multer = require("multer");
 const { uploadFile, getUserFolder } = require("../services/s3.service");
+const cloudinaryService = require("../services/cloudinary.service");
 
 /**
- * Multer memory storage (files stored in memory before uploading to S3)
+ * Multer memory storage (files stored in memory before uploading to S3/Cloudinary)
  */
 const memoryStorage = multer.memoryStorage();
 
@@ -58,7 +59,7 @@ const uploadToS3 = async (req, res, next) => {
 
     const userId = req.user?.id || "anonymous";
     const folder = getUserFolder(userId, req.file.fieldname === "image" || req.file.fieldname === "avatar" ? "images" : "documents");
-    
+
     // Upload file to S3
     const result = await uploadFile(
       req.file.buffer,
@@ -99,11 +100,73 @@ const uploadMultipleToS3 = async (req, res, next) => {
         folder,
         file.mimetype
       );
-      
+
       file.location = result.url;
       file.key = result.key;
       file.s3FileName = result.fileName;
-      
+
+      return file;
+    });
+
+    await Promise.all(uploadPromises);
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Middleware to upload file to Cloudinary after multer processes it
+ */
+const uploadToCloudinary = async (req, res, next) => {
+  try {
+    if (!req.file) {
+      return next();
+    }
+
+    const folder = req.file.fieldname === "image" || req.file.fieldname === "avatar" || req.file.fieldname === "profileImage"
+      ? "consultation/images"
+      : "consultation/documents";
+
+    // Upload file to Cloudinary
+    const result = await cloudinaryService.uploadFile(
+      req.file.buffer,
+      folder
+    );
+
+    // Attach Cloudinary file info to req.file
+    req.file.location = result.url;
+    req.file.key = result.public_id; // Using public_id as key
+    req.file.s3FileName = result.public_id;
+
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Middleware to upload multiple files to Cloudinary
+ */
+const uploadMultipleToCloudinary = async (req, res, next) => {
+  try {
+    if (!req.files || req.files.length === 0) {
+      return next();
+    }
+
+    const folderType = req.files[0].fieldname === "images" ? "consultation/images" : "consultation/documents";
+
+    // Upload all files to Cloudinary
+    const uploadPromises = req.files.map(async (file) => {
+      const result = await cloudinaryService.uploadFile(
+        file.buffer,
+        folderType
+      );
+
+      file.location = result.url;
+      file.key = result.public_id;
+      file.s3FileName = result.public_id;
+
       return file;
     });
 
@@ -122,7 +185,8 @@ module.exports = {
   uploadImage,
   uploadDocument,
   uploadToS3,
+  uploadToCloudinary,
   uploadMultipleToS3,
+  uploadMultipleToCloudinary,
   createUploadMiddleware,
 };
-

@@ -33,6 +33,8 @@ const userSchema = new mongoose.Schema(
       default: "Pending",
     },
 
+    profileImage: { type: String, default: "" },
+
     lastLogin: { type: Date },
 
     // Password Fields

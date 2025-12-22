@@ -8,7 +8,8 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
-import { Pencil, Trash2, Check, Clipboard, Ban, CheckCircle } from "lucide-react";
+import { Pencil, Trash2, Check, Clipboard, Ban, CheckCircle, Upload } from "lucide-react";
+import UploadAPI from "@/api/upload.api";
 
 import {
   Dialog,
@@ -63,7 +64,9 @@ const UserManagement = () => {
     email: "",
     phone: "",
     role: "",
+    profileImage: "",
   });
+  const [isUploading, setIsUploading] = useState(false);
   const [page, setPage] = useState(1);
   const [roleFilter, setRoleFilter] = useState("All");
   const [search, setSearch] = useState("");
@@ -80,6 +83,7 @@ const UserManagement = () => {
         email: "",
         phone: "",
         role: "",
+        profileImage: "",
       });
     }
   }, [isDialogOpen]);
@@ -145,6 +149,7 @@ const UserManagement = () => {
         email: "",
         phone: "",
         role: "",
+        profileImage: "",
       });
 
       // Close dialog
@@ -278,16 +283,26 @@ const UserManagement = () => {
 
   const handleRoleChange = (value: string) => {
     // Set default permissions based on role
-
     setUserData({
       ...userData,
       role: value,
     });
   };
 
-
-
-
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setIsUploading(true);
+      try {
+        const response = await UploadAPI.uploadImage(e.target.files[0]);
+        setUserData({ ...userData, profileImage: response.data.url });
+        toast.success("Image uploaded successfully");
+      } catch (error) {
+        toast.error("Failed to upload image");
+      } finally {
+        setIsUploading(false);
+      }
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -300,7 +315,6 @@ const UserManagement = () => {
       !userData.role
     ) {
       toast.error("Please fill in all required fields");
-
       return;
     }
 
@@ -308,7 +322,6 @@ const UserManagement = () => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(userData.email)) {
       toast.error("Please enter a valid email address");
-
       return;
     }
 
@@ -316,7 +329,6 @@ const UserManagement = () => {
     const phoneRegex = /^\+?[\d\s-()]+$/;
     if (!phoneRegex.test(userData.phone)) {
       toast.error("Please enter a valid phone number");
-
       return;
     }
 
@@ -328,9 +340,8 @@ const UserManagement = () => {
       mobile: userData.phone,
       role: userData.role,
       status: "Active",
+      profileImage: userData.profileImage,
     };
-
-
 
     createUser(userPayload);
   };
@@ -342,8 +353,7 @@ const UserManagement = () => {
       email: "",
       phone: "",
       role: "",
-
-
+      profileImage: "",
     });
 
     // Close dialog
@@ -357,8 +367,7 @@ const UserManagement = () => {
       email: user.email,
       phone: user.mobile,
       role: user.role,
-
-
+      profileImage: user.profileImage || "",
     });
     setIsEditDialogOpen(true);
   };
@@ -400,6 +409,7 @@ const UserManagement = () => {
       email: userData.email,
       mobile: userData.phone,
       role: userData.role,
+      profileImage: userData.profileImage,
     };
 
 
@@ -413,8 +423,7 @@ const UserManagement = () => {
       email: "",
       phone: "",
       role: "",
-
-
+      profileImage: "",
     });
     setIsEditDialogOpen(false);
   };
@@ -572,6 +581,39 @@ const UserManagement = () => {
                 <DialogTitle className="text-lg font-semibold mb-4">
                   Add New User
                 </DialogTitle>
+
+                {/* Profile Image Upload */}
+                <div className="flex justify-center mb-6">
+                  <div className="relative group">
+                    <div className="w-24 h-24 rounded-full bg-gray-100 border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden">
+                      {userData.profileImage ? (
+                        <img
+                          src={userData.profileImage}
+                          alt="Profile"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="text-center p-2">
+                          <Upload size={20} className="mx-auto text-gray-400 mb-1" />
+                          <span className="text-[10px] text-gray-500">
+                            Upload Photo
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <label className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-full cursor-pointer text-white text-xs font-medium">
+                      {isUploading ? "..." : "Change"}
+                      <input
+                        type="file"
+                        className="hidden"
+                        accept="image/*"
+                        onChange={handleImageUpload}
+                        disabled={isUploading}
+                      />
+                    </label>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Input
                     name="fullName"
@@ -626,6 +668,39 @@ const UserManagement = () => {
               <DialogTitle className="text-lg font-semibold mb-4">
                 Edit User
               </DialogTitle>
+
+              {/* Profile Image Upload */}
+              <div className="flex justify-center mb-6">
+                <div className="relative group">
+                  <div className="w-24 h-24 rounded-full bg-gray-100 border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden">
+                    {userData.profileImage ? (
+                      <img
+                        src={userData.profileImage}
+                        alt="Profile"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="text-center p-2">
+                        <Upload size={20} className="mx-auto text-gray-400 mb-1" />
+                        <span className="text-[10px] text-gray-500">
+                          Upload Photo
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  <label className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-full cursor-pointer text-white text-xs font-medium">
+                    {isUploading ? "..." : "Change"}
+                    <input
+                      type="file"
+                      className="hidden"
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      disabled={isUploading}
+                    />
+                  </label>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Input
                   name="fullName"
@@ -702,6 +777,7 @@ const UserManagement = () => {
         <table className="min-w-full table-auto text-sm text-left">
           <thead className="bg-gray-200">
             <tr>
+              <th className="p-3 font-medium">Profile</th>
               <th className="p-3 font-medium">Full Name</th>
               <th className="p-3 font-medium">Email ID</th>
               <th className="p-3 font-medium">Mobile Number</th>
@@ -718,6 +794,21 @@ const UserManagement = () => {
                 className={`hover:bg-gray-50 ${isCurrentUser(user) ? "bg-blue-50/50" : ""}`}
               >
 
+                <td className="p-3">
+                  <div className="w-10 h-10 rounded-full bg-gray-200 overflow-hidden flex-shrink-0">
+                    {user.profileImage ? (
+                      <img
+                        src={user.profileImage}
+                        alt=""
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-gray-400 font-semibold bg-gray-100">
+                        {user.fullName.charAt(0)}
+                      </div>
+                    )}
+                  </div>
+                </td>
                 <td className="p-3">{user.fullName}</td>
                 {/* <td className="p-3">{user.email}</td>
                  */}

@@ -15,6 +15,7 @@ import {
   ChevronDown,
   Check,
   X,
+  Upload,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import UserAPI from "@/api/user.api";
@@ -22,6 +23,7 @@ import CategoryAPI from "@/api/category.api";
 import SubcategoryAPI from "@/api/subcategory.api";
 import ConsultantAPI from "@/api/consultant.api";
 import ClientConsultantAPI from "@/api/clientConsultant.api";
+import UploadAPI from "@/api/upload.api";
 import { toast } from "react-hot-toast";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
@@ -112,6 +114,7 @@ const initialConsultantForm = {
   password: "", // Optional - if not provided, will be auto-generated
   category: "",
   subcategory: "",
+  image: "",
 };
 
 const generateUserId = () => {
@@ -457,6 +460,22 @@ const ConsultationManagement: React.FC = () => {
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [openAdd, setOpenAdd] = useState(false);
   const [form, setForm] = useState(initialConsultantForm);
+  const [isUploading, setIsUploading] = useState(false);
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setIsUploading(true);
+      try {
+        const response = await UploadAPI.uploadImage(e.target.files[0]);
+        setForm({ ...form, image: response.data.url });
+        toast.success("Image uploaded successfully");
+      } catch (error) {
+        toast.error("Failed to upload image");
+      } finally {
+        setIsUploading(false);
+      }
+    }
+  };
 
   const {
     usersQuery,
@@ -661,6 +680,7 @@ const ConsultationManagement: React.FC = () => {
         mobile: payload.mobile,
         category: payload.category || 'General',
         subcategory: payload.subcategory || '',
+        image: payload.image || '',
       };
 
       // Add password if provided
@@ -1027,6 +1047,7 @@ const ConsultationManagement: React.FC = () => {
                 mobile,
                 role: "Consultant",
                 status: "Active",
+                image: form.image,
               };
 
               if (form.category) userPayload.category = form.category;
@@ -1040,6 +1061,38 @@ const ConsultationManagement: React.FC = () => {
               createConsultant(userPayload);
             }}
           >
+            {/* Profile Image Upload */}
+            <div className="flex justify-center mb-4">
+              <div className="relative group">
+                <div className="w-24 h-24 rounded-full bg-gray-100 border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden">
+                  {form.image ? (
+                    <img
+                      src={form.image}
+                      alt="Profile"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="text-center p-2">
+                      <Upload size={20} className="mx-auto text-gray-400 mb-1" />
+                      <span className="text-[10px] text-gray-500">
+                        Upload Photo
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <label className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-full cursor-pointer text-white text-xs font-medium">
+                  {isUploading ? "..." : "Change"}
+                  <input
+                    type="file"
+                    className="hidden"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    disabled={isUploading}
+                  />
+                </label>
+              </div>
+            </div>
+
             <div>
               <input
                 className="w-full border rounded-md p-2 text-sm bg-gray-50"

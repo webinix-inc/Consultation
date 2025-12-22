@@ -55,7 +55,7 @@ exports.createAppointment = async (req, res, next) => {
     // Clients are stored in Client model, not User model
     const Client = require("../../../models/client.model");
     let client = await Client.findById(value.client);
-    
+
     // Fallback: Check User model for backward compatibility (though clients should be in Client model)
     if (!client) {
       const userClient = await User.findById(value.client);
@@ -63,7 +63,7 @@ exports.createAppointment = async (req, res, next) => {
         client = userClient;
       }
     }
-    
+
     if (!client) throw new ApiError("Client not found", httpStatus.NOT_FOUND);
 
     // Resolve Consultant to User ID and Consultant Document
@@ -108,7 +108,7 @@ exports.createAppointment = async (req, res, next) => {
     // Use the User ID if available, otherwise use Consultant ID
     // For ClientConsultant linking, prefer User ID but fallback to Consultant ID
     const consultantUserId = consultantUser ? consultantUser._id : (consultantDoc ? consultantDoc._id : null);
-    
+
     if (!consultantUserId) {
       throw new ApiError("Consultant not found", httpStatus.NOT_FOUND);
     }
@@ -345,10 +345,10 @@ exports.getAppointments = async (req, res, next) => {
       let consultantDoc = null;
       let consultantId = userId; // Default: assume userId is Consultant ID
       let linkedUserId = null;
-      
+
       // First, try to find consultant by ID (most likely case - consultants auth with Consultant ID)
       consultantDoc = await Consultant.findById(userId).lean();
-      
+
       // If found, check if it has a linked User ID
       if (consultantDoc) {
         consultantId = consultantDoc._id;
@@ -368,7 +368,7 @@ exports.getAppointments = async (req, res, next) => {
           }
         }
       }
-      
+
       // Build query to match either Consultant ID or User ID (if linked)
       if (consultantDoc) {
         if (linkedUserId) {
@@ -403,7 +403,7 @@ exports.getAppointments = async (req, res, next) => {
     // Additional filters
     if (status) query.status = status;
     if (consultant && userRole === "Admin") query.consultant = consultant; // Only admin can filter by consultant
-    if (client && userRole === "Admin") query.client = client; // Only admin can filter by client
+    if (client && (userRole === "Admin" || userRole === "Consultant")) query.client = client; // Admin and Consultant can filter by client
 
     // date range filter using startAt
     if (from || to) {
@@ -574,7 +574,7 @@ exports.getAppointmentById = async (req, res, next) => {
       // For consultants, userId is their Consultant ID (from JWT)
       // Check if appointment's consultant matches the logged-in consultant
       let isAuthorized = String(consultantId) === String(userId);
-      
+
       if (!isAuthorized) {
         // Try to check if consultant has linked User ID that matches
         const Consultant = require("../../../models/consultant.model").Consultant;
@@ -590,7 +590,7 @@ exports.getAppointmentById = async (req, res, next) => {
           isAuthorized = true;
         }
       }
-      
+
       if (!isAuthorized) {
         throw new ApiError("Not authorized to view this appointment", httpStatus.FORBIDDEN);
       }
@@ -635,7 +635,7 @@ exports.updateAppointment = async (req, res, next) => {
       // For consultants, userId is their Consultant ID (from JWT)
       // Check if appointment's consultant matches the logged-in consultant
       let isAuthorized = String(consultantId) === String(userId);
-      
+
       if (!isAuthorized) {
         // Try to check if consultant has linked User ID that matches
         const Consultant = require("../../../models/consultant.model").Consultant;
@@ -651,7 +651,7 @@ exports.updateAppointment = async (req, res, next) => {
           isAuthorized = true;
         }
       }
-      
+
       if (!isAuthorized) {
         throw new ApiError("Not authorized to update this appointment", httpStatus.FORBIDDEN);
       }
@@ -803,9 +803,9 @@ exports.updateAppointment = async (req, res, next) => {
       }
 
       // Check if time/date changed
-      const timeChanged = (newStart && (oldDate !== appt.date || oldTimeStart !== appt.timeStart)) || 
-                          (value.date && value.date !== oldDate) ||
-                          (value.timeStart && value.timeStart !== oldTimeStart);
+      const timeChanged = (newStart && (oldDate !== appt.date || oldTimeStart !== appt.timeStart)) ||
+        (value.date && value.date !== oldDate) ||
+        (value.timeStart && value.timeStart !== oldTimeStart);
 
       if (timeChanged) {
         const dateStr = appt.date || (appt.startAt ? appt.startAt.toISOString().split("T")[0] : "");
@@ -864,7 +864,7 @@ exports.deleteAppointment = async (req, res, next) => {
       // For consultants, userId is their Consultant ID (from JWT)
       // Check if appointment's consultant matches the logged-in consultant
       let isAuthorized = String(consultantId) === String(userId);
-      
+
       if (!isAuthorized) {
         // Try to check if consultant has linked User ID that matches
         const Consultant = require("../../../models/consultant.model").Consultant;
@@ -880,7 +880,7 @@ exports.deleteAppointment = async (req, res, next) => {
           isAuthorized = true;
         }
       }
-      
+
       if (!isAuthorized) {
         throw new ApiError("Not authorized to delete this appointment", httpStatus.FORBIDDEN);
       }

@@ -614,6 +614,7 @@ export default function ClientManagement() {
           createdAt: clientData.createdAt || clientData.created_at || "",
           sessions: 0,
           lastSession: "-",
+          avatar: clientData.avatar || clientData.profileImage || clientData.image || "",
         } as Client & { createdAt: string };
       });
     }
@@ -641,6 +642,7 @@ export default function ClientManagement() {
       createdAt: user.createdAt || user.created_at || "",
       sessions: 0,
       lastSession: "-",
+      avatar: user.avatar || user.profileImage || user.image || "",
     } as Client & { createdAt: string }));
   }, [data, linkedClientIds, linkedClientsArray, categories, subcategories]);
 

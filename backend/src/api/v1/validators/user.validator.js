@@ -51,13 +51,16 @@ const baseUserSchema = {
       Joi.valid(null)
     )
     .optional(),
-  status: Joi.string().valid("Active", "Inactive").default("Active"),
-  verificationStatus: Joi.string().valid("Approved", "Pending", "Rejected", "Blocked").default("Pending"),
+  status: Joi.string().valid("Active", "Inactive"),
+  verificationStatus: Joi.string().valid("Approved", "Pending", "Rejected", "Blocked"),
+  profileImage: Joi.string().allow("").optional(),
 };
 
 // Create user validation schema
 const createUserSchema = Joi.object({
   ...baseUserSchema,
+  status: baseUserSchema.status.default("Active"),
+  verificationStatus: baseUserSchema.verificationStatus.default("Pending"),
   userId: Joi.string().alphanum().min(3).max(20).required().messages({
     "string.alphanum": "User ID must contain only alphanumeric characters",
     "string.min": "User ID must be at least 3 characters long",
@@ -76,6 +79,7 @@ const updateUserSchema = Joi.object({
   subcategory: baseUserSchema.subcategory,
   status: baseUserSchema.status.optional(),
   verificationStatus: baseUserSchema.verificationStatus.optional(),
+  profileImage: baseUserSchema.profileImage.optional(),
 }).min(1); // At least one field must be provided
 
 // ID parameter validation
