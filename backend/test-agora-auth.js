@@ -44,10 +44,10 @@ try {
     const uid = 0;
     const role = RtcRole.PUBLISHER;
     const expireTime = 3600;
-    
+
     const currentTime = Math.floor(Date.now() / 1000);
     const privilegeExpiredTs = currentTime + expireTime;
-    
+
     const token = RtcTokenBuilder.buildTokenWithUid(
       AGORA_APP_ID,
       AGORA_APP_CERTIFICATE,
@@ -56,7 +56,7 @@ try {
       role,
       privilegeExpiredTs
     );
-    
+
     console.log('   ✅ Token generated successfully');
     console.log('   Token preview:', token.substring(0, 50) + '...');
   }
@@ -76,10 +76,10 @@ async function testRestApiAuth() {
 
     // Test with a simple API call to get project list
     const authHeader = generateBasicAuthHeader();
-    
+
     console.log('   Testing authentication with Agora REST API...');
     console.log('   Auth Header format:', authHeader.substring(0, 30) + '...');
-    
+
     const response = await axios.get('https://api.agora.io/dev/v2/projects', {
       headers: {
         'Authorization': authHeader,
@@ -112,7 +112,7 @@ async function testRestApiAuth() {
 // Run tests
 (async () => {
   await testRestApiAuth();
-  
+
   console.log('\n📋 Summary:');
   console.log('   If all tests pass, your Agora credentials are configured correctly!');
   console.log('   If any test fails, check:');
