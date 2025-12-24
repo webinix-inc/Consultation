@@ -315,7 +315,7 @@ function BookingRow({
 
             <div className="min-w-[220px] flex flex-col items-end gap-2">
                 <div className="font-semibold pr-2">₹{b.price}</div>
-                        {!past ? (
+                {!past ? (
                     <>
                         {!isConsultant && (
                             <div className="flex items-center gap-2">
@@ -324,8 +324,8 @@ function BookingRow({
                                         size="icon"
                                         className={cn(
                                             "h-9 w-9 rounded-full shadow-sm transition-all relative",
-                                            isNow 
-                                                ? "bg-blue-100 text-blue-700 hover:bg-blue-200 border border-blue-200 cursor-pointer" 
+                                            isNow
+                                                ? "bg-blue-100 text-blue-700 hover:bg-blue-200 border border-blue-200 cursor-pointer"
                                                 : "bg-gray-200 text-gray-400 cursor-not-allowed opacity-50"
                                         )}
                                         onClick={() => {

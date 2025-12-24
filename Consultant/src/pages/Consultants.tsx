@@ -26,20 +26,16 @@ export default function Consultants() {
   const queryClient = useQueryClient();
   const { user, isAuthenticated } = useSelector((state: RootState) => state.auth);
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("");
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [selectedConsultant, setSelectedConsultant] = useState<any>(null);
 
-  // Fetch consultants from API (only Approved status) - using public endpoint
+  // Fetch all consultants from API (only Approved status) - using public endpoint
   const { data: consultantsData, isLoading: isLoadingConsultants } = useQuery({
-    queryKey: ["consultants", "public", searchTerm, selectedCategory],
+    queryKey: ["consultants", "public"],
     queryFn: async () => {
       try {
         const params: any = { status: "Active" };
-        if (searchTerm) params.q = searchTerm;
-        if (selectedCategory) params.category = selectedCategory;
-
         const response = await axiosInstance.get("/consultants/public", { params });
         let data = [];
         if (response.data?.data && Array.isArray(response.data.data)) {
@@ -87,6 +83,30 @@ export default function Consultants() {
 
   const consultants = Array.isArray(consultantsData) ? consultantsData : [];
   const categories = Array.isArray(categoriesData) ? categoriesData : [];
+
+  // Client-side filtering: case-insensitive category search with partial matching
+  const filteredConsultantsList = useMemo(() => {
+    if (!searchTerm.trim()) {
+      return consultants; // Show all consultants if no search term
+    }
+
+    const searchLower = searchTerm.toLowerCase().trim();
+
+    return consultants.filter((consultant: any) => {
+      // Get category title (handle both object and string formats)
+      let categoryTitle = "";
+      if (consultant.category) {
+        if (typeof consultant.category === 'object') {
+          categoryTitle = consultant.category.title || "";
+        } else {
+          categoryTitle = String(consultant.category);
+        }
+      }
+
+      // Case-insensitive partial match
+      return categoryTitle.toLowerCase().includes(searchLower);
+    });
+  }, [consultants, searchTerm]);
 
   // Normalize active consultants
   const activeConsultants = useMemo(() => {
@@ -674,31 +694,15 @@ export default function Consultants() {
           </p>
         </div>
 
-        {/* Filters */}
-        <div className="mb-8 flex flex-col md:flex-row gap-4">
-          <div className="flex-1">
-            <input
-              type="text"
-              placeholder="Search consultants..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <div className="md:w-64">
-            <select
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-            >
-              <option value="">All Categories</option>
-              {categories.map((cat: any) => (
-                <option key={cat._id} value={cat.title}>
-                  {cat.title}
-                </option>
-              ))}
-            </select>
-          </div>
+        {/* Search Filter */}
+        <div className="mb-8">
+          <input
+            type="text"
+            placeholder="Search by category..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
         </div>
 
         {/* Consultants Grid */}
@@ -706,13 +710,13 @@ export default function Consultants() {
           <div className="text-center py-12">
             <p className="text-slate-500">Loading consultants...</p>
           </div>
-        ) : consultants.length === 0 ? (
+        ) : filteredConsultantsList.length === 0 ? (
           <div className="text-center py-12">
             <p className="text-slate-500">No consultants found</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {consultants.map((consultant: any, index: number) => {
+            {filteredConsultantsList.map((consultant: any, index: number) => {
               const consultantName = consultant.name || consultant.fullName || `${consultant.firstName || ""} ${consultant.lastName || ""}`.trim() || "Consultant";
               const consultantImage = consultant.image || consultant.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(consultantName)}&background=0d6efd&color=fff`;
               const ratingValue = consultant.ratingSummary?.average || consultant.avgRating || 4.5;
