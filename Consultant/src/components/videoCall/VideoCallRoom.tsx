@@ -42,6 +42,7 @@ export const VideoCallRoom: React.FC<VideoCallRoomProps> = ({
     role,
   });
 
+  console.log("testing", remoteUsers)
   // Mount local video
   useEffect(() => {
     if (localVideoTrack && localVideoRef.current) {

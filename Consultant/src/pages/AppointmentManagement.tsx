@@ -439,8 +439,13 @@ const AppointmentManagementConsultant: React.FC = () => {
     });
 
     return filtered.map((it: any) => {
-      const start = it.startAt ? new Date(it.startAt) : it.date && it.timeStart ? new Date(`${it.date}T${normalizeTimeString(it.timeStart)}:00`) : null;
-      const end = it.endAt ? new Date(it.endAt) : it.date && it.timeEnd ? new Date(`${it.date}T${normalizeTimeString(it.timeEnd)}:00`) : null;
+      const start = (it.date && it.timeStart)
+        ? new Date(`${it.date}T${normalizeTimeString(it.timeStart)}:00`)
+        : (it.startAt ? new Date(it.startAt) : null);
+
+      const end = (it.date && it.timeEnd)
+        ? new Date(`${it.date}T${normalizeTimeString(it.timeEnd)}:00`)
+        : (it.endAt ? new Date(it.endAt) : null);
 
       const dateStr = start ? start.toLocaleDateString() : it.date ? new Date(it.date).toLocaleDateString() : "";
       const timeStr = start && end ? `${formatToDisplay(start)} to ${formatToDisplay(end)}` : it.timeStart ? it.timeStart : "";

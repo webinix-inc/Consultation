@@ -17,6 +17,8 @@ const VideoCallPage = () => {
     // Agora App ID from env or fallback (to avoid restart requirement)
     const appId = import.meta.env.VITE_AGORA_APP_ID || "2ad83189742b4b1a8a6f22ca512a2c48";
 
+    console.log("VideoCallPage", id);
+    console.log("VideoCallPage user", user.id);
     useEffect(() => {
         const channel = searchParams.get("channel");
         if (channel) {

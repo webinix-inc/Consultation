@@ -42,16 +42,20 @@ export function useAgoraVideoCall({
   const clientRef = useRef<any>(null);
   const channelNameRef = useRef<string>('');
 
-  useEffect(() => {
+    useEffect(() => {
     // Initialize Agora client
     clientRef.current = AgoraRTC.createClient({
       mode: 'rtc',
       codec: 'vp8',
     });
 
+
+
     // Handle remote user events
     const handleUserPublished = async (user: any, mediaType: 'audio' | 'video') => {
       await clientRef.current.subscribe(user, mediaType);
+      console.log("user", user)
+      console.log("mediaType", mediaType)
       if (mediaType === 'video') {
         setRemoteUsers((prev) => {
           const existing = prev.find((u) => u.uid === user.uid);
@@ -72,6 +76,7 @@ export function useAgoraVideoCall({
         user.audioTrack?.play();
       }
     };
+
 
     const handleUserUnpublished = (user: any, mediaType: 'audio' | 'video') => {
       if (mediaType === 'video') {
@@ -103,6 +108,8 @@ export function useAgoraVideoCall({
     };
   }, []);
 
+
+
   const joinChannel = async () => {
     try {
       // Prevent multiple joins
@@ -120,15 +127,18 @@ export function useAgoraVideoCall({
       // Generate channel name from appointment ID
       channelNameRef.current = `appointment-${appointmentId}`;
 
+
       // Get token from backend
       const { token, uid } = await AgoraAPI.generateToken(
-        channelNameRef.current,
-        userId || 0,
-        role
+        channelNameRef.current
       );
 
+  
+
       // Join channel first
-      await clientRef.current.join(appId, channelNameRef.current, token, uid || 0);
+      const res = await clientRef.current.join(appId, channelNameRef.current, token, uid);
+
+
 
       // Create and publish local tracks if publisher
       if (role === 'publisher') {
