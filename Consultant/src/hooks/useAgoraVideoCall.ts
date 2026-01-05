@@ -23,6 +23,8 @@ interface UseAgoraVideoCallReturn {
   stopRecording: () => Promise<void>;
   error: string | null;
   loading: boolean;
+  audioEnabled: boolean;
+  videoEnabled: boolean;
 }
 
 export function useAgoraVideoCall({
@@ -38,11 +40,13 @@ export function useAgoraVideoCall({
   const [isRecording, setIsRecording] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [audioEnabled, setAudioEnabled] = useState(true);
+  const [videoEnabled, setVideoEnabled] = useState(true);
 
   const clientRef = useRef<any>(null);
   const channelNameRef = useRef<string>('');
 
-    useEffect(() => {
+  useEffect(() => {
     // Initialize Agora client
     clientRef.current = AgoraRTC.createClient({
       mode: 'rtc',
@@ -133,7 +137,7 @@ export function useAgoraVideoCall({
         channelNameRef.current
       );
 
-  
+
 
       // Join channel first
       const res = await clientRef.current.join(appId, channelNameRef.current, token, uid);
@@ -147,6 +151,8 @@ export function useAgoraVideoCall({
 
         setLocalAudioTrack(audioTrack);
         setLocalVideoTrack(videoTrack);
+        setAudioEnabled(true);
+        setVideoEnabled(true);
 
         // Publish tracks immediately after creation
         await clientRef.current.publish([audioTrack, videoTrack]);
@@ -199,13 +205,17 @@ export function useAgoraVideoCall({
 
   const toggleAudio = () => {
     if (localAudioTrack) {
-      localAudioTrack.setEnabled(!localAudioTrack.enabled);
+      const newState = !audioEnabled;
+      localAudioTrack.setEnabled(newState);
+      setAudioEnabled(newState);
     }
   };
 
   const toggleVideo = () => {
     if (localVideoTrack) {
-      localVideoTrack.setEnabled(!localVideoTrack.enabled);
+      const newState = !videoEnabled;
+      localVideoTrack.setEnabled(newState);
+      setVideoEnabled(newState);
     }
   };
 
@@ -249,6 +259,8 @@ export function useAgoraVideoCall({
     stopRecording,
     error,
     loading,
+    audioEnabled,
+    videoEnabled,
   };
 }
 

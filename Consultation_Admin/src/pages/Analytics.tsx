@@ -47,9 +47,7 @@ const AnalyticsDashboard: React.FC = () => {
           >
             <RefreshCw size={16} />
           </button>
-          <button className="flex items-center gap-2 px-3 py-2 bg-white border rounded-md text-sm font-medium hover:bg-gray-50 transition">
-            <Download size={14} /> Export Report
-          </button>
+          
         </div>
       </div>
 
