@@ -277,7 +277,7 @@ exports.getClientConsultants = async (req, res, next) => {
       const Appointment = require("../../../models/appointment.model");
       consultantUserIds = await Appointment.find({
         client: clientId,
-        status: { $in: ["Upcoming", "Confirmed"] }
+        status: "Upcoming"
       }).distinct("consultant");
 
       // Convert ObjectIds to strings

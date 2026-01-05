@@ -189,7 +189,8 @@ exports.verifyPayment = async (req, res, next) => {
           method: "Razorpay",
           transactionId: transaction._id,
         };
-        appointment.status = "Confirmed";
+        appointment.fee = transaction.amount; // Also set fee field
+        appointment.status = "Upcoming";
         await appointment.save();
 
         // Send notifications for confirmed appointment

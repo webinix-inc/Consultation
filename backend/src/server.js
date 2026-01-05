@@ -14,6 +14,11 @@ const server = http.createServer(app);
 (async () => {
   try {
     await connectDB();
+
+    // Start the appointment auto-completion scheduler
+    const { startAppointmentScheduler } = require('./services/appointmentScheduler');
+    startAppointmentScheduler();
+
     server.listen(PORT, () => {
       console.log(`Server running at http://localhost:${PORT}`);
     });

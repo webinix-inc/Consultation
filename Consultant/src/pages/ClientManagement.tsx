@@ -766,8 +766,6 @@ export default function ClientManagement() {
               <thead className="bg-muted/40 text-muted-foreground">
                 <tr>
                   <th className="text-left font-medium py-3 pl-6">Name</th>
-                  <th className="text-left font-medium py-3">Phone</th>
-                  <th className="text-left font-medium py-3">Email</th>
 
                   <th className="text-left font-medium py-3">Created At</th>
                   <th className="text-left font-medium py-3">Sessions</th>
@@ -789,8 +787,6 @@ export default function ClientManagement() {
                         </div>
                       </div>
                     </td>
-                    <td className="py-4">{r.phone}</td>
-                    <td className="py-4">{r.email}</td>
 
                     <td className="py-4"><span className="text-sm text-muted-foreground">{formatDate((r as any).createdAt)}</span></td>
                     <td className="py-4">{r.sessions || 0}</td>

@@ -10,7 +10,6 @@ import AuthAPI from "@/api/auth.api";
 import Logo from "@/assets/images/logo.jpg";
 
 const Login = () => {
-  const [userRole, setUserRole] = useState<'Client' | 'Consultant'>('Client');
   const [loginMode, setLoginMode] = useState<'otp' | 'password'>('password');
   const [step, setStep] = useState<'mobile' | 'otp'>('mobile');
   const [mobile, setMobile] = useState("");
@@ -93,13 +92,6 @@ const Login = () => {
         return;
       }
 
-      // Validate selected role matches actual user role
-      if (user.role !== userRole) {
-        toast.error(`Please select ${user.role} role to login.`);
-        setLoading(false);
-        return;
-      }
-
       // Login success for Consultant/Client
       dispatch(loginSuccess({ token, user }));
       navigate("/dashboard");
@@ -114,6 +106,15 @@ const Login = () => {
         return;
       } else if (errorMessage.includes("has been blocked")) {
         navigate('/account-status?status=blocked');
+        return;
+      }
+
+      // Check for user not found errors - redirect to signup
+      if (errorMessage.toLowerCase().includes("invalid login") ||
+        errorMessage.toLowerCase().includes("not found") ||
+        errorMessage.toLowerCase().includes("user not found")) {
+        toast.info("Account not found. Redirecting to sign up...");
+        navigate(`/signup?mobile=${encodeURIComponent(loginId)}`);
         return;
       }
 
@@ -134,23 +135,18 @@ const Login = () => {
 
     setLoading(true);
     try {
-      const response = await AuthAPI.verifyOtp({ mobile: normalizedMobile, otp, role: userRole });
+      const response = await AuthAPI.verifyOtp({ mobile: normalizedMobile, otp });
       const { token, user, isNewUser, registrationToken } = response.data.data;
 
       if (isNewUser) {
-        toast.error("Account not found. Please sign up first.");
+        // User doesn't exist - redirect to signup with mobile number pre-filled
+        toast.info("Account not found. Redirecting to sign up...");
+        navigate(`/signup?mobile=${encodeURIComponent(normalizedMobile)}`);
         return;
       } else {
         // Check if user is admin - block admin login
         if (user.role === 'Admin') {
           toast.error('Access denied. Admins cannot log in to this portal.');
-          setLoading(false);
-          return;
-        }
-
-        // Validate selected role matches actual user role
-        if (user.role !== userRole) {
-          toast.error(`Please select ${user.role} role to login.`);
           setLoading(false);
           return;
         }
@@ -198,42 +194,6 @@ const Login = () => {
                 ? 'Enter your mobile number to login'
                 : 'Enter the OTP sent to your mobile'}
           </p>
-        </div>
-
-        {/* Role Selector */}
-        <div className="flex gap-2 mb-4 bg-blue-50 p-1 rounded-lg border border-blue-100">
-          <button
-            onClick={() => {
-              setUserRole('Client');
-              setLoginId("");
-              setPassword("");
-              setMobile("");
-              setOtp("");
-              setStep('mobile');
-            }}
-            className={`flex-1 py-2 rounded-md text-sm font-medium transition ${userRole === 'Client'
-              ? 'bg-white text-[#2E7FC4] shadow-sm font-semibold'
-              : 'text-gray-600 hover:text-gray-800'
-              }`}
-          >
-            Client
-          </button>
-          <button
-            onClick={() => {
-              setUserRole('Consultant');
-              setLoginId("");
-              setPassword("");
-              setMobile("");
-              setOtp("");
-              setStep('mobile');
-            }}
-            className={`flex-1 py-2 rounded-md text-sm font-medium transition ${userRole === 'Consultant'
-              ? 'bg-white text-[#2E7FC4] shadow-sm font-semibold'
-              : 'text-gray-600 hover:text-gray-800'
-              }`}
-          >
-            Consultant
-          </button>
         </div>
 
         {/* Login Mode Toggle */}
@@ -297,18 +257,21 @@ const Login = () => {
             </>
           ) : step === 'mobile' ? (
             <>
-              <input
-                className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#2E7FC4] text-gray-700 placeholder-gray-400"
-                value={mobile}
-                onChange={(e) => {
-                  // Only allow digits
-                  const value = e.target.value.replace(/\D/g, '');
-                  setMobile(value);
-                }}
-                placeholder="Mobile Number"
-                type="tel"
-                maxLength={15}
-              />
+              <div className="flex items-center gap-2">
+                <span className="px-3 py-3 bg-gray-100 border border-gray-300 rounded-l-xl text-gray-700 font-medium">+91</span>
+                <input
+                  className="flex-1 px-4 py-3 rounded-r-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#2E7FC4] text-gray-700 placeholder-gray-400"
+                  value={mobile}
+                  onChange={(e) => {
+                    // Only allow digits
+                    const value = e.target.value.replace(/\D/g, '');
+                    setMobile(value);
+                  }}
+                  placeholder="Mobile Number"
+                  type="tel"
+                  maxLength={10}
+                />
+              </div>
               <button
                 onClick={handleSendOtp}
                 disabled={loading}
@@ -379,7 +342,7 @@ const Login = () => {
         <div className="text-center text-sm text-gray-600 mt-6">
           Don't have an account?{" "}
           <Link
-            to={`/signup?role=${userRole}`}
+            to="/signup"
             className="text-[#2E7FC4] font-semibold hover:underline"
           >
             Sign Up

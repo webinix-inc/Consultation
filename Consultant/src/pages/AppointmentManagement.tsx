@@ -44,7 +44,7 @@ type Appointment = {
   session: string;
   date: string;
   time: string;
-  status: "Upcoming" | "Confirmed" | "Completed" | "Cancelled";
+  status: "Upcoming" | "Completed" | "Cancelled";
   reason?: string;
   notes?: string;
   fee?: string;
@@ -186,7 +186,7 @@ const AppointmentManagementConsultant: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState<"all" | "today" | "incoming">("all");
-  const [statusFilter, setStatusFilter] = useState<"" | "Upcoming" | "Confirmed" | "Completed" | "Cancelled">("");
+  const [statusFilter, setStatusFilter] = useState<"" | "Upcoming" | "Completed" | "Cancelled">("");;
   const [page, setPage] = useState(1);
   const pageSize = 8;
 
@@ -489,15 +489,15 @@ const AppointmentManagementConsultant: React.FC = () => {
         const ad = new Date(a.date);
         ad.setHours(0, 0, 0, 0);
         if (ad.getTime() < today.getTime()) return false;
-        if (!["Upcoming", "Confirmed"].includes(a.status)) return false;
+        if (a.status !== "Upcoming") return false;
       }
 
       if (!q) return true;
       const fields = [a.client || "", a.consultant || "", a.category || "", a.reason || "", a.notes || ""].join(" ").toLowerCase();
       return fields.includes(q);
     }).sort((a, b) => {
-      const isUpcomingA = ["Upcoming", "Confirmed"].includes(a.status);
-      const isUpcomingB = ["Upcoming", "Confirmed"].includes(b.status);
+      const isUpcomingA = a.status === "Upcoming";
+      const isUpcomingB = b.status === "Upcoming";
 
       // 1. Group Priority: Upcoming/Confirmed comes before others
       if (isUpcomingA && !isUpcomingB) return -1;
@@ -547,7 +547,6 @@ const AppointmentManagementConsultant: React.FC = () => {
 
   const statusColors: Record<string, string> = {
     Upcoming: "bg-purple-100 text-purple-700",
-    Confirmed: "bg-blue-100 text-blue-700",
     Completed: "bg-green-100 text-green-700",
     Cancelled: "bg-gray-100 text-gray-700",
   };
@@ -1006,7 +1005,6 @@ const AppointmentManagementConsultant: React.FC = () => {
           <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value as any); setPage(1); }} className="border rounded-md px-3 py-2 text-sm bg-gray-50">
             <option value="">All Status</option>
             <option value="Upcoming">Upcoming</option>
-            <option value="Confirmed">Confirmed</option>
             <option value="Completed">Completed</option>
             <option value="Cancelled">Cancelled</option>
           </select>
@@ -1044,7 +1042,7 @@ const AppointmentManagementConsultant: React.FC = () => {
                 <td className="px-4 py-2"><span className={`px-2 py-1 rounded-md text-xs font-medium ${statusColors[a.status] || "bg-gray-100 text-gray-700"}`}>{a.status}</span></td>
                 <td className="px-4 py-2 flex gap-2">
                   <button onClick={() => { setSelected(a); setOpenModal("details"); }} className="p-1.5 hover:bg-gray-100 rounded-md" aria-label="View details"><Eye size={16} /></button>
-                  {["Upcoming", "Confirmed"].includes(a.status) && (
+                  {a.status === "Upcoming" && (
                     <>
                       {/* Consultant: Start Call button - only active at scheduled time */}
                       {isConsultant && (

@@ -111,13 +111,27 @@ exports.create = async (req, res, next) => {
 exports.update = async (req, res, next) => {
   try {
     const { id } = req.params;
+
+    // Get the old category to check if title is changing
+    const oldCategory = await Category.findById(id);
+    if (!oldCategory) {
+      throw new ApiError("Category not found", httpStatus.NOT_FOUND);
+    }
+    const oldTitle = oldCategory.title;
+
     const updated = await Category.findByIdAndUpdate(id, req.body, {
       new: true,
       runValidators: true,
     });
-    if (!updated) {
-      throw new ApiError("Category not found", httpStatus.NOT_FOUND);
+
+    // Cascade update: If title changed, update all consultants with the old category name
+    if (req.body.title && req.body.title !== oldTitle) {
+      await Consultant.updateMany(
+        { category: oldTitle },
+        { $set: { category: req.body.title } }
+      );
     }
+
     return sendSuccess(res, "Category updated", updated);
   } catch (error) {
     next(error);

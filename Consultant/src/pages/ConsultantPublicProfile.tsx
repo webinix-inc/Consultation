@@ -82,22 +82,6 @@ const ConsultantPublicProfile = () => {
                             <Separator className="my-4" />
 
                             <div className="w-full space-y-4 text-sm text-left px-2">
-                                <div className="flex items-center gap-3 text-slate-600">
-                                    <Mail className="h-4 w-4 shrink-0 text-slate-400" />
-                                    <span className="truncate">{consultant.email}</span>
-                                </div>
-                                {consultant.mobile && (
-                                    <div className="flex items-center gap-3 text-slate-600">
-                                        <Phone className="h-4 w-4 shrink-0 text-slate-400" />
-                                        <span>{consultant.mobile}</span>
-                                    </div>
-                                )}
-                                {consultant.alternatePhone && (
-                                    <div className="flex items-center gap-3 text-slate-600">
-                                        <Phone className="h-4 w-4 shrink-0 text-slate-400" />
-                                        <span>{consultant.alternatePhone} (Alt)</span>
-                                    </div>
-                                )}
                                 {(consultant.city || consultant.state || consultant.address) && (
                                     <div className="flex items-start gap-3 text-slate-600">
                                         <MapPin className="h-4 w-4 shrink-0 text-slate-400 mt-0.5" />

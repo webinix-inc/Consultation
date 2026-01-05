@@ -113,7 +113,7 @@ exports.overview = async (req, res, next) => {
                 { startAt: { $gte: monthStart, $lte: monthEnd } },
                 { date: { $gte: monthStart.toISOString().split('T')[0], $lte: monthEnd.toISOString().split('T')[0] } }
               ],
-              status: { $in: ["Completed", "Confirmed"] }
+              status: { $in: ["Completed", "Upcoming"] }
             }
           },
           { $group: { _id: null, revenue: { $sum: "$fee" } } },
@@ -148,7 +148,7 @@ exports.overview = async (req, res, next) => {
                 { startAt: { $gte: startOfMonth } },
                 { date: { $gte: startOfMonth.toISOString().split('T')[0] } }
               ],
-              status: { $in: ["Completed", "Confirmed"] }
+              status: { $in: ["Completed", "Upcoming"] }
             }
           },
           {
@@ -169,7 +169,7 @@ exports.overview = async (req, res, next) => {
                 { startAt: { $gte: startOfLastMonth, $lte: endOfLastMonth } },
                 { date: { $gte: startOfLastMonth.toISOString().split('T')[0], $lte: endOfLastMonth.toISOString().split('T')[0] } }
               ],
-              status: { $in: ["Completed", "Confirmed"] }
+              status: { $in: ["Completed", "Upcoming"] }
             }
           },
           {
@@ -207,7 +207,7 @@ exports.overview = async (req, res, next) => {
             { startAt: { $gte: startOfMonth } },
             { date: { $gte: startOfMonth.toISOString().split('T')[0] } }
           ],
-          status: { $in: ["Completed", "Confirmed"] }
+          status: { $in: ["Completed", "Upcoming"] }
         }
       },
       {
@@ -474,7 +474,7 @@ exports.consultantStats = async (req, res, next) => {
 
     const totalBookedAppointments = await Appointment.countDocuments({
       consultant: { $in: consultantIds },
-      status: { $in: ["Confirmed", "Completed", "Upcoming"] }
+      status: { $in: ["Completed", "Upcoming"] }
     });
 
     const sessionCompletionRate = totalBookedAppointments > 0
@@ -500,7 +500,7 @@ exports.consultantStats = async (req, res, next) => {
         $match: {
           consultant: { $in: consultantIds },
           createdAt: { $gte: thirtyDaysAgo },
-          status: { $in: ["Completed", "Confirmed", "Upcoming"] }
+          status: { $in: ["Completed", "Upcoming"] }
         }
       },
       {
@@ -591,7 +591,7 @@ exports.clientStats = async (req, res, next) => {
 
     const upcomingAppointments = await Appointment.countDocuments({
       client: userId,
-      status: { $in: ["Upcoming", "Confirmed"] },
+      status: "Upcoming",
       startAt: { $gte: today }
     });
     console.log("📊 [Analytics] Client Upcoming Appointments:", upcomingAppointments);
@@ -611,7 +611,7 @@ exports.clientStats = async (req, res, next) => {
 
     const recentAppointmentsRaw = await Appointment.find({
       client: userId,
-      status: { $in: ["Upcoming", "Confirmed"] },
+      status: "Upcoming",
       startAt: { $gte: today }
     })
       .sort({ startAt: 1 })
@@ -699,7 +699,7 @@ exports.getClientStatsById = async (req, res, next) => {
 
     const upcomingAppointments = await Appointment.countDocuments({
       client: userId,
-      status: { $in: ["Upcoming", "Confirmed"] },
+      status: "Upcoming",
       startAt: { $gte: today }
     });
 
@@ -716,7 +716,7 @@ exports.getClientStatsById = async (req, res, next) => {
 
     const recentAppointmentsRaw = await Appointment.find({
       client: userId,
-      status: { $in: ["Upcoming", "Confirmed"] },
+      status: "Upcoming",
       startAt: { $gte: today }
     })
       .sort({ startAt: 1 })
@@ -757,11 +757,11 @@ exports.getClientStatsById = async (req, res, next) => {
           cEmail = cDoc.email;
           cAvatar = cDoc.image || cAvatar;
         } else {
-           // 3. Try Snapshot
-           if (appt.consultantSnapshot) {
-             cName = appt.consultantSnapshot.name || cName;
-             cEmail = appt.consultantSnapshot.email || cEmail;
-           }
+          // 3. Try Snapshot
+          if (appt.consultantSnapshot) {
+            cName = appt.consultantSnapshot.name || cName;
+            cEmail = appt.consultantSnapshot.email || cEmail;
+          }
         }
       }
 

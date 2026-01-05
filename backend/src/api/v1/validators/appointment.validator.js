@@ -15,7 +15,7 @@ const createAppointmentSchema = Joi.object({
   startAt: Joi.date().iso().optional(),
   endAt: Joi.date().iso().optional(),
 
-  status: Joi.string().valid("Upcoming", "Confirmed", "Completed", "Cancelled").default("Upcoming"),
+  status: Joi.string().valid("Upcoming", "Completed", "Cancelled").default("Upcoming"),
   reason: Joi.string().allow("", null),
   notes: Joi.string().allow("", null),
   fee: Joi.number().min(0).optional(),
@@ -37,7 +37,7 @@ const updateAppointmentSchema = Joi.object({
   timeEnd: Joi.string().pattern(/^\d{2}:\d{2}$/).optional(),
   startAt: Joi.date().iso().optional(),
   endAt: Joi.date().iso().optional(),
-  status: Joi.string().valid("Upcoming", "Confirmed", "Completed", "Cancelled").optional(),
+  status: Joi.string().valid("Upcoming", "Completed", "Cancelled").optional(),
   reason: Joi.string().allow("", null).optional(),
   notes: Joi.string().allow("", null).optional(),
   fee: Joi.number().min(0).optional(),

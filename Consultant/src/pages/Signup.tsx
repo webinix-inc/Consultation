@@ -17,9 +17,10 @@ const Signup = () => {
 
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
-  const [mobile, setMobile] = useState("");
+  const [mobile, setMobile] = useState(searchParams.get("mobile")?.replace(/\D/g, "") || "");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const [category, setCategory] = useState("");
@@ -54,6 +55,15 @@ const Signup = () => {
     }
   }, [isAuthenticated, navigate, user]);
 
+  // Form validation check
+  const isFormValid = () => {
+    const baseFieldsValid = fullName && email && mobile.length >= 10 && password.length >= 6 && password === confirmPassword && termsAccepted;
+    if (userRole === 'Consultant') {
+      return baseFieldsValid && category && subcategory;
+    }
+    return baseFieldsValid;
+  };
+
   const handleSignup = async () => {
     // Validation
     if (!fullName || !email || !mobile || !password || !confirmPassword) {
@@ -85,6 +95,11 @@ const Signup = () => {
 
     if (userRole === 'Consultant' && (!category || !subcategory)) {
       toast.error("Please select a category and subcategory");
+      return;
+    }
+
+    if (!termsAccepted) {
+      toast.error("Please accept the Terms and Conditions to continue");
       return;
     }
 
@@ -247,14 +262,17 @@ const Signup = () => {
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Mobile Number
             </label>
-            <input
-              className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#2E7FC4] text-gray-700 placeholder-gray-400"
-              value={mobile}
-              onChange={(e) => setMobile(e.target.value.replace(/\D/g, ""))}
-              placeholder="1234567890"
-              type="tel"
-              maxLength={15}
-            />
+            <div className="flex items-center gap-2">
+              <span className="px-3 py-3 bg-gray-100 border border-gray-300 rounded-l-xl text-gray-700 font-medium">+91</span>
+              <input
+                className="flex-1 px-4 py-3 rounded-r-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#2E7FC4] text-gray-700 placeholder-gray-400"
+                value={mobile}
+                onChange={(e) => setMobile(e.target.value.replace(/\D/g, ""))}
+                placeholder="1234567890"
+                type="tel"
+                maxLength={10}
+              />
+            </div>
           </div>
 
           <div>
@@ -283,10 +301,41 @@ const Signup = () => {
             />
           </div>
 
+          {/* Terms and Conditions Checkbox */}
+          <div className="flex items-start gap-2">
+            <input
+              type="checkbox"
+              id="terms"
+              checked={termsAccepted}
+              onChange={(e) => setTermsAccepted(e.target.checked)}
+              className="mt-1 h-4 w-4 rounded border-gray-300 text-[#2E7FC4] focus:ring-[#2E7FC4] cursor-pointer"
+            />
+            <label htmlFor="terms" className="text-sm text-gray-600 cursor-pointer">
+              I agree to the{" "}
+              <a
+                href="/terms-and-conditions"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[#2E7FC4] font-medium hover:underline"
+              >
+                Terms and Conditions
+              </a>{" "}
+              and{" "}
+              <a
+                href="/privacy-policy"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[#2E7FC4] font-medium hover:underline"
+              >
+                Privacy Policy
+              </a>
+            </label>
+          </div>
+
           <button
             onClick={handleSignup}
-            disabled={loading}
-            className="w-full py-3 bg-[#2E7FC4] hover:bg-[#2567a5] text-white rounded-xl font-semibold shadow-md transition disabled:opacity-50"
+            disabled={loading || !isFormValid()}
+            className="w-full py-3 bg-[#2E7FC4] hover:bg-[#2567a5] text-white rounded-xl font-semibold shadow-md transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? "Creating Account..." : "Sign Up"}
           </button>

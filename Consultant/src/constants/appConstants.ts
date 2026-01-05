@@ -8,7 +8,6 @@
 // ============================================
 export const APPOINTMENT_STATUSES = {
   UPCOMING: "Upcoming",
-  CONFIRMED: "Confirmed",
   COMPLETED: "Completed",
   CANCELLED: "Cancelled",
 } as const;
@@ -20,8 +19,6 @@ export const APPOINTMENT_STATUS_ARRAY = Object.values(APPOINTMENT_STATUSES);
 // Status arrays for filtering
 export const UPCOMING_STATUSES = [
   APPOINTMENT_STATUSES.UPCOMING,
-  APPOINTMENT_STATUSES.CONFIRMED,
-  "Pending", // Legacy support
 ] as const;
 
 export const PAST_STATUSES = [

@@ -89,9 +89,6 @@ function PageHeading({ profile }: { profile: any }) {
                 <div className="flex items-center gap-3 grow">
                     <div>
                         <div className="text-lg font-semibold">{profile.fullName}</div>
-                        <div className="text-xs text-muted-foreground">
-                            {profile.email}
-                        </div>
                         <div className="mt-1 flex items-center">
                             <Badge
                                 variant="outline"

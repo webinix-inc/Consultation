@@ -28,19 +28,9 @@ export function StatusModal({ open, onClose, appointment, onUpdate, isPending }:
                     <div className="flex flex-col gap-2">
                         {appointment.status === "Upcoming" && (
                             <button
-                                onClick={() => onUpdate(appointment.id, { status: "Confirmed" })}
-                                disabled={isPending}
-                                className="w-full py-2 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
-                            >
-                                Confirm Appointment
-                            </button>
-                        )}
-
-                        {(appointment.status === "Upcoming" || appointment.status === "Confirmed") && (
-                            <button
                                 onClick={() => onUpdate(appointment.id, { status: "Completed" })}
                                 disabled={isPending}
-                                className="w-full py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                                className="w-full py-2 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
                             >
                                 Mark as Completed
                             </button>

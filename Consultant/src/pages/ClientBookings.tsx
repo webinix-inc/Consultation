@@ -82,7 +82,7 @@ function Tag({ label }: { label: string }) {
         Finance: "bg-amber-500/10 text-amber-700 border-amber-200",
         Legal: "bg-violet-600/10 text-violet-700 border-violet-200",
         IT: "bg-emerald-600/10 text-emerald-700 border-emerald-200",
-        Confirmed: "bg-sky-600/10 text-sky-700 border-sky-200",
+        Upcoming: "bg-sky-600/10 text-sky-700 border-sky-200",
         Pending: "bg-amber-600/10 text-amber-700 border-amber-200",
         Completed: "bg-emerald-600/10 text-emerald-700 border-emerald-200",
         Cancelled: "bg-rose-600/10 text-rose-700 border-rose-200",
@@ -319,7 +319,7 @@ function BookingRow({
                     <>
                         {!isConsultant && (
                             <div className="flex items-center gap-2">
-                                {["Upcoming", "Confirmed"].includes(b.status || "") && (
+                                {b.status === "Upcoming" && (
                                     <Button
                                         size="icon"
                                         className={cn(
@@ -407,8 +407,8 @@ export default function ClientBookings() {
     });
 
     const appointments = appointmentsData?.data || [];
-    const upcoming = appointments?.filter((a: any) => UPCOMING_STATUSES.includes(a.status)) || [];
-    const past = appointments?.filter((a: any) => PAST_STATUSES.includes(a.status)) || [];
+    const upcoming = appointments?.filter((a: any) => a.status === "Upcoming") || [];
+    const past = appointments?.filter((a: any) => a.status === "Completed" || a.status === "Cancelled") || [];
 
     useEffect(() => {
         if (rescheduleItem && rescheduleItem.rawDate) {
@@ -517,7 +517,7 @@ export default function ClientBookings() {
                         {upcoming.length > 0 ? upcoming.map((b: any) => (
                             <BookingRow key={b._id} b={{
                                 id: b._id,
-                                price: b.payment?.amount,
+                                price: b.payment?.amount || b.fee || 0,
                                 doctor: b.consultantSnapshot?.name || "NA",
                                 tags: [b.category || "General", b.status || "Pending"],
                                 title: `${b.consultantSnapshot?.subcategory || "General"} • ${b.reason || "Consultation"}`,
@@ -548,7 +548,7 @@ export default function ClientBookings() {
                         {past.length > 0 ? past.map((b: any) => (
                             <BookingRow key={b._id} b={{
                                 id: b._id,
-                                price: b.fee,
+                                price: b.payment?.amount || b.fee || 0,
                                 doctor: b.consultantSnapshot?.name || "NA",
                                 tags: [b.category || "General", b.status || "NA"],
                                 title: `${b.consultantSnapshot?.subcategory || "General"} • ${b.reason || "Consultation"}`,

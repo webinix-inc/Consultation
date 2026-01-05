@@ -51,7 +51,7 @@ const appointmentSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["Upcoming", "Confirmed", "Completed", "Cancelled"],
+      enum: ["Upcoming", "Completed", "Cancelled"],
       default: "Upcoming",
     },
 
@@ -310,7 +310,11 @@ appointmentSchema.statics.getAvailableSlots = async function (id, dateISO /* "YY
   //   }
   // }
 
-  // Filter candidate slots against busy ranges
+  // Get current time for filtering past slots (only relevant for today)
+  const now = new Date();
+  const isToday = dateISO === now.toISOString().split('T')[0];
+
+  // Filter candidate slots against busy ranges and past times
   const availableSlots = [];
   for (const slot of candidateSlots) {
     const slotStart = new Date(`${dateISO}T${slot.start}:00`);
@@ -321,6 +325,11 @@ appointmentSchema.statics.getAvailableSlots = async function (id, dateISO /* "YY
     // If using default hourly slots, calculate end based on duration if not explicit
     if (!slot.end) {
       slotEnd = new Date(slotStart.getTime() + slotDurationMin * 60 * 1000);
+    }
+
+    // Skip slots that have already passed (only for today)
+    if (isToday && slotStart <= now) {
+      continue;
     }
 
     let isFree = true;
