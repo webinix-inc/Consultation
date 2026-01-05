@@ -311,8 +311,14 @@ appointmentSchema.statics.getAvailableSlots = async function (id, dateISO /* "YY
   // }
 
   // Get current time for filtering past slots (only relevant for today)
-  const now = new Date();
-  const isToday = dateISO === now.toISOString().split('T')[0];
+  // Use IST (India Standard Time = UTC+5:30) for proper comparison
+  const nowUTC = new Date();
+  const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000; // 5 hours 30 minutes in milliseconds
+  const nowIST = new Date(nowUTC.getTime() + IST_OFFSET_MS);
+
+  // Get today's date in IST
+  const todayIST = nowIST.toISOString().split('T')[0];
+  const isToday = dateISO === todayIST;
 
   // Filter candidate slots against busy ranges and past times
   const availableSlots = [];
@@ -328,8 +334,18 @@ appointmentSchema.statics.getAvailableSlots = async function (id, dateISO /* "YY
     }
 
     // Skip slots that have already passed (only for today)
-    if (isToday && slotStart <= now) {
-      continue;
+    // Compare using IST: slotStart is in IST (parsed from dateISO + time), nowIST is current time in IST
+    // Since slotStart is parsed without timezone, it's treated as local/UTC, so we need to compare hours/minutes
+    if (isToday) {
+      const slotHour = parseInt(slot.start.split(':')[0], 10);
+      const slotMinute = parseInt(slot.start.split(':')[1], 10);
+      const nowHourIST = nowIST.getUTCHours();
+      const nowMinuteIST = nowIST.getUTCMinutes();
+
+      // Skip if slot time has passed in IST
+      if (slotHour < nowHourIST || (slotHour === nowHourIST && slotMinute <= nowMinuteIST)) {
+        continue;
+      }
     }
 
     let isFree = true;
