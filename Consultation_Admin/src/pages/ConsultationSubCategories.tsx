@@ -108,6 +108,11 @@ const ConsultationSubCategories: React.FC = () => {
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error("File size exceeds 5MB limit");
+        return;
+      }
       setIsUploading(true);
       try {
         const response = await UploadAPI.uploadImage(e.target.files[0]);
