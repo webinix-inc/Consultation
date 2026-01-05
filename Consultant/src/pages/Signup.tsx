@@ -9,7 +9,7 @@ import AuthAPI from "@/api/auth.api";
 import CategoryAPI from "@/api/category.api";
 import SubcategoryAPI from "@/api/subcategory.api";
 import { useQuery } from "@tanstack/react-query";
-import Logo from "@/assets/images/logo.jpg";
+import Logo from "@/assets/images/logo.png";
 
 const Signup = () => {
   const [searchParams] = useSearchParams();

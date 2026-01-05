@@ -7,7 +7,7 @@ import { useDispatch } from "react-redux";
 import { loginSuccess } from "@/features/auth/authSlice";
 import type { AppDispatch } from "@/app/store";
 import AuthAPI from "@/api/auth.api";
-import Logo from "@/assets/images/logo.jpg";
+import Logo from "@/assets/images/logo.png";
 
 const Login = () => {
   const [loginMode, setLoginMode] = useState<'otp' | 'password'>('password');

@@ -5,6 +5,7 @@ import ConsultantAPI from "@/api/consultant.api";
 import CategoryAPI from "@/api/category.api";
 import axiosInstance from "@/api/axiosInstance";
 import { Menu, X } from "lucide-react";
+import Logo from "@/assets/images/logo.png";
 
 export default function AIOBHero() {
   const navigate = useNavigate();
@@ -67,8 +68,8 @@ export default function AIOBHero() {
         {/* Top navigation */}
         <header className="max-w-7xl mx-auto px-6 py-6 flex items-center justify-between w-full relative z-50">
           <div className="flex items-center gap-3 relative z-50">
-            <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center font-bold text-lg text-white">S</div>
-            <span className="font-semibold text-xl tracking-tight">AIOB</span>
+            <img src={Logo} alt="AIOB Logo" className="w-20 h-10 rounded-full object-cover" />
+            {/* <span className="font-semibold text-xl tracking-tight">AIOB</span> */}
           </div>
 
           {/* Desktop Navigation */}
@@ -457,18 +458,33 @@ export default function AIOBHero() {
               {categories.slice(0, 6).map((category: any, index: number) => (
                 <div key={category._id || index} className="bg-white rounded-2xl overflow-hidden shadow-lg border border-slate-100 group hover:-translate-y-1 transition-transform duration-300 flex flex-col">
                   <div className="relative h-64 overflow-hidden bg-gradient-to-br from-blue-500 to-indigo-600">
+                    {category.image && (
+                      <img
+                        src={category.image}
+                        alt={category.title}
+                        className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
+                    )}
                     <div className="absolute top-4 left-4 z-10 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full flex items-center gap-1 shadow-sm">
                       <svg className="w-4 h-4 text-yellow-500 fill-current" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg>
                       <span className="text-xs font-bold text-slate-800">
                         {category.consultants ? `${category.consultants}` : "0"}
                       </span>
                     </div>
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent z-0 opacity-90"></div>
-                    <div className="w-full h-full flex items-center justify-center">
-                      <div className="text-white text-6xl font-bold opacity-20">
-                        {category.title || "C"}
+                    {/* Dark overlay for text readability */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent z-0"></div>
+
+                    {/* Fallback letter if no image (hidden if image exists) */}
+                    {!category.image && (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <div className="text-white text-6xl font-bold opacity-20">
+                          {category.title?.[0] || "C"}
+                        </div>
                       </div>
-                    </div>
+                    )}
                     <h3 className="absolute bottom-4 left-4 text-white text-xl font-bold z-10">{category.title || "Category"}</h3>
                   </div>
                   <div className="p-6 flex flex-col flex-grow">

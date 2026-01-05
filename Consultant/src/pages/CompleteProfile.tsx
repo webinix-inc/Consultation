@@ -6,7 +6,7 @@ import { loginSuccess } from "@/features/auth/authSlice";
 import type { AppDispatch } from "@/app/store";
 import AuthAPI from "@/api/auth.api";
 import CategoryAPI from "@/api/category.api";
-import Logo from "@/assets/images/logo.jpg";
+import Logo from "@/assets/images/logo.png";
 import ConsultantAPI from "@/api/consultant.api";
 
 const CompleteProfile = () => {

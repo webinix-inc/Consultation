@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ArrowRight, Edit2 } from "lucide-react";
-import Logo from "@/assets/images/logo.jpg";
+import Logo from "@/assets/images/logo.png";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
