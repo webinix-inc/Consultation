@@ -1,10 +1,10 @@
 // Consultant Dashboard – production-stable (exact UI)
-import React from "react";
+import React, { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Calendar, ClipboardList, IndianRupee, Users, Clock, CheckCircle2, TrendingUp, TrendingDown, Check, X, MessageSquare, Search } from "lucide-react";
+import { Calendar, ClipboardList, IndianRupee, Users, Clock, CheckCircle2, TrendingUp, TrendingDown, Check, X, Search, RefreshCw } from "lucide-react";
 import { AreaChart, Area, ResponsiveContainer } from "recharts";
 import { useSelector } from "react-redux";
 import { RootState } from "@/app/store";
@@ -12,6 +12,45 @@ import { useQuery } from "@tanstack/react-query";
 import DashboardAPI from "@/api/dashboard.api";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
+
+// ------------------------------
+// Types
+// ------------------------------
+interface StatItem {
+  id: string;
+  title: string;
+  value: string;
+  delta: string;
+  up: boolean;
+}
+
+interface ClientStats {
+  total: number;
+  active: number;
+  inactive: number;
+  activePercent: number;
+  inactivePercent: number;
+}
+
+interface Appointment {
+  id: string;
+  name: string;
+  avatar: string;
+  time: string;
+  status: string;
+  tag?: string;
+}
+
+interface DashboardData {
+  stats: StatItem[];
+  clientStats: ClientStats;
+  recentAppointments: Appointment[];
+  monthlyRevenueTrends?: any[];
+  weeklyAppointments?: number[];
+  performance?: any;
+  metrics?: any;
+  monthlyApptTrends?: { name: string; total: number; completed: number }[];
+}
 
 // ------------------------------
 // Utils
@@ -157,9 +196,6 @@ function ClientGauge({ percent, size = 230 }: { percent: number; size?: number }
 // ------------------------------
 // UI Blocks
 // ------------------------------
-// ------------------------------
-// UI Blocks
-// ------------------------------
 function StatCard({ title, value, delta, up, icon: Icon, stroke, data }: any) {
   return (
     <Card className="shadow-sm border-muted/50 hover:shadow-md transition-shadow duration-200">
@@ -188,7 +224,7 @@ function StatCard({ title, value, delta, up, icon: Icon, stroke, data }: any) {
   );
 }
 
-function AppointmentItem({ a }: { a: any }) {
+function AppointmentItem({ a }: { a: Appointment }) {
   return (
     <div className="group flex items-center justify-between py-3 px-1 hover:bg-muted/50 rounded-lg transition-colors -mx-1 px-3">
       <div className="flex items-center gap-3">
@@ -225,12 +261,23 @@ function AppointmentItem({ a }: { a: any }) {
 // ------------------------------
 
 const ConsultantDashboard = () => {
-  const { data, isLoading } = useQuery({
-    queryKey: ["consultant-stats"],
-    queryFn: DashboardAPI.getConsultantStats,
+  const navigate = useNavigate();
+  const [viewType, setViewType] = React.useState<"monthly" | "yearly">("monthly");
+  const [selectedDate, setSelectedDate] = React.useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
+  const [selectedYear, setSelectedYear] = React.useState(new Date().getFullYear());
+
+  const { data, isLoading, refetch } = useQuery<DashboardData>({
+    queryKey: ["consultant-stats", viewType, selectedDate, selectedYear],
+    queryFn: () => {
+      const [year, month] = selectedDate.split("-").map(Number);
+      return DashboardAPI.getConsultantStats({
+        viewType,
+        month: viewType === "monthly" ? month : undefined,
+        year: viewType === "monthly" ? year : selectedYear,
+      });
+    },
   });
 
-  const navigate = useNavigate();
   const stats = data?.stats || [
     { id: "total", title: "Total Appointments", value: "0", delta: "+0%", up: true },
     { id: "today", title: "Today Appointments", value: "0", delta: "+0%", up: true },
@@ -246,17 +293,47 @@ const ConsultantDashboard = () => {
     inactivePercent: 0
   };
 
+  const monthlyRevenueTrends = data?.monthlyRevenueTrends || [];
+  const weeklyAppointments = data?.weeklyAppointments || [];
+
   // Add icons and colors to stats
-  const enrichedStats = stats.map((s: any) => {
+  const enrichedStats = stats.map((s: StatItem) => {
     let icon = ClipboardList;
     let stroke = "#5E8BFF";
-    let data = sparkline(40, 48);
+    let chartData = sparkline(10, 5); // Default flat-ish line
 
-    if (s.id === "today") { icon = Calendar; stroke = "#F97316"; data = sparkline(24, 52); }
-    if (s.id === "active") { icon = Users; stroke = "#8B5CF6"; data = sparkline(24, 50); }
-    if (s.id === "revenue") { icon = IndianRupee; stroke = "#EC4899"; data = sparkline(24, 55); }
+    if (s.id === "total" || s.id === "today") {
+      // Use weekly appointment counts for appointment cards
+      if (weeklyAppointments.length > 0) {
+        chartData = weeklyAppointments.map((val, i) => ({ x: i, y: val }));
+      } else {
+        chartData = Array.from({ length: 7 }).map((_, i) => ({ x: i, y: 0 }));
+      }
+    }
 
-    return { ...s, icon, stroke, data };
+    if (s.id === "today") {
+      icon = Calendar;
+      stroke = "#F97316";
+    }
+
+    if (s.id === "active") {
+      icon = Users;
+      stroke = "#8B5CF6";
+      // For active clients, we don't have a trend history in the current API, so we show a flat line to avoid fake data.
+      chartData = Array(10).fill(0).map((_, i) => ({ x: i, y: 0 }));
+    }
+
+    if (s.id === "revenue") {
+      icon = IndianRupee;
+      stroke = "#EC4899";
+      if (monthlyRevenueTrends.length > 0) {
+        chartData = monthlyRevenueTrends.map((item: { revenue: number }, i: number) => ({ x: i, y: item.revenue }));
+      } else {
+        chartData = Array.from({ length: 6 }).map((_, i) => ({ x: i, y: 0 }));
+      }
+    }
+
+    return { ...s, icon, stroke, data: chartData };
   });
 
   const recentAppointments = data?.recentAppointments || [];
@@ -265,6 +342,58 @@ const ConsultantDashboard = () => {
 
   return (
     <>
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
+        <div></div>
+        <div className="flex items-center gap-3">
+          {/* View Toggle */}
+          <div className="flex bg-gray-100 p-1 rounded-lg">
+            <button
+              onClick={() => setViewType("monthly")}
+              className={`px-3 py-1 text-sm font-medium rounded-md transition ${viewType === "monthly" ? "bg-white shadow text-indigo-600" : "text-gray-500 hover:text-gray-700"
+                }`}
+            >
+              Monthly
+            </button>
+            <button
+              onClick={() => setViewType("yearly")}
+              className={`px-3 py-1 text-sm font-medium rounded-md transition ${viewType === "yearly" ? "bg-white shadow text-indigo-600" : "text-gray-500 hover:text-gray-700"
+                }`}
+            >
+              Yearly
+            </button>
+          </div>
+
+          {/* Date Selector */}
+          {viewType === "monthly" ? (
+            <input
+              type="month"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            />
+          ) : (
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(Number(e.target.value))}
+              className="border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white min-w-[100px]"
+            >
+              {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map((year) => (
+                <option key={year} value={year}>
+                  {year}
+                </option>
+              ))}
+            </select>
+          )}
+
+          <button
+            onClick={() => refetch()}
+            className="p-2 border rounded-md hover:bg-gray-100 transition"
+          >
+            <RefreshCw size={16} />
+          </button>
+        </div>
+      </div>
+
       {/* Top Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         {enrichedStats.map((s: any) => (
@@ -284,7 +413,7 @@ const ConsultantDashboard = () => {
           </CardHeader>
           <CardContent className="pt-0">
             <div className="divide-y">
-              {recentAppointments.length > 0 ? recentAppointments.map((a: any, i: number) => (
+              {recentAppointments.length > 0 ? recentAppointments.map((a: Appointment, i: number) => (
                 <AppointmentItem key={i} a={a} />
               )) : <div className="py-4 text-center text-muted-foreground text-sm">No recent appointments</div>}
             </div>
@@ -337,38 +466,131 @@ const ConsultantDashboard = () => {
 };
 
 const ClientDashboard = () => {
-  const { data, isLoading } = useQuery({
-    queryKey: ["client-stats"],
-    queryFn: DashboardAPI.getClientStats,
+  const [viewType, setViewType] = useState<"monthly" | "yearly">("monthly");
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+
+  const { data, isLoading, refetch } = useQuery<DashboardData>({
+    queryKey: ["client-stats", viewType, selectedDate, selectedYear],
+    queryFn: () => {
+      const [year, month] = selectedDate.split("-").map(Number);
+      return DashboardAPI.getClientStats({
+        viewType,
+        month: viewType === "monthly" ? month : undefined,
+        year: viewType === "monthly" ? year : selectedYear,
+      });
+    },
   });
 
   const navigate = useNavigate();
-  // Filter out "spent" if it comes from the backend
+  // Backend now returns 'upcoming', 'completed', 'total', 'spent' in stats array.
   const rawStats = data?.stats || [
+    { id: "total", title: "Total Appointments", value: "0", delta: "+0%", up: true },
+    { id: "completed", title: "Completed Sessions", value: "0", delta: "+0%", up: true },
     { id: "upcoming", title: "Upcoming Appointments", value: "0", delta: "+0%", up: true },
-    { id: "consultants", title: "My Consultants", value: "0", delta: "+0%", up: true },
-    { id: "messages", title: "Unread Messages", value: "0", delta: "+0%", up: true },
   ];
-  const stats = rawStats.filter((s: any) => s.id !== "spent");
+
+  // We want to show all stats returned by backend, so we don't filter 'spent' anymore.
+  const stats = rawStats;
+  // const monthlySpendingTrends = data?.monthlySpendingTrends || [];
+  const monthlyApptTrends = data?.monthlyApptTrends || [];
 
   // Add icons and colors
-  const enrichedStats = stats.map((s: any) => {
+  const enrichedStats = stats.map((s: StatItem) => {
     let icon = Calendar;
     let stroke = "#5E8BFF";
-    let data = sparkline(24, 10);
+    let chartData = sparkline(24, 10); // Default fallback
 
-    if (s.id === "consultants") { icon = Users; stroke = "#8B5CF6"; data = sparkline(24, 5); }
-    if (s.id === "messages") { icon = MessageSquare; stroke = "#F97316"; data = sparkline(24, 2); }
+    if (s.id === "total") {
+      icon = ClipboardList;
+      stroke = "#2563EB";
+      if (monthlyApptTrends.length > 0) {
+        chartData = monthlyApptTrends.map((t: { total: number }, i: number) => ({ x: i, y: t.total }));
+      } else {
+        chartData = Array(12).fill(0).map((_, i) => ({ x: i, y: 0 }));
+      }
+    }
+    if (s.id === "completed") {
+      icon = CheckCircle2;
+      stroke = "#10B981";
+      if (monthlyApptTrends.length > 0) {
+        chartData = monthlyApptTrends.map((t: { completed: number }, i: number) => ({ x: i, y: t.completed }));
+      } else {
+        chartData = Array(12).fill(0).map((_, i) => ({ x: i, y: 0 }));
+      }
+    }
+    if (s.id === "upcoming") {
+      icon = Calendar;
+      stroke = "#F97316";
+      chartData = Array(12).fill(0).map((_, i) => ({ x: i, y: 0 }));
+    }
+    // if (s.id === "spent") {
+    //   icon = IndianRupee;
+    //   stroke = "#10B981"; // Emerald
+    //   if (monthlySpendingTrends.length > 0) {
+    //     chartData = monthlySpendingTrends.map((t: { value: number }, i: number) => ({ x: i, y: t.value }));
+    //   }
+    // }
 
-    return { ...s, icon, stroke, data };
+    return { ...s, icon, stroke, data: chartData };
   });
 
   const recentAppointments = data?.recentAppointments || [];
+
+  const years = [];
+  const currentYear = new Date().getFullYear();
+  for (let i = currentYear; i >= 2020; i--) {
+    years.push(i);
+  }
 
   if (isLoading) return <div className="p-4">Loading dashboard...</div>;
 
   return (
     <>
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
+        <div></div>
+        <div className="flex items-center gap-3">
+          {/* View Toggle */}
+          <div className="flex bg-gray-100 p-1 rounded-lg">
+            <button
+              onClick={() => setViewType("monthly")}
+              className={cn("px-3 py-1.5 text-sm font-medium rounded-md transition-all", viewType === "monthly" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-900")}
+            >
+              Monthly
+            </button>
+            <button
+              onClick={() => setViewType("yearly")}
+              className={cn("px-3 py-1.5 text-sm font-medium rounded-md transition-all", viewType === "yearly" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-900")}
+            >
+              Yearly
+            </button>
+          </div>
+
+          {/* Date Selectors */}
+          {viewType === "monthly" ? (
+            <input
+              type="month"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="h-9 px-3 py-1 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
+            />
+          ) : (
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(Number(e.target.value))}
+              className="h-9 px-3 py-1 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white min-w-[100px]"
+            >
+              {years.map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+          )}
+
+          {/* Refresh Action */}
+          <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => refetch()}>
+            <RefreshCw className="h-4 w-4 text-muted-foreground" />
+          </Button>
+        </div>
+      </div>
+
       {/* Top Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {enrichedStats.map((s: any) => (
@@ -391,7 +613,7 @@ const ClientDashboard = () => {
           </CardHeader>
           <CardContent className="pt-0">
             <div className="divide-y">
-              {recentAppointments.length > 0 ? recentAppointments.map((a: any, i: number) => (
+              {recentAppointments.length > 0 ? recentAppointments.map((a: Appointment, i: number) => (
                 <AppointmentItem key={i} a={a} />
               )) : <div className="py-4 text-center text-muted-foreground text-sm">No upcoming appointments</div>}
             </div>

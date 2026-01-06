@@ -5,8 +5,8 @@ const DashboardAPI = {
         const res = await axiosInstance.get("/analytics/consultant", { params });
         return res.data.data;
     },
-    getClientStats: async () => {
-        const res = await axiosInstance.get("/analytics/client");
+    getClientStats: async (params?: { viewType?: "monthly" | "yearly"; month?: number; year?: number }) => {
+        const res = await axiosInstance.get("/analytics/client", { params });
         return res.data.data;
     },
     getClientStatsById: async (id: string) => {

@@ -177,6 +177,14 @@ const AdminDashboard: React.FC = () => {
 
   const cardData = useMemo(() => {
     const cards = data?.data?.cards || {};
+    const trends = data?.data?.monthlyTrends || [];
+
+    const sparklineData = (key: string) => {
+      if (trends.length > 0) {
+        return trends.map((t: any, i: number) => ({ x: i, y: t[key] || 0 }));
+      }
+      return Array.from({ length: 12 }).map((_, i) => ({ x: i, y: 0 }));
+    };
 
     return [
       {
@@ -187,7 +195,7 @@ const AdminDashboard: React.FC = () => {
         up: true,
         icon: Users,
         stroke: "#3b82f6",
-        data: sparkline(40, 48),
+        data: sparklineData("consultants"),
       },
       {
         id: "appointments",
@@ -197,7 +205,7 @@ const AdminDashboard: React.FC = () => {
         up: true,
         icon: Calendar,
         stroke: "#f97316",
-        data: sparkline(24, 52),
+        data: sparklineData("appt"),
       },
       {
         id: "clients",
@@ -207,7 +215,7 @@ const AdminDashboard: React.FC = () => {
         up: true,
         icon: Users,
         stroke: "#8b5cf6",
-        data: sparkline(24, 50),
+        data: sparklineData("clients"),
       },
       {
         id: "revenue",
@@ -217,7 +225,7 @@ const AdminDashboard: React.FC = () => {
         up: true,
         icon: IndianRupee,
         stroke: "#ec4899",
-        data: sparkline(24, 55),
+        data: sparklineData("revenue"),
       },
     ];
   }, [data]);

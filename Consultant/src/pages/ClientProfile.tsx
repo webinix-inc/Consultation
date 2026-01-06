@@ -153,84 +153,6 @@ function PageHeading({ profile }: { profile: any }) {
 /* --------------------------------------
    Small sparkline for stats
 -------------------------------------- */
-function Spark({ color = "currentColor" }: { color?: string }) {
-  return (
-    <svg viewBox="0 0 120 32" className="w-full h-10" aria-hidden>
-      <path
-        d="M1 24 C 20 26, 24 18, 40 20 S 60 26, 80 22 S 100 26, 119 12"
-        fill="none"
-        stroke={color}
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-function StatCards({ stats }: { stats: any }) {
-  if (!stats) return null;
-
-  return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span className="flex items-center gap-2">
-              <CalendarDays className="h-4 w-4" /> Total Appointments
-            </span>
-          </div>
-          <div className="mt-1 text-2xl font-semibold">{stats.totalAppointments || 0}</div>
-          <div className="text-sky-600 mt-2">
-            <Spark />
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4" /> Completed Sessions
-            </span>
-          </div>
-          <div className="mt-1 text-2xl font-semibold">{stats.completedAppointments || 0}</div>
-          <div className="text-orange-500 mt-2">
-            <Spark />
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span className="flex items-center gap-2">
-              <Clock className="h-4 w-4" /> Upcoming Appointments
-            </span>
-          </div>
-          <div className="mt-1 text-2xl font-semibold">{stats.upcomingAppointments || 0}</div>
-          <div className="text-violet-600 mt-2">
-            <Spark />
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span className="flex items-center gap-2">
-              <DollarSign className="h-4 w-4" /> Total Spent
-            </span>
-          </div>
-          <div className="mt-1 text-2xl font-semibold">₹{stats.totalSpent || 0}</div>
-          <div className="text-pink-500 mt-2">
-            <Spark />
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
 /* --------------------------------------
    Profile Tab (stats + personal info)
 -------------------------------------- */
@@ -475,22 +397,6 @@ export default function ClientProfile() {
     retry: 1,
   });
 
-  const { data: statsData } = useQuery({
-    queryKey: ["clientStats"],
-    queryFn: DashboardAPI.getClientStats,
-  });
-
-  const stats = useMemo(() => {
-    if (!statsData?.stats) return {};
-    return statsData.stats.reduce((acc: any, curr: any) => {
-      if (curr.id === 'total') acc.totalAppointments = curr.value;
-      if (curr.id === 'completed') acc.completedAppointments = curr.value;
-      if (curr.id === 'upcoming') acc.upcomingAppointments = curr.value;
-      if (curr.id === 'spent') acc.totalSpent = curr.value;
-      return acc;
-    }, {});
-  }, [statsData]);
-
   if (loadingProfile) {
     return <div className="p-8 text-center">Loading profile...</div>;
   }
@@ -539,7 +445,6 @@ export default function ClientProfile() {
       <PageHeading profile={profile} />
 
       <div className="space-y-4">
-        <StatCards stats={stats} />
         <ProfileTab profile={profile} />
       </div>
     </div>
