@@ -121,7 +121,7 @@ function StatCard({ title, value, delta, up, icon: Icon, stroke, data }: any) {
 const AdminDashboard: React.FC = () => {
   const { data, isLoading, isError } = useQuery({
     queryKey: ["analytics-overview"],
-    queryFn: AnalyticsAPI.overview,
+    queryFn: () => AnalyticsAPI.overview(),
     refetchOnWindowFocus: true,
   });
 

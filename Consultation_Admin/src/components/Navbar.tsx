@@ -18,7 +18,7 @@ export const Navbar = () => {
 
   const { data } = useQuery({
     queryKey: ["notifications"],
-    queryFn: NotificationsAPI.getAll,
+    queryFn: () => NotificationsAPI.getAll(),
     enabled: !!isAuthenticated, // Only fetch if authenticated
   });
 
