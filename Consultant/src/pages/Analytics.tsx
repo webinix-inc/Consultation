@@ -8,9 +8,20 @@ import DashboardAPI from "@/api/dashboard.api";
 const designRef = "/mnt/data/Screenshot 2025-11-21 142130.png";
 
 const AnalyticsDashboard: React.FC = () => {
+  const [viewType, setViewType] = React.useState<"monthly" | "yearly">("monthly");
+  const [selectedDate, setSelectedDate] = React.useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
+  const [selectedYear, setSelectedYear] = React.useState(new Date().getFullYear());
+
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ["consultant-analytics"],
-    queryFn: DashboardAPI.getConsultantStats,
+    queryKey: ["consultant-analytics", viewType, selectedDate, selectedYear],
+    queryFn: () => {
+      const [year, month] = selectedDate.split("-").map(Number);
+      return DashboardAPI.getConsultantStats({
+        viewType,
+        month: viewType === "monthly" ? month : undefined,
+        year: viewType === "monthly" ? year : selectedYear,
+      });
+    },
   });
 
   const statsData = data || {};
@@ -53,6 +64,46 @@ const AnalyticsDashboard: React.FC = () => {
           <p className="text-sm text-gray-500">Home &gt; Analytics</p>
         </div>
         <div className="flex items-center gap-3">
+          {/* View Toggle */}
+          <div className="flex bg-gray-100 p-1 rounded-lg">
+            <button
+              onClick={() => setViewType("monthly")}
+              className={`px-3 py-1 text-sm font-medium rounded-md transition ${viewType === "monthly" ? "bg-white shadow text-indigo-600" : "text-gray-500 hover:text-gray-700"
+                }`}
+            >
+              Monthly
+            </button>
+            <button
+              onClick={() => setViewType("yearly")}
+              className={`px-3 py-1 text-sm font-medium rounded-md transition ${viewType === "yearly" ? "bg-white shadow text-indigo-600" : "text-gray-500 hover:text-gray-700"
+                }`}
+            >
+              Yearly
+            </button>
+          </div>
+
+          {/* Date Selector */}
+          {viewType === "monthly" ? (
+            <input
+              type="month"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            />
+          ) : (
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(Number(e.target.value))}
+              className="border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white min-w-[100px]"
+            >
+              {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map((year) => (
+                <option key={year} value={year}>
+                  {year}
+                </option>
+              ))}
+            </select>
+          )}
+
           <button
             onClick={() => refetch()}
             className="p-2 border rounded-md hover:bg-gray-100 transition"

@@ -89,6 +89,21 @@ exports.linkClientConsultant = async (req, res, next) => {
       consultant: consultantDto,
     };
 
+    // Send notifications for new link
+    try {
+      const NotificationService = require("../../../services/notificationService");
+      const clientName = rel.client?.fullName || "Client";
+      const consultantName = consultantDto?.displayName || consultantDto?.fullName || "Consultant";
+
+      // Notify consultant about new client
+      await NotificationService.notifyNewClientLinked(consultantUserId, clientName);
+
+      // Notify client about being linked
+      await NotificationService.notifyLinkedToConsultant(clientId, consultantName);
+    } catch (notifErr) {
+      console.error("Failed to create link notifications:", notifErr);
+    }
+
     return sendSuccess(res, "Client-consultant relationship created/updated", responseObj);
   } catch (error) {
     // Duplicate key fallback

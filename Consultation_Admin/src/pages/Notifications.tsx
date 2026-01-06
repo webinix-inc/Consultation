@@ -20,6 +20,9 @@ interface NotificationItem {
   createdAt: string;
   avatar?: string;
   read: boolean;
+  priority?: "low" | "normal" | "high" | "urgent";
+  category?: string;
+  type?: string;
 }
 
 import {
@@ -42,14 +45,17 @@ const NotificationsPage: React.FC = () => {
     message: "",
     recipientRole: "" as "Admin" | "Consultant" | "Client" | "",
     recipient: "",
-    type: "other" as "system" | "appointment" | "registration" | "payment" | "other",
+    isGlobal: false,
+    type: "system" as "system" | "appointment" | "registration" | "payment" | "other",
+    category: "general" as "general" | "appointments" | "payments" | "messages" | "system" | "reminders",
+    priority: "normal" as "low" | "normal" | "high" | "urgent",
   });
 
   const { data, isLoading, isFetching, refetch } = useQuery({
     queryKey: ["notifications"],
-    queryFn: NotificationsAPI.getAll,
+    queryFn: () => NotificationsAPI.getAll(),
   });
-  const notifications: NotificationItem[] = useMemo(() => data?.data || [], [data]);
+  const notifications: NotificationItem[] = useMemo(() => (data as any)?.data || [], [data]);
 
   // Fetch users for recipient selection
   const { data: usersData } = useQuery({
@@ -77,7 +83,10 @@ const NotificationsPage: React.FC = () => {
         message: "",
         recipientRole: "",
         recipient: "",
-        type: "other",
+        isGlobal: false,
+        type: "system",
+        category: "general",
+        priority: "normal",
       });
     },
   });
@@ -99,17 +108,27 @@ const NotificationsPage: React.FC = () => {
 
   // Send notification
   const handleSendNotification = () => {
-    if (!notificationForm.name || !notificationForm.message || !notificationForm.recipientRole) {
+    if (!notificationForm.name || !notificationForm.message) {
+      return;
+    }
+    // Must have either isGlobal, recipientRole, or specific recipient
+    if (!notificationForm.isGlobal && !notificationForm.recipientRole) {
       return;
     }
     const payload: any = {
       name: notificationForm.name,
       message: notificationForm.message,
-      recipientRole: notificationForm.recipientRole,
       type: notificationForm.type,
+      category: notificationForm.category,
+      priority: notificationForm.priority,
     };
-    if (notificationForm.recipient) {
-      payload.recipient = notificationForm.recipient;
+    if (notificationForm.isGlobal) {
+      payload.isGlobal = true;
+    } else {
+      payload.recipientRole = notificationForm.recipientRole;
+      if (notificationForm.recipient) {
+        payload.recipient = notificationForm.recipient;
+      }
     }
     createNotification(payload);
   };
@@ -240,15 +259,11 @@ const NotificationsPage: React.FC = () => {
                   : "border-gray-100 border-l-4 border-l-transparent hover:border-gray-200"
                   }`}
               >
-                {/* Avatar */}
+                {/* Icon */}
                 <div className="relative shrink-0">
-                  <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-semibold shadow-sm overflow-hidden ${!n.read ? "bg-blue-100 text-blue-600" : "bg-gray-100 text-gray-500"
+                  <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-semibold shadow-sm ${!n.read ? "bg-blue-100 text-blue-600" : "bg-gray-100 text-gray-500"
                     }`}>
-                    {n.avatar ? (
-                      <img src={n.avatar} alt={n.name} className="w-full h-full object-cover" />
-                    ) : (
-                      n.name.charAt(0).toUpperCase()
-                    )}
+                    {n.name.charAt(0).toUpperCase()}
                   </div>
                   {!n.read && (
                     <span className="absolute -top-1 -right-1 flex h-4 w-4">
@@ -322,36 +337,73 @@ const NotificationsPage: React.FC = () => {
                 placeholder="Enter notification message"
               />
             </div>
+
+            {/* Global Broadcast Toggle */}
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                id="isGlobal"
+                checked={notificationForm.isGlobal}
+                onChange={(e) => setNotificationForm({ ...notificationForm, isGlobal: e.target.checked, recipientRole: "", recipient: "" })}
+                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+              />
+              <label htmlFor="isGlobal" className="text-sm font-medium text-gray-700">
+                Send to everyone (Global Broadcast)
+              </label>
+            </div>
+
+            {/* Role selection (hidden if global) */}
+            {!notificationForm.isGlobal && (
+              <>
+                <div>
+                  <label className="text-sm font-medium text-gray-700">Recipient Role</label>
+                  <select
+                    value={notificationForm.recipientRole}
+                    onChange={(e) => setNotificationForm({ ...notificationForm, recipientRole: e.target.value as any, recipient: "" })}
+                    className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Select role</option>
+                    <option value="Admin">All Admins</option>
+                    <option value="Consultant">All Consultants</option>
+                    <option value="Client">All Clients</option>
+                  </select>
+                </div>
+                {notificationForm.recipientRole && filteredUsers.length > 0 && (
+                  <div>
+                    <label className="text-sm font-medium text-gray-700">Specific User (Optional)</label>
+                    <select
+                      value={notificationForm.recipient}
+                      onChange={(e) => setNotificationForm({ ...notificationForm, recipient: e.target.value })}
+                      className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">All {notificationForm.recipientRole}s</option>
+                      {filteredUsers.map((user: any) => (
+                        <option key={user._id || user.id} value={user._id || user.id}>
+                          {user.fullName || user.name || user.email} ({user.email})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Priority */}
             <div>
-              <label className="text-sm font-medium text-gray-700">Recipient Role</label>
+              <label className="text-sm font-medium text-gray-700">Priority</label>
               <select
-                value={notificationForm.recipientRole}
-                onChange={(e) => setNotificationForm({ ...notificationForm, recipientRole: e.target.value as any, recipient: "" })}
+                value={notificationForm.priority}
+                onChange={(e) => setNotificationForm({ ...notificationForm, priority: e.target.value as any })}
                 className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="">Select role</option>
-                <option value="Admin">All Admins</option>
-                <option value="Consultant">All Consultants</option>
-                <option value="Client">All Clients</option>
+                <option value="low">Low</option>
+                <option value="normal">Normal</option>
+                <option value="high">High</option>
+                <option value="urgent">Urgent</option>
               </select>
             </div>
-            {notificationForm.recipientRole && filteredUsers.length > 0 && (
-              <div>
-                <label className="text-sm font-medium text-gray-700">Specific User (Optional)</label>
-                <select
-                  value={notificationForm.recipient}
-                  onChange={(e) => setNotificationForm({ ...notificationForm, recipient: e.target.value })}
-                  className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">All {notificationForm.recipientRole}s</option>
-                  {filteredUsers.map((user: any) => (
-                    <option key={user._id || user.id} value={user._id || user.id}>
-                      {user.fullName || user.name || user.email} ({user.email})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
+
+            {/* Type */}
             <div>
               <label className="text-sm font-medium text-gray-700">Type</label>
               <select
@@ -359,11 +411,11 @@ const NotificationsPage: React.FC = () => {
                 onChange={(e) => setNotificationForm({ ...notificationForm, type: e.target.value as any })}
                 className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="other">Other</option>
                 <option value="system">System</option>
                 <option value="appointment">Appointment</option>
                 <option value="registration">Registration</option>
                 <option value="payment">Payment</option>
+                <option value="other">Other</option>
               </select>
             </div>
           </div>
@@ -376,7 +428,7 @@ const NotificationsPage: React.FC = () => {
             </button>
             <button
               onClick={handleSendNotification}
-              disabled={isCreating || !notificationForm.name || !notificationForm.message || !notificationForm.recipientRole}
+              disabled={isCreating || !notificationForm.name || !notificationForm.message || (!notificationForm.isGlobal && !notificationForm.recipientRole)}
               className="px-4 py-2 text-sm font-medium text-white bg-blue-500 rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isCreating ? "Sending..." : "Send Notification"}

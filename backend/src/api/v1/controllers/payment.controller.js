@@ -193,36 +193,40 @@ exports.verifyPayment = async (req, res, next) => {
         appointment.status = "Upcoming";
         await appointment.save();
 
-        // Send notifications for confirmed appointment
+        // Send notifications for confirmed appointment using NotificationService
         try {
-          const Notification = require("../../../models/notification.model");
+          const NotificationService = require("../../../services/notificationService");
           const User = require("../../../models/user.model");
+          const Client = require("../../../models/client.model");
 
-          const client = await User.findById(appointment.client);
-          const consultant = await User.findById(appointment.consultant);
-
+          // Get client name
+          let client = await Client.findById(appointment.client);
+          if (!client) client = await User.findById(appointment.client);
           const clientName = client?.fullName || "Client";
+
+          // Get consultant name
+          const consultant = await User.findById(appointment.consultant);
           const consultantName = consultant?.fullName || "Consultant";
 
-          // Notification for Consultant
-          await Notification.create({
-            name: "Appointment Confirmed",
-            message: `Appointment with ${clientName} is confirmed on ${appointment.date} at ${appointment.timeStart}.`,
-            recipient: appointment.consultant,
-            recipientRole: "Consultant",
-            type: "appointment",
-            avatar: client?.avatar || client?.profileImage || "https://via.placeholder.com/40"
-          });
+          // Payment success notification for client
+          await NotificationService.notifyPaymentSuccess(
+            { ...transaction.toObject(), user: appointment.client },
+            clientName
+          );
 
-          // Notification for Client
-          await Notification.create({
-            name: "Appointment Confirmed",
-            message: `Your appointment with ${consultantName} is confirmed on ${appointment.date} at ${appointment.timeStart}.`,
-            recipient: appointment.client,
-            recipientRole: "Client",
-            type: "appointment",
-            avatar: consultant?.avatar || consultant?.profileImage || "https://via.placeholder.com/40"
-          });
+          // Payment received notification for consultant
+          await NotificationService.notifyPaymentReceived(
+            transaction.toObject(),
+            clientName,
+            appointment.consultant
+          );
+
+          // Appointment confirmed notifications
+          await NotificationService.notifyAppointmentBooked(
+            { ...appointment.toObject(), date: appointment.date, timeStart: appointment.timeStart },
+            clientName,
+            consultantName
+          );
         } catch (notifErr) {
           console.error("Failed to create payment confirmation notifications:", notifErr);
         }

@@ -391,6 +391,7 @@ export default function ClientBookings() {
     const queryClient = useQueryClient();
     const { user } = useAuth();
     const isConsultant = user?.role === "Consultant";
+    const [activeTab, setActiveTab] = useState<"upcoming" | "past">("upcoming");
 
     const [rDate, setRDate] = useState<Date>(new Date());
     const [rTimeSlot, setRTimeSlot] = useState<string | null>(null);
@@ -506,61 +507,98 @@ export default function ClientBookings() {
             </div>
 
             <div className="space-y-4">
-                <Card className="border-muted/50">
-                    <CardHeader className="pb-2">
-                        <div className="text-sm font-semibold">Upcoming Appointments</div>
-                        <div className="text-xs text-muted-foreground">
-                            Your scheduled consultations
-                        </div>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                        {upcoming.length > 0 ? upcoming.map((b: any) => (
-                            <BookingRow key={b._id} b={{
-                                id: b._id,
-                                price: b.payment?.amount || b.fee || 0,
-                                doctor: b.consultantSnapshot?.name || "NA",
-                                tags: [b.category || "General", b.status || "Pending"],
-                                title: `${b.consultantSnapshot?.subcategory || "General"} • ${b.reason || "Consultation"}`,
-                                category: b.category,
-                                subcategory: b.consultantSnapshot?.subcategory,
-                                status: b.status,
-                                serviceType: b.session,
-                                dateLine: formatDateLine(b.date, b.timeStart, b.timeEnd, b.session || "Video Call", true),
-                                notes: b.notes || "NA",
-                                rawDate: b.date,
-                                rawTimeStart: b.timeStart,
-                                rawTimeEnd: b.timeEnd,
-                                consultantId: b.consultant?._id || b.consultant?.id || b.consultant,
-                                meetingLink: b.meetingLink || b.agora?.channelName || `appointment-${b._id}`,
-                            }} onOpen={setOpen} onCancel={() => setCancelId(b._id)} onReschedule={(item) => setRescheduleItem(item)} isConsultant={isConsultant} />
-                        )) : <div className="text-sm text-muted-foreground">No upcoming appointments.</div>}
-                    </CardContent>
-                </Card>
+                {/* Toggle Tabs */}
+                <div className="flex items-center gap-2 bg-gray-100 p-1 rounded-lg w-fit">
+                    <button
+                        onClick={() => setActiveTab("upcoming")}
+                        className={cn(
+                            "px-4 py-2 text-sm font-medium rounded-md transition-all",
+                            activeTab === "upcoming"
+                                ? "bg-white text-blue-600 shadow-sm"
+                                : "text-gray-600 hover:text-gray-900"
+                        )}
+                    >
+                        Upcoming
+                        {upcoming.length > 0 && (
+                            <span className={cn(
+                                "ml-2 px-2 py-0.5 text-xs rounded-full",
+                                activeTab === "upcoming" ? "bg-blue-100 text-blue-600" : "bg-gray-200 text-gray-600"
+                            )}>
+                                {upcoming.length}
+                            </span>
+                        )}
+                    </button>
+                    <button
+                        onClick={() => setActiveTab("past")}
+                        className={cn(
+                            "px-4 py-2 text-sm font-medium rounded-md transition-all",
+                            activeTab === "past"
+                                ? "bg-white text-blue-600 shadow-sm"
+                                : "text-gray-600 hover:text-gray-900"
+                        )}
+                    >
+                        Past
+                        {past.length > 0 && (
+                            <span className={cn(
+                                "ml-2 px-2 py-0.5 text-xs rounded-full",
+                                activeTab === "past" ? "bg-blue-100 text-blue-600" : "bg-gray-200 text-gray-600"
+                            )}>
+                                {past.length}
+                            </span>
+                        )}
+                    </button>
+                </div>
 
+                {/* Appointments List */}
                 <Card className="border-muted/50">
                     <CardHeader className="pb-2">
-                        <div className="text-sm font-semibold">Past Appointments</div>
+                        <div className="text-sm font-semibold">
+                            {activeTab === "upcoming" ? "Upcoming Appointments" : "Past Appointments"}
+                        </div>
                         <div className="text-xs text-muted-foreground">
-                            Your consultation history
+                            {activeTab === "upcoming" ? "Your scheduled consultations" : "Your consultation history"}
                         </div>
                     </CardHeader>
                     <CardContent className="space-y-3">
-                        {past.length > 0 ? past.map((b: any) => (
-                            <BookingRow key={b._id} b={{
-                                id: b._id,
-                                price: b.payment?.amount || b.fee || 0,
-                                doctor: b.consultantSnapshot?.name || "NA",
-                                tags: [b.category || "General", b.status || "NA"],
-                                title: `${b.consultantSnapshot?.subcategory || "General"} • ${b.reason || "Consultation"}`,
-                                category: b.category,
-                                subcategory: b.consultantSnapshot?.subcategory,
-                                status: b.status,
-                                serviceType: b.session,
-                                dateLine: formatDateLine(b.date, b.timeStart, b.timeEnd, b.session || "Video Call", true),
-                                notes: b.notes,
-                                consultantId: b.consultant?._id || b.consultant?.id || b.consultant,
-                            }} past onOpen={setOpen} onViewNotes={setNotesItem} />
-                        )) : <div className="text-sm text-muted-foreground">No past appointments.</div>}
+                        {activeTab === "upcoming" ? (
+                            upcoming.length > 0 ? upcoming.map((b: any) => (
+                                <BookingRow key={b._id} b={{
+                                    id: b._id,
+                                    price: b.payment?.amount || b.fee || 0,
+                                    doctor: b.consultantSnapshot?.name || "NA",
+                                    tags: [b.category || "General", b.status || "Pending"],
+                                    title: `${b.consultantSnapshot?.subcategory || "General"} • ${b.reason || "Consultation"}`,
+                                    category: b.category,
+                                    subcategory: b.consultantSnapshot?.subcategory,
+                                    status: b.status,
+                                    serviceType: b.session,
+                                    dateLine: formatDateLine(b.date, b.timeStart, b.timeEnd, b.session || "Video Call", true),
+                                    notes: b.notes || "NA",
+                                    rawDate: b.date,
+                                    rawTimeStart: b.timeStart,
+                                    rawTimeEnd: b.timeEnd,
+                                    consultantId: b.consultant?._id || b.consultant?.id || b.consultant,
+                                    meetingLink: b.meetingLink || b.agora?.channelName || `appointment-${b._id}`,
+                                }} onOpen={setOpen} onCancel={() => setCancelId(b._id)} onReschedule={(item) => setRescheduleItem(item)} isConsultant={isConsultant} />
+                            )) : <div className="text-sm text-muted-foreground py-8 text-center">No upcoming appointments.</div>
+                        ) : (
+                            past.length > 0 ? past.map((b: any) => (
+                                <BookingRow key={b._id} b={{
+                                    id: b._id,
+                                    price: b.payment?.amount || b.fee || 0,
+                                    doctor: b.consultantSnapshot?.name || "NA",
+                                    tags: [b.category || "General", b.status || "NA"],
+                                    title: `${b.consultantSnapshot?.subcategory || "General"} • ${b.reason || "Consultation"}`,
+                                    category: b.category,
+                                    subcategory: b.consultantSnapshot?.subcategory,
+                                    status: b.status,
+                                    serviceType: b.session,
+                                    dateLine: formatDateLine(b.date, b.timeStart, b.timeEnd, b.session || "Video Call", true),
+                                    notes: b.notes,
+                                    consultantId: b.consultant?._id || b.consultant?.id || b.consultant,
+                                }} past onOpen={setOpen} onViewNotes={setNotesItem} />
+                            )) : <div className="text-sm text-muted-foreground py-8 text-center">No past appointments.</div>
+                        )}
                     </CardContent>
                 </Card>
             </div>

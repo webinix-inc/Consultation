@@ -252,33 +252,17 @@ exports.createAppointment = async (req, res, next) => {
     await appointment.populate("client", "fullName email mobile");
     await appointment.populate("consultant", "fullName email mobile role");
 
-    // Trigger Notifications for both Consultant and Client
+    // Trigger Notifications for both Consultant and Client using NotificationService
     try {
-      const Notification = require("../../../models/notification.model");
-
-      // Notification for Consultant
+      const NotificationService = require("../../../services/notificationService");
+      const clientName = client.fullName || client.name || "Client";
       const consultantName = consultantDoc?.fullName || consultantDoc?.name || consultantDoc?.displayName || "Consultant";
-      // Only create notification if we have a valid recipient ID
-      if (consultantUserId) {
-        await Notification.create({
-          name: "New Appointment",
-          message: `New appointment booked by ${client.fullName || client.name || "Client"} on ${doc.date} at ${doc.timeStart}.`,
-          recipient: consultantUserId, // Send to User ID or Consultant ID
-          recipientRole: "Consultant",
-          type: "appointment",
-          avatar: client.avatar || client.profileImage || "https://via.placeholder.com/40"
-        });
-      }
 
-      // Notification for Client
-      await Notification.create({
-        name: "Appointment Confirmed",
-        message: `Your appointment with ${consultantName} is scheduled on ${doc.date} at ${doc.timeStart}.`,
-        recipient: value.client,
-        recipientRole: "Client",
-        type: "appointment",
-        avatar: consultantDoc.avatar || consultantDoc.profileImage || "https://via.placeholder.com/40"
-      });
+      await NotificationService.notifyAppointmentBooked(
+        { ...doc, _id: appointment._id, client: value.client, consultant: consultantUserId },
+        clientName,
+        consultantName
+      );
     } catch (notifErr) {
       console.error("Failed to create appointment notifications:", notifErr);
     }
@@ -939,29 +923,16 @@ exports.deleteAppointment = async (req, res, next) => {
 
     await Appointment.findByIdAndDelete(id);
 
-    // Send cancellation notifications
+    // Send cancellation notifications using NotificationService
     try {
-      const Notification = require("../../../models/notification.model");
+      const NotificationService = require("../../../services/notificationService");
 
-      // Notification to Client
-      await Notification.create({
-        name: "Appointment Cancelled",
-        message: `Your appointment with ${consultantName} on ${dateStr} at ${timeStr} has been cancelled.`,
-        recipient: clientUserId,
-        recipientRole: "Client",
-        type: "appointment",
-        avatar: consultant?.avatar || consultant?.profileImage || ""
-      });
-
-      // Notification to Consultant
-      await Notification.create({
-        name: "Appointment Cancelled",
-        message: `Appointment with ${clientName} on ${dateStr} at ${timeStr} has been cancelled.`,
-        recipient: consultantUserId,
-        recipientRole: "Consultant",
-        type: "appointment",
-        avatar: client?.avatar || client?.profileImage || ""
-      });
+      await NotificationService.notifyAppointmentCancelled(
+        { ...appointment.toObject(), client: clientUserId, consultant: consultantUserId, date: dateStr, timeStart: timeStr },
+        userRole === "Client" ? "client" : "consultant",
+        clientName,
+        consultantName
+      );
     } catch (notifErr) {
       console.error("Failed to create cancellation notifications:", notifErr);
       // Don't fail the deletion if notifications fail

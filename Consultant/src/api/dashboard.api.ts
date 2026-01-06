@@ -1,8 +1,8 @@
 import axiosInstance from "./axiosInstance";
 
 const DashboardAPI = {
-    getConsultantStats: async () => {
-        const res = await axiosInstance.get("/analytics/consultant");
+    getConsultantStats: async (params?: { viewType?: "monthly" | "yearly"; month?: number; year?: number }) => {
+        const res = await axiosInstance.get("/analytics/consultant", { params });
         return res.data.data;
     },
     getClientStats: async () => {

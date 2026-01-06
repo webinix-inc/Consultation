@@ -7,34 +7,165 @@ const { sendSuccess } = require("../../../utils/response");
 
 exports.overview = async (req, res, next) => {
   try {
-    const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    const viewType = req.query.viewType || "monthly"; // "monthly" | "yearly"
+    const queryMonth = req.query.month ? parseInt(req.query.month) - 1 : new Date().getMonth(); // 0-indexed
+    const queryYear = req.query.year ? parseInt(req.query.year) : new Date().getFullYear();
+
+    let startOfPeriod, endOfPeriod, startOfLastPeriod, endOfLastPeriod;
+    const now = new Date(queryYear, queryMonth, 1);
+
+    if (viewType === "yearly") {
+      // Selected Year (Jan 1 - Dec 31)
+      startOfPeriod = new Date(queryYear, 0, 1);
+      endOfPeriod = new Date(queryYear, 11, 31, 23, 59, 59, 999);
+
+      // Previous Year
+      startOfLastPeriod = new Date(queryYear - 1, 0, 1);
+      endOfLastPeriod = new Date(queryYear - 1, 11, 31, 23, 59, 59, 999);
+    } else {
+      // Selected Month
+      startOfPeriod = new Date(queryYear, queryMonth, 1);
+      endOfPeriod = new Date(queryYear, queryMonth + 1, 0, 23, 59, 59, 999);
+
+      // Previous Month
+      startOfLastPeriod = new Date(queryYear, queryMonth - 1, 1);
+      endOfLastPeriod = new Date(queryYear, queryMonth, 0, 23, 59, 59, 999);
+    }
+
+    // Legacy mapping for variable names used in aggregations
+    // We'll reuse the existing variable names but they now represent "current period" vs "last period"
+    const startOfMonth = startOfPeriod;
+    const endOfMonth = endOfPeriod;
+    const startOfLastMonth = startOfLastPeriod;
+    const endOfLastMonth = endOfLastPeriod;
+
+    // Year stats (start of the selected year - always full year context for YTD logic)
+    const startOfYear = new Date(queryYear, 0, 1);
+    // For YTD, if we are looking at a past year, we probably want the whole year, or up to the selected month?
+    // Let's assume YTD means "up to the end of the selected month" or "end of selected year" if it's in the past.
+    // For simplicity and consistency with "Year to Date", let's keep it as start of year to end of selected month (or current time if current month).
+    // Actually, "Year to Date" usually implies up to the current moment. If filters are used, it might mean "for that entire year" or "up to that month".
+    // Let's standardise: Year Stats = From Jan 1 of selected year to Dec 31 of selected year (Full Year View for past years, YTD for current)
+    // Wait, the previous logic was `startOfYear`... let's check aggregation.
+    // Previous aggregation was `$gte: startOfYear`. That captures everything from Jan 1 onwards.
+    // If I select "Nov 2025", YTD should probably be Jan 1 2025 - Nov 30 2025? Or just Jan 1 2025 - Dec 31 2025?
+    // Let's define "Yearly Performance" as the performance for the selected year.
+    const endOfYear = new Date(queryYear, 11, 31, 23, 59, 59, 999);
+
+    const startOfLastYear = new Date(queryYear - 1, 0, 1);
+    const endOfLastYear = new Date(queryYear - 1, 11, 31, 23, 59, 59, 999);
 
     const Client = require("../../../models/client.model");
 
-    const [totalConsultants, totalAppointments, activeClients, monthlyRevenue] = await Promise.all([
+    // Main stats - optimized with Promise.all
+    const [
+      totalConsultants,
+      totalAppointments,
+      activeClients,
+      revenueStats,
+      lastMonthRevenueStats,
+      yearlyStats,
+      lastYearStats
+    ] = await Promise.all([
       Consultant.countDocuments({ status: { $in: ["Active"] } }),
       Appointment.countDocuments({}),
       Client.countDocuments({ status: "Active" }),
-      // Calculate Admin Revenue (Platform Fees) from Transactions
+      // This month's revenue breakdown from Transactions
       Transaction.aggregate([
         {
           $match: {
-            createdAt: { $gte: startOfMonth },
+            createdAt: { $gte: startOfMonth, $lte: endOfMonth },
             status: "Success",
             type: "Payment"
           }
         },
-        { $group: { _id: null, revenue: { $sum: "$platformFee" } } },
-      ]).then((r) => (r[0]?.revenue || 0)),
+        {
+          $group: {
+            _id: null,
+            gmv: { $sum: "$amount" },                    // Gross Merchandise Value
+            platformRevenue: { $sum: "$platformFee" },   // Admin earnings
+            consultantPayouts: { $sum: "$netAmount" },   // Consultant earnings
+            transactionCount: { $sum: 1 }
+          }
+        },
+      ]),
+      // Last month's revenue for comparison
+      Transaction.aggregate([
+        {
+          $match: {
+            createdAt: { $gte: startOfLastMonth, $lte: endOfLastMonth },
+            status: "Success",
+            type: "Payment"
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            gmv: { $sum: "$amount" },
+            platformRevenue: { $sum: "$platformFee" },
+            consultantPayouts: { $sum: "$netAmount" }
+          }
+        },
+      ]),
+      // This year's totals (Selected Year)
+      Transaction.aggregate([
+        {
+          $match: {
+            createdAt: { $gte: startOfYear, $lte: endOfYear },
+            status: "Success",
+            type: "Payment"
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            gmv: { $sum: "$amount" },
+            platformRevenue: { $sum: "$platformFee" },
+            consultantPayouts: { $sum: "$netAmount" }
+          }
+        },
+      ]),
+      // Last year's totals for YoY comparison
+      Transaction.aggregate([
+        {
+          $match: {
+            createdAt: { $gte: startOfLastYear, $lte: endOfLastYear },
+            status: "Success",
+            type: "Payment"
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            gmv: { $sum: "$amount" },
+            platformRevenue: { $sum: "$platformFee" }
+          }
+        },
+      ]),
     ]);
+
+    // Extract values with defaults
+    const currentStats = revenueStats[0] || { gmv: 0, platformRevenue: 0, consultantPayouts: 0, transactionCount: 0 };
+    const lastMonthStats = lastMonthRevenueStats[0] || { gmv: 0, platformRevenue: 0, consultantPayouts: 0 };
+    const yearStats = yearlyStats[0] || { gmv: 0, platformRevenue: 0, consultantPayouts: 0 };
+    const prevYearStats = lastYearStats[0] || { gmv: 0, platformRevenue: 0 };
+
+    // Calculate growth percentages
+    const calcGrowth = (current, previous) => {
+      if (previous === 0) return current > 0 ? "+100%" : "0%";
+      const pct = Math.round(((current - previous) / previous) * 100);
+      return pct >= 0 ? `+${pct}%` : `${pct}%`;
+    };
+
+    const monthlyGmvGrowth = calcGrowth(currentStats.gmv, lastMonthStats.gmv);
+    const monthlyPlatformGrowth = calcGrowth(currentStats.platformRevenue, lastMonthStats.platformRevenue);
+    const yoyGrowth = calcGrowth(yearStats.platformRevenue, prevYearStats.platformRevenue);
 
     const topCategoriesRaw = await Category.find({})
       .sort({ monthlyRevenue: -1 })
       .limit(6)
       .select("title monthlyRevenue consultants clients rating")
       .lean();
-
-
 
     // Aggregate appointment counts by category
     const categoryAppointmentCounts = await Appointment.aggregate([
@@ -62,22 +193,16 @@ exports.overview = async (req, res, next) => {
       .lean();
 
     const recentAppointments = await Promise.all(recentAppointmentsRaw.map(async (appt) => {
-      // Populate Client Name
       let clientName = "Unknown Client";
-      // Try User first
       let clientDoc = await User.findById(appt.client).select("fullName");
       if (!clientDoc) {
-        // Try Client model
         clientDoc = await Client.findById(appt.client).select("fullName");
       }
       if (clientDoc) clientName = clientDoc.fullName;
 
-      // Populate Consultant Name
       let consultantName = "Unknown Consultant";
-      // Try Consultant model first (more likely)
       let consultantDoc = await Consultant.findById(appt.consultant).select("name firstName lastName fullName");
       if (!consultantDoc) {
-        // Try User model
         consultantDoc = await User.findById(appt.consultant).select("fullName");
       }
       if (consultantDoc) {
@@ -90,34 +215,75 @@ exports.overview = async (req, res, next) => {
         consultant: consultantName,
         category: appt.category,
         date: appt.date,
-        timeStart: appt.timeStart, // Legacy
+        timeStart: appt.timeStart,
         status: appt.status,
-        // Convert startAt if needed or just use legacy fields if available
       };
     }));
 
-    // Calculate monthly revenue trends (last 6 months)
+    // Calculate monthly revenue trends - using TRANSACTIONS
     const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    const now = new Date();
     const monthlyTrends = [];
 
-    for (let i = 5; i >= 0; i--) {
-      const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59, 999);
+    // Determine loop range based on viewType
+    let loopStart, loopEnd, getMonthDate;
+
+    if (viewType === "yearly") {
+      // For yearly view, show all 12 months of the selected year
+      loopStart = 0; // Jan
+      loopEnd = 11;  // Dec
+      getMonthDate = (i) => {
+        const d = new Date(queryYear, i, 1);
+        const end = new Date(queryYear, i + 1, 0, 23, 59, 59, 999);
+        return { start: d, end };
+      };
+    } else {
+      // For monthly view, show trends for the past 6 months ending at selected month
+      loopStart = 5; // 5 months ago
+      loopEnd = 0;   // Current month
+      getMonthDate = (i) => {
+        const mStart = new Date(queryYear, queryMonth - i, 1);
+        const mEnd = new Date(queryYear, queryMonth - i + 1, 0, 23, 59, 59, 999);
+        return { start: mStart, end: mEnd };
+      };
+    }
+
+    // Adjust loop direction logic
+    const iterateMonths = async () => {
+      const results = [];
+      if (viewType === "yearly") {
+        for (let i = loopStart; i <= loopEnd; i++) {
+          results.push(await processMonth(i));
+        }
+      } else {
+        for (let i = loopStart; i >= loopEnd; i--) {
+          results.push(await processMonth(i));
+        }
+      }
+      return results;
+    };
+
+    const processMonth = async (i) => {
+      const { start: monthStart, end: monthEnd } = getMonthDate(i);
 
       const [revenueResult, apptCount] = await Promise.all([
-        Appointment.aggregate([
+        Transaction.aggregate([
           {
             $match: {
-              $or: [
-                { startAt: { $gte: monthStart, $lte: monthEnd } },
-                { date: { $gte: monthStart.toISOString().split('T')[0], $lte: monthEnd.toISOString().split('T')[0] } }
-              ],
-              status: { $in: ["Completed", "Upcoming"] }
+              createdAt: { $gte: monthStart, $lte: monthEnd },
+              status: "Success",
+              type: "Payment"
             }
           },
-          { $group: { _id: null, revenue: { $sum: "$fee" } } },
+          {
+            $group: {
+              _id: null,
+              gmv: { $sum: "$amount" },
+              platformRevenue: { $sum: "$platformFee" },
+              consultantPayouts: { $sum: "$netAmount" }
+            }
+          },
         ]),
+        // Appointment count for that month
         Appointment.countDocuments({
           $or: [
             { startAt: { $gte: monthStart, $lte: monthEnd } },
@@ -126,16 +292,21 @@ exports.overview = async (req, res, next) => {
         })
       ]);
 
-      monthlyTrends.push({
+      const monthData = revenueResult[0] || { gmv: 0, platformRevenue: 0, consultantPayouts: 0 };
+      return {
         name: monthNames[monthStart.getMonth()],
-        revenue: revenueResult[0]?.revenue || 0,
+        gmv: monthData.gmv,
+        revenue: monthData.platformRevenue,  // Platform revenue for backward compatibility
+        consultantPayouts: monthData.consultantPayouts,
         appt: apptCount
-      });
-    }
+      };
+    };
+
+    const trendsData = await iterateMonths();
+    monthlyTrends.push(...trendsData);
 
     // Calculate category performance with revenue, sessions, and growth
-    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+    // Note: startOfLastMonth and endOfLastMonth already declared at top of function
 
     const categoryPerformance = await Promise.all(
       topCategories.map(async (cat) => {
@@ -261,11 +432,25 @@ exports.overview = async (req, res, next) => {
         totalConsultants,
         totalAppointments,
         activeClients,
-        monthlyRevenue,
+        monthlyRevenue: currentStats.platformRevenue,  // Backward compatibility
+      },
+      // Enhanced revenue breakdown
+      revenueBreakdown: {
+        // This month
+        monthlyGmv: currentStats.gmv,
+        monthlyPlatformRevenue: currentStats.platformRevenue,
+        monthlyConsultantPayouts: currentStats.consultantPayouts,
+        monthlyTransactions: currentStats.transactionCount,
+        monthlyGmvGrowth,
+        monthlyPlatformGrowth,
+        // Year to date
+        yearlyGmv: yearStats.gmv,
+        yearlyPlatformRevenue: yearStats.platformRevenue,
+        yearlyConsultantPayouts: yearStats.consultantPayouts,
+        yoyGrowth,
       },
       topCategories,
       recentAppointments,
-      // Enhanced analytics data
       monthlyTrends,
       categoryPerformance,
       topConsultants
@@ -306,7 +491,10 @@ exports.consultantStats = async (req, res, next) => {
     const consultantObjectIds = consultantIds.map(id => new mongoose.Types.ObjectId(id));
 
     // Execute queries individually for better debugging
-    const totalAppointments = await Appointment.countDocuments({ consultant: { $in: consultantIds } });
+    const totalAppointments = await Appointment.countDocuments({
+      consultant: { $in: consultantIds },
+      status: { $in: ["Upcoming", "Completed"] }
+    });
     console.log("📊 [Analytics] Total Appointments:", totalAppointments);
 
     const todayAppointments = await Appointment.countDocuments({
@@ -586,7 +774,7 @@ exports.clientStats = async (req, res, next) => {
     console.log("📊 [Analytics] Full req.user:", req.user);
     const today = new Date();
 
-    const totalAppointments = await Appointment.countDocuments({ client: userId });
+    const totalAppointments = await Appointment.countDocuments({ client: userId, status: { $in: ["Upcoming", "Completed"] } });
     const completedAppointments = await Appointment.countDocuments({ client: userId, status: "Completed" });
 
     const upcomingAppointments = await Appointment.countDocuments({
@@ -694,7 +882,7 @@ exports.getClientStatsById = async (req, res, next) => {
     const userId = req.params.id;
     const today = new Date();
 
-    const totalAppointments = await Appointment.countDocuments({ client: userId });
+    const totalAppointments = await Appointment.countDocuments({ client: userId, status: { $in: ["Upcoming", "Completed"] } });
     const completedAppointments = await Appointment.countDocuments({ client: userId, status: "Completed" });
 
     const upcomingAppointments = await Appointment.countDocuments({

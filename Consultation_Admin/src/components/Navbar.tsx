@@ -22,7 +22,7 @@ export const Navbar = () => {
     enabled: !!isAuthenticated, // Only fetch if authenticated
   });
 
-  const unreadCount = data?.data?.filter((n: any) => !n.read).length || 0;
+  const unreadCount = data?.unreadCount || (Array.isArray(data?.data) ? data.data.filter((n: any) => !n.read).length : 0);
 
   return (
     <header className="h-16 border-b border-border bg-background flex items-center justify-between px-6">

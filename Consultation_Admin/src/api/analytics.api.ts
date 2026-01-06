@@ -1,8 +1,8 @@
 import axiosInstance from "./axiosInstance";
 
 const AnalyticsAPI = {
-  overview: async () => {
-    const res = await axiosInstance.get("/analytics/overview");
+  overview: async (params?: { month?: number; year?: number; viewType?: "monthly" | "yearly" }) => {
+    const res = await axiosInstance.get("/analytics/overview", { params });
     return res.data;
   },
 };

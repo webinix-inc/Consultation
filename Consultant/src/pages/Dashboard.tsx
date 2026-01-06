@@ -11,6 +11,7 @@ import { RootState } from "@/app/store";
 import { useQuery } from "@tanstack/react-query";
 import DashboardAPI from "@/api/dashboard.api";
 import { useNavigate } from "react-router-dom";
+import { cn } from "@/lib/utils";
 
 // ------------------------------
 // Utils
@@ -156,18 +157,21 @@ function ClientGauge({ percent, size = 230 }: { percent: number; size?: number }
 // ------------------------------
 // UI Blocks
 // ------------------------------
+// ------------------------------
+// UI Blocks
+// ------------------------------
 function StatCard({ title, value, delta, up, icon: Icon, stroke, data }: any) {
   return (
-    <Card className="shadow-sm border-muted/50">
+    <Card className="shadow-sm border-muted/50 hover:shadow-md transition-shadow duration-200">
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between gap-2">
           <CardTitle className="text-sm text-muted-foreground font-medium flex items-center gap-2">
-            <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl" style={{ backgroundColor: `${stroke}15` }}>
-              <Icon className="h-4 w-4" />
+            <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl" style={{ backgroundColor: `${stroke}15`, color: stroke }}>
+              <Icon className="h-5 w-5" />
             </span>
             {title}
           </CardTitle>
-          <Badge variant="secondary" className={`text-xs ${up ? "text-emerald-600" : "text-red-600"} bg-transparent p-0`}>
+          <Badge variant="secondary" className={cn("text-xs bg-transparent p-0", up ? "text-emerald-600" : "text-red-600")}>
             {up ? (
               <span className="inline-flex items-center gap-1"><TrendingUp className="h-3 w-3" />{delta}</span>
             ) : (
@@ -175,7 +179,7 @@ function StatCard({ title, value, delta, up, icon: Icon, stroke, data }: any) {
             )}
           </Badge>
         </div>
-        <div className="text-2xl font-bold mt-1">{value}</div>
+        <div className="text-2xl font-bold mt-2">{value}</div>
       </CardHeader>
       <CardContent className="pt-1 p-0">
         <Sparkline data={data} stroke={stroke} />
@@ -186,23 +190,30 @@ function StatCard({ title, value, delta, up, icon: Icon, stroke, data }: any) {
 
 function AppointmentItem({ a }: { a: any }) {
   return (
-    <div className="grid grid-cols-12 items-center py-3">
-      <div className="col-span-6 sm:col-span-6 flex items-center gap-3">
-        <Avatar className="h-9 w-9">
+    <div className="group flex items-center justify-between py-3 px-1 hover:bg-muted/50 rounded-lg transition-colors -mx-1 px-3">
+      <div className="flex items-center gap-3">
+        <Avatar className="h-10 w-10 border-2 border-white shadow-sm">
           <AvatarImage src={a.avatar} />
-          <AvatarFallback>{a.name.split(" ").map((s: string) => s[0]).join("")}</AvatarFallback>
+          <AvatarFallback className="bg-primary/10 text-primary">{a.name.split(" ").map((s: string) => s[0]).join("")}</AvatarFallback>
         </Avatar>
         <div>
-          <div className="font-medium leading-tight">{a.name}</div>
+          <div className="font-semibold text-sm leading-tight text-gray-900 group-hover:text-primary transition-colors">{a.name}</div>
+          <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
+            {a.tag && <span className="inline-block px-1.5 py-0.5 rounded-md bg-muted text-[10px] font-medium uppercase tracking-wider">{a.tag}</span>}
+          </div>
         </div>
       </div>
-      <div className="col-span-3 hidden sm:flex">
-        <Badge variant="outline" className="rounded-md px-2 py-1 text-xs">{a.tag}</Badge>
-      </div>
-      <div className="col-span-3 flex items-center justify-end gap-6">
-        <div className="text-xs text-muted-foreground inline-flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {a.time}</div>
-        <div className={`text-xs inline-flex items-center gap-1 ${a.status === 'Confirmed' ? 'text-emerald-600' : 'text-amber-600'}`}>
-          <CheckCircle2 className="h-3.5 w-3.5" /> {a.status}
+
+      <div className="flex items-center gap-4 text-right">
+        <div className="text-xs text-muted-foreground">
+          <div className="flex items-center justify-end gap-1"><Clock className="h-3 w-3" /> {a.time}</div>
+        </div>
+        <div className={cn("text-xs font-medium px-2 py-1 rounded-full",
+          a.status === 'Confirmed' ? 'bg-emerald-50 text-emerald-700' :
+            a.status === 'Upcoming' ? 'bg-blue-50 text-blue-700' :
+              'bg-gray-100 text-gray-600'
+        )}>
+          {a.status}
         </div>
       </div>
     </div>
@@ -332,12 +343,13 @@ const ClientDashboard = () => {
   });
 
   const navigate = useNavigate();
-  const stats = data?.stats || [
+  // Filter out "spent" if it comes from the backend
+  const rawStats = data?.stats || [
     { id: "upcoming", title: "Upcoming Appointments", value: "0", delta: "+0%", up: true },
     { id: "consultants", title: "My Consultants", value: "0", delta: "+0%", up: true },
     { id: "messages", title: "Unread Messages", value: "0", delta: "+0%", up: true },
-    { id: "spent", title: "Total Spent", value: "₹0", delta: "+0%", up: true },
   ];
+  const stats = rawStats.filter((s: any) => s.id !== "spent");
 
   // Add icons and colors
   const enrichedStats = stats.map((s: any) => {
@@ -347,7 +359,6 @@ const ClientDashboard = () => {
 
     if (s.id === "consultants") { icon = Users; stroke = "#8B5CF6"; data = sparkline(24, 5); }
     if (s.id === "messages") { icon = MessageSquare; stroke = "#F97316"; data = sparkline(24, 2); }
-    if (s.id === "spent") { icon = IndianRupee; stroke = "#EC4899"; data = sparkline(24, 100); }
 
     return { ...s, icon, stroke, data };
   });
@@ -359,7 +370,7 @@ const ClientDashboard = () => {
   return (
     <>
       {/* Top Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {enrichedStats.map((s: any) => (
           <StatCard key={s.id} {...s} />
         ))}

@@ -406,15 +406,17 @@ exports.register = async (req, res, next) => {
         status: 'Pending'
       });
 
-      // Trigger Notification for Admins
+      // Notify Admins about new registration
       try {
-        const Notification = require("../../../models/notification.model");
-        await Notification.create({
-          name: "New Registration",
-          message: `Consultant ${fullName} has registered.`,
-          recipientRole: "Admin",
+        const NotificationService = require("../../../services/notificationService");
+        await NotificationService.notifyRole("Admin", {
+          name: "New Consultant Registration",
+          message: `${fullName} has registered as a consultant and is pending approval.`,
           type: "registration",
-          avatar: "https://via.placeholder.com/40"
+          category: "system",
+          priority: "high",
+          actionUrl: "/consultants",
+          actionLabel: "Review"
         });
       } catch (notifErr) {
         console.error("Failed to create registration notification:", notifErr);
@@ -452,15 +454,16 @@ exports.register = async (req, res, next) => {
         status: 'Active'
       });
 
-      // Trigger Notification for Admins
+      // Notify Admins about new client registration
       try {
-        const Notification = require("../../../models/notification.model");
-        await Notification.create({
-          name: "New Registration",
-          message: `Client ${fullName} has registered.`,
-          recipientRole: "Admin",
+        const NotificationService = require("../../../services/notificationService");
+        await NotificationService.notifyRole("Admin", {
+          name: "New Client Registration",
+          message: `${fullName} has registered as a client.`,
           type: "registration",
-          avatar: "https://via.placeholder.com/40"
+          category: "system",
+          actionUrl: "/clients",
+          actionLabel: "View"
         });
       } catch (notifErr) {
         console.error("Failed to create registration notification:", notifErr);
@@ -538,15 +541,17 @@ exports.signup = async (req, res, next) => {
         status: 'Pending'
       });
 
-      // Trigger Notification for Admins
+      // Notify Admins about new consultant signup
       try {
-        const Notification = require("../../../models/notification.model");
-        await Notification.create({
-          name: "New Registration",
-          message: `Consultant ${fullName} has signed up.`,
-          recipientRole: "Admin",
+        const NotificationService = require("../../../services/notificationService");
+        await NotificationService.notifyRole("Admin", {
+          name: "New Consultant Signup",
+          message: `${fullName} has signed up as a consultant and is pending approval.`,
           type: "registration",
-          avatar: "https://via.placeholder.com/40"
+          category: "system",
+          priority: "high",
+          actionUrl: "/consultants",
+          actionLabel: "Review"
         });
       } catch (notifErr) {
         console.error("Failed to create registration notification:", notifErr);
@@ -584,14 +589,16 @@ exports.signup = async (req, res, next) => {
         status: 'Active'
       });
 
+      // Notify Admins about new client signup
       try {
-        const Notification = require("../../../models/notification.model");
-        await Notification.create({
-          name: "New Registration",
-          message: `Client ${fullName} has signed up.`,
-          recipientRole: "Admin",
+        const NotificationService = require("../../../services/notificationService");
+        await NotificationService.notifyRole("Admin", {
+          name: "New Client Signup",
+          message: `${fullName} has signed up as a client.`,
           type: "registration",
-          avatar: "https://via.placeholder.com/40"
+          category: "system",
+          actionUrl: "/clients",
+          actionLabel: "View"
         });
       } catch (notifErr) {
         console.error("Failed to create registration notification:", notifErr);
