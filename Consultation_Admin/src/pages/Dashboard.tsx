@@ -260,7 +260,7 @@ const AdminDashboard: React.FC = () => {
           consultant: appointment.consultant || "Unknown Consultant",
           category: appointment.category,
           date: appointment.date,
-          time: appointment.timeStart,
+          time: appointment.startAt,
           status: appointment.status,
         };
       });
@@ -274,6 +274,16 @@ const AdminDashboard: React.FC = () => {
 
   const formatTime = (timeStr: string) => {
     if (!timeStr) return "";
+    // If ISO string (contains T), parse as date
+    if (timeStr.includes("T")) {
+      return new Date(timeStr).toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      });
+    }
+
+    // Legacy HH:mm handling
     const [hours, minutes] = timeStr.split(":");
     const h = parseInt(hours, 10);
     const m = parseInt(minutes, 10);
@@ -353,17 +363,22 @@ const AdminDashboard: React.FC = () => {
                   <p className="font-medium text-gray-800">{a.name}</p>
                   <p className="text-sm text-gray-500">with {a.consultant}</p>
                 </div>
-                <div className="flex items-center space-x-3">
-                  <span className="text-xs px-2 py-1 bg-gray-100 rounded-full text-gray-600">
+                <div className="flex items-center gap-6">
+                  <span className="text-xs px-2.5 py-1 bg-gray-100 rounded-full text-gray-600 font-medium">
                     {a.category}
                   </span>
-                  <div className="text-right">
+                  <div className="text-right min-w-[90px]">
                     <div className="text-xs text-gray-500">{formatDate(a.date)}</div>
-                    <div className="text-sm text-gray-700 font-medium">{formatTime(a.time)}</div>
+                    <div className="text-sm text-gray-800 font-semibold">{formatTime(a.time)}</div>
                   </div>
-                  <span className={`text-xs font-medium ${a.status === 'Completed' ? 'text-green-600' :
-                    a.status === 'Cancelled' ? 'text-red-600' : 'text-blue-600'
-                    }`}>
+                  <span
+                    className={`text-xs font-semibold px-2.5 py-1 rounded-full ${a.status === "Completed"
+                        ? "bg-green-100 text-green-700"
+                        : a.status === "Cancelled"
+                          ? "bg-red-100 text-red-700"
+                          : "bg-blue-100 text-blue-700"
+                      }`}
+                  >
                     {a.status}
                   </span>
                 </div>

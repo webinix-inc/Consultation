@@ -194,28 +194,46 @@ exports.overview = async (req, res, next) => {
 
     const recentAppointments = await Promise.all(recentAppointmentsRaw.map(async (appt) => {
       let clientName = "Unknown Client";
-      let clientDoc = await User.findById(appt.client).select("fullName");
-      if (!clientDoc) {
-        clientDoc = await Client.findById(appt.client).select("fullName");
+      // Try snapshot first, then DB
+      if (appt.clientSnapshot?.name) {
+        clientName = appt.clientSnapshot.name;
+      } else {
+        let clientDoc = await User.findById(appt.client).select("fullName");
+        if (!clientDoc) {
+          clientDoc = await Client.findById(appt.client).select("fullName");
+        }
+        if (clientDoc) clientName = clientDoc.fullName;
       }
-      if (clientDoc) clientName = clientDoc.fullName;
 
       let consultantName = "Unknown Consultant";
-      let consultantDoc = await Consultant.findById(appt.consultant).select("name firstName lastName fullName");
-      if (!consultantDoc) {
-        consultantDoc = await User.findById(appt.consultant).select("fullName");
-      }
-      if (consultantDoc) {
-        consultantName = consultantDoc.name || consultantDoc.fullName || `${consultantDoc.firstName} ${consultantDoc.lastName}`;
+      let consultantCategory = "General";
+
+      // Try snapshot first
+      if (appt.consultantSnapshot) {
+        consultantName = appt.consultantSnapshot.name || consultantName;
+        consultantCategory = appt.consultantSnapshot.category || consultantCategory;
+      } else {
+        // Fallback to DB
+        let consultantDoc = await Consultant.findById(appt.consultant).select("name firstName lastName fullName category");
+        if (!consultantDoc) {
+          consultantDoc = await User.findById(appt.consultant).select("fullName");
+        }
+        if (consultantDoc) {
+          consultantName = consultantDoc.name || consultantDoc.fullName || `${consultantDoc.firstName} ${consultantDoc.lastName}`;
+          if (consultantDoc.category) {
+            consultantCategory = consultantDoc.category.name || consultantDoc.category;
+          }
+        }
       }
 
       return {
         _id: appt._id,
         client: clientName,
         consultant: consultantName,
-        category: appt.category,
+        category: consultantCategory,
         date: appt.date,
         time: appt.startAt ? new Date(appt.startAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : "",
+        startAt: appt.startAt,
         status: appt.status,
       };
     }));
