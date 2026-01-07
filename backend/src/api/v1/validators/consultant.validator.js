@@ -117,8 +117,22 @@ const createConsultantSchema = Joi.object({
 
   lastLogin: Joi.date().optional(),
 
-  category: Joi.string().min(2).max(100).required(),
-  subcategory: Joi.string().allow("").max(100).optional(),
+  category: Joi.alternatives().try(
+    Joi.string().min(2).max(100),
+    Joi.object({
+      name: Joi.string().required(),
+      description: Joi.string().allow("").optional(),
+      imageUrl: Joi.string().uri().allow("").optional(),
+    })
+  ).required(),
+  subcategory: Joi.alternatives().try(
+    Joi.string().allow("").max(100),
+    Joi.object({
+      name: Joi.string().allow("").optional(),
+      description: Joi.string().allow("").optional(),
+      imageUrl: Joi.string().uri().allow("").optional(),
+    })
+  ).optional(),
   specialization: Joi.string().allow("").max(100).optional(),
   regNo: Joi.string().allow("").max(120).optional(),
   fees: Joi.number().min(0).optional(),
@@ -242,8 +256,22 @@ const updateConsultantSchema = Joi.object({
   email: Joi.string().email().optional(),
   phone: Joi.string().min(6).max(30).optional(),
   alternatePhone: Joi.string().allow("").max(30).optional(),
-  category: Joi.string().min(2).max(100).optional(),
-  subcategory: Joi.string().allow("").max(100).optional(),
+  category: Joi.alternatives().try(
+    Joi.string().min(2).max(100),
+    Joi.object({
+      name: Joi.string().required(),
+      description: Joi.string().allow("").optional(),
+      imageUrl: Joi.string().uri().allow("").optional(),
+    })
+  ).optional(),
+  subcategory: Joi.alternatives().try(
+    Joi.string().allow("").max(100),
+    Joi.object({
+      name: Joi.string().allow("").optional(),
+      description: Joi.string().allow("").optional(),
+      imageUrl: Joi.string().uri().allow("").optional(),
+    })
+  ).optional(),
   specialization: Joi.string().allow("").max(100).optional(),
   regNo: Joi.string().allow("").max(120).optional(),
   fees: Joi.number().min(0).optional(),

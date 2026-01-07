@@ -211,7 +211,13 @@ exports.overview = async (req, res, next) => {
       // Try snapshot first
       if (appt.consultantSnapshot) {
         consultantName = appt.consultantSnapshot.name || consultantName;
-        consultantCategory = appt.consultantSnapshot.category || consultantCategory;
+        // Handle category if it's an object or string
+        const snapCat = appt.consultantSnapshot.category;
+        if (snapCat && typeof snapCat === "object") {
+          consultantCategory = snapCat.name || snapCat.title || "General";
+        } else if (snapCat) {
+          consultantCategory = snapCat;
+        }
       } else {
         // Fallback to DB
         let consultantDoc = await Consultant.findById(appt.consultant).select("name firstName lastName fullName category");
@@ -221,7 +227,11 @@ exports.overview = async (req, res, next) => {
         if (consultantDoc) {
           consultantName = consultantDoc.name || consultantDoc.fullName || `${consultantDoc.firstName} ${consultantDoc.lastName}`;
           if (consultantDoc.category) {
-            consultantCategory = consultantDoc.category.name || consultantDoc.category;
+            if (typeof consultantDoc.category === "object") {
+              consultantCategory = consultantDoc.category.name || consultantDoc.category.title || "General";
+            } else {
+              consultantCategory = consultantDoc.category;
+            }
           }
         }
       }

@@ -266,11 +266,11 @@ const ConsultantCard: React.FC<{
   const categoryLabel =
     typeof user.category === "string"
       ? user.category || "General"
-      : (user.category as Category)?.title || "General";
+      : (user.category as any)?.name || (user.category as Category)?.title || "General";
   const subcategoryLabel =
     typeof user.subcategory === "string"
       ? user.subcategory || ""
-      : (user.subcategory as Subcategory)?.title || "";
+      : (user.subcategory as any)?.name || (user.subcategory as Subcategory)?.title || "";
   const yearsOfExperience = user.yearsOfExperience ?? 0;
   const location =
     user.city && user.state
@@ -1077,7 +1077,7 @@ const ConsultationManagement: React.FC = () => {
               if (form.category) userPayload.category = form.category;
               if (form.subcategory) userPayload.subcategory = form.subcategory;
 
-             
+
 
               createConsultant(userPayload);
             }}

@@ -254,11 +254,17 @@ const AdminDashboard: React.FC = () => {
     return data.data.recentAppointments
       .slice(0, 4)
       .map((appointment: any) => {
+        const cat = appointment.category;
+        const categoryLabel =
+          typeof cat === "string"
+            ? cat
+            : cat?.name || cat?.title || "General";
+
         return {
           id: appointment._id,
           name: appointment.client || "Unknown Client",
           consultant: appointment.consultant || "Unknown Consultant",
-          category: appointment.category,
+          category: categoryLabel,
           date: appointment.date,
           time: appointment.startAt,
           status: appointment.status,
@@ -373,10 +379,10 @@ const AdminDashboard: React.FC = () => {
                   </div>
                   <span
                     className={`text-xs font-semibold px-2.5 py-1 rounded-full ${a.status === "Completed"
-                        ? "bg-green-100 text-green-700"
-                        : a.status === "Cancelled"
-                          ? "bg-red-100 text-red-700"
-                          : "bg-blue-100 text-blue-700"
+                      ? "bg-green-100 text-green-700"
+                      : a.status === "Cancelled"
+                        ? "bg-red-100 text-red-700"
+                        : "bg-blue-100 text-blue-700"
                       }`}
                   >
                     {a.status}

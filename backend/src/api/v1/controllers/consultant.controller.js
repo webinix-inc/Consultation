@@ -1,4 +1,6 @@
 const { Consultant } = require("../../../models/consultant.model");
+const Category = require("../../../models/category.model");
+const SubCategory = require("../../../models/subcategory.model");
 const ClientConsultant = require("../../../models/clientConsultant.model");
 const { sendSuccess, ApiError } = require("../../../utils/response");
 const httpStatus = require("../../../constants/httpStatus");
@@ -122,9 +124,53 @@ exports.create = async (req, res, next) => {
       consultantData.status = 'Pending';
     }
 
-    // Set default category if not provided
+    // Handle category object structure
+    // Handle category snapshot
     if (!consultantData.category) {
-      consultantData.category = 'General';
+      consultantData.category = { name: "General" };
+    } else if (typeof consultantData.category === "string") {
+      // Try to find category by ID or Title
+      let catDoc = null;
+      if (consultantData.category.match(/^[0-9a-fA-F]{24}$/)) {
+        catDoc = await Category.findById(consultantData.category);
+      }
+      if (!catDoc) {
+        catDoc = await Category.findOne({ title: consultantData.category });
+      }
+
+      if (catDoc) {
+        consultantData.category = {
+          name: catDoc.title,
+          description: catDoc.description,
+          imageUrl: catDoc.image
+        };
+      } else {
+        consultantData.category = { name: consultantData.category };
+      }
+    } else if (typeof consultantData.category === "object" && !consultantData.category.name) {
+      consultantData.category.name = "General";
+    }
+
+    // Handle subcategory snapshot
+    if (consultantData.subcategory && typeof consultantData.subcategory === "string") {
+      // Try to find subcategory by ID or Title
+      let subDoc = null;
+      if (consultantData.subcategory.match(/^[0-9a-fA-F]{24}$/)) {
+        subDoc = await SubCategory.findById(consultantData.subcategory);
+      }
+      if (!subDoc) {
+        subDoc = await SubCategory.findOne({ title: consultantData.subcategory });
+      }
+
+      if (subDoc) {
+        consultantData.subcategory = {
+          name: subDoc.title,
+          description: subDoc.description,
+          imageUrl: subDoc.image
+        };
+      } else {
+        consultantData.subcategory = { name: consultantData.subcategory };
+      }
     }
 
     const consultant = await Consultant.create(consultantData);
@@ -142,6 +188,50 @@ exports.update = async (req, res, next) => {
   try {
     const { id } = req.params;
     const updateData = { ...req.body };
+
+    // Handle category object structure
+    if (updateData.category && typeof updateData.category === "string") {
+      // Try to find category by ID or Title
+      let catDoc = null;
+      if (updateData.category.match(/^[0-9a-fA-F]{24}$/)) {
+        catDoc = await Category.findById(updateData.category);
+      }
+      if (!catDoc) {
+        catDoc = await Category.findOne({ title: updateData.category });
+      }
+
+      if (catDoc) {
+        updateData.category = {
+          name: catDoc.title,
+          description: catDoc.description,
+          imageUrl: catDoc.image
+        };
+      } else {
+        updateData.category = { name: updateData.category };
+      }
+    }
+
+    // Handle subcategory object structure
+    if (updateData.subcategory && typeof updateData.subcategory === "string") {
+      // Try to find subcategory by ID or Title
+      let subDoc = null;
+      if (updateData.subcategory.match(/^[0-9a-fA-F]{24}$/)) {
+        subDoc = await SubCategory.findById(updateData.subcategory);
+      }
+      if (!subDoc) {
+        subDoc = await SubCategory.findOne({ title: updateData.subcategory });
+      }
+
+      if (subDoc) {
+        updateData.subcategory = {
+          name: subDoc.title,
+          description: subDoc.description,
+          imageUrl: subDoc.image
+        };
+      } else {
+        updateData.subcategory = { name: updateData.subcategory };
+      }
+    }
 
     // Handle image upload from S3 (if uploaded via multer middleware)
     if (req.file) {
