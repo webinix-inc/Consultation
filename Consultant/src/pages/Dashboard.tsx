@@ -522,7 +522,14 @@ const ClientDashboard = () => {
     if (s.id === "upcoming") {
       icon = Calendar;
       stroke = "#F97316";
-      chartData = Array(12).fill(0).map((_, i) => ({ x: i, y: 0 }));
+      if (monthlyApptTrends.length > 0) {
+        chartData = monthlyApptTrends.map((t: { total: number; completed: number }, i: number) => ({
+          x: i,
+          y: Math.max(0, t.total - t.completed)
+        }));
+      } else {
+        chartData = Array(12).fill(0).map((_, i) => ({ x: i, y: 0 }));
+      }
     }
     // if (s.id === "spent") {
     //   icon = IndianRupee;
@@ -620,40 +627,41 @@ const ClientDashboard = () => {
           </CardContent>
         </Card>
 
-        {/* Quick Actions / Suggestions */}
+        {/* Recent Consultants */}
         <Card className="shadow-sm border-muted/50">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-base">Quick Actions</CardTitle>
+              <CardTitle className="text-base">Recent Consultants</CardTitle>
             </div>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <Button className="w-full justify-start gap-2" variant="outline">
-              <Search className="h-4 w-4" /> Find a Consultant
-            </Button>
-            <Button className="w-full justify-start gap-2" variant="outline">
-              <Calendar className="h-4 w-4" /> Schedule Appointment
-            </Button>
-
-            <div className="pt-4 border-t">
-              <h4 className="text-sm font-medium mb-3">Suggested Consultants</h4>
-              <div className="space-y-3">
-                {[1, 2].map((i) => (
-                  <div key={i} className="flex items-center gap-3">
-                    <Avatar className="h-8 w-8">
-                      <AvatarImage src={`https://i.pravatar.cc/100?img=${i + 20}`} />
-                      <AvatarFallback>C{i}</AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1">
-                      <div className="text-sm font-medium">Dr. Emily Chen</div>
-                      <div className="text-xs text-muted-foreground">Cardiology</div>
+          <CardContent>
+            <div className="space-y-4">
+              {recentAppointments.length > 0 ? (
+                Array.from(new Map(recentAppointments.map((appt) => [appt.name, appt])).values())
+                  .slice(0, 4)
+                  .map((consultant, i) => (
+                    <div key={i} className="flex items-center gap-3">
+                      <Avatar className="h-9 w-9 border border-gray-100">
+                        <AvatarImage src={consultant.avatar} />
+                        <AvatarFallback>{consultant.name.charAt(0)}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium truncate">{consultant.name}</div>
+                        <div className="text-xs text-muted-foreground truncate">{consultant.tag}</div>
+                      </div>
+                      <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => navigate(`/consultants`)}>
+                        <Search className="h-4 w-4 text-gray-400" />
+                      </Button>
                     </div>
-                    <Button size="icon" variant="ghost" className="h-8 w-8">
-                      <CheckCircle2 className="h-4 w-4 text-blue-600" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
+                  ))
+              ) : (
+                <div className="py-8 text-center">
+                  <p className="text-sm text-muted-foreground">No recent consultants</p>
+                  <Button variant="link" onClick={() => navigate("/consultants")} className="mt-2 h-auto p-0 text-xs">
+                    Find a consultant
+                  </Button>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

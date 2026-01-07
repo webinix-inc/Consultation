@@ -9,7 +9,7 @@ exports.list = async (req, res, next) => {
   try {
     const { category, status, q } = req.query;
     const filter = {};
-    if (category) filter.category = category;
+    if (category) filter["category.name"] = category;
     if (status) filter.status = status;
     if (q) filter.name = { $regex: q, $options: "i" };
 

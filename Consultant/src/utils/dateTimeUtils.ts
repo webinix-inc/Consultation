@@ -126,7 +126,7 @@ export function formatDateLine(date: string, start: string, end: string, session
   const dateStr = d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
   const startNormalized = normalizeTimeString(start);
   const endNormalized = end ? normalizeTimeString(end) : null;
-  
+
   let timeStr = '';
   if (includeDuration && endNormalized) {
     const [sH, sM] = startNormalized.split(':').map(Number);
@@ -141,7 +141,7 @@ export function formatDateLine(date: string, start: string, end: string, session
   } else {
     timeStr = startNormalized;
   }
-  
+
   return `${dateStr} ${timeStr} ${session}`;
 }
 
@@ -184,3 +184,29 @@ export function checkIsNow(dateStr?: string, timeStart?: string, timeEnd?: strin
   return now >= start && now <= end;
 }
 
+
+/**
+ * Formats appointment date line from Date objects
+ */
+export function formatDateLineFromDates(start: Date, end: Date, session: string): string {
+  if (!start) return "";
+  const dateStr = start.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+  const startStr = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+
+  if (end) {
+    const diffMs = end.getTime() - start.getTime();
+    const diffMin = Math.round(diffMs / 60000);
+    return `${dateStr} ${startStr} (${diffMin} min) ${session}`;
+  }
+  return `${dateStr} ${startStr} ${session}`;
+}
+
+/**
+ * Checks if now is within Date range
+ */
+export function checkIsNowFromDates(start: Date, end: Date): boolean {
+  if (!start) return false;
+  const now = new Date();
+  const e = end || new Date(start.getTime() + 60 * 60 * 1000);
+  return now >= start && now <= e;
+}

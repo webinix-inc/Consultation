@@ -67,7 +67,6 @@ export type Client = {
   status: "Active" | "Inactive";
   sessions?: number;
   lastSessionDate?: string;
-  lastSessionTime?: string;
   lastSessionAt?: string;
   avatar?: string;
 };
@@ -607,7 +606,6 @@ export default function ClientManagement() {
           createdAt: clientData.createdAt || clientData.created_at || "",
           sessions: clientData.sessions || 0,
           lastSessionDate: clientData.lastSessionDate || null,
-          lastSessionTime: clientData.lastSessionTime || null,
           lastSessionAt: clientData.lastSessionAt || null,
           avatar: clientData.avatar || clientData.profileImage || clientData.image || "",
         } as Client & { createdAt: string };
@@ -636,7 +634,7 @@ export default function ClientManagement() {
       status: user.status || "Active",
       createdAt: user.createdAt || user.created_at || "",
       sessions: 0,
-      lastSession: "-",
+
       avatar: user.avatar || user.profileImage || user.image || "",
     } as Client & { createdAt: string }));
   }, [data, linkedClientIds, linkedClientsArray, categories, subcategories]);
@@ -724,24 +722,10 @@ export default function ClientManagement() {
     }
   };
 
-  const formatRawDateTime = (dateStr: string, timeStr: string, dateTimeStr?: string) => {
-    if (!dateStr || !timeStr) {
-      if (dateTimeStr) return formatDateTime(dateTimeStr);
-      return "—";
-    }
-    // dateStr is YYYY-MM-DD usually if from legacy 'date' field
-    // timeStr is "HH:mm AM"
-    try {
-      const [y, m, d] = dateStr.split('-');
-      // Display as DD/MM/YYYY, HH:MM AM/PM
-      if (y && m && d) {
-        return `${d}/${m}/${y}, ${timeStr}`;
-      }
-      // fallback
-      return `${dateStr}, ${timeStr}`;
-    } catch {
-      return `${dateStr}, ${timeStr}`;
-    }
+  const formatSessionTime = (dateStr?: string, dateTimeStr?: string) => {
+    if (dateTimeStr) return formatDateTime(dateTimeStr);
+    if (dateStr) return formatDate(dateStr);
+    return "—";
   };
 
   useEffect(() => {
@@ -822,7 +806,7 @@ export default function ClientManagement() {
 
                     <td className="py-4"><span className="text-sm text-muted-foreground">{formatDate((r as any).createdAt)}</span></td>
                     <td className="py-4">{r.sessions || 0}</td>
-                    <td className="py-4">{formatRawDateTime(r.lastSessionDate, r.lastSessionTime, r.lastSessionAt)}</td>
+                    <td className="py-4">{formatSessionTime(r.lastSessionDate, r.lastSessionAt)}</td>
                   </tr>
                 ))}
                 {pageRows.length === 0 && (

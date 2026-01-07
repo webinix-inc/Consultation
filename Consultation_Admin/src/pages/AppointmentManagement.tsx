@@ -26,8 +26,6 @@ interface Appointment {
   session: "Video Call" | "In-Person" | "Phone";
   date: string | Date;
   time: string; // Display time (e.g., "9:00 AM")
-  timeStart: string; // "HH:mm"
-  timeEnd: string; // "HH:mm"
   status: "Upcoming" | "Confirmed" | "Completed" | "Cancelled";
   reason?: string;
   notes?: string;
@@ -124,44 +122,18 @@ const AppointmentManagement: React.FC = () => {
 
       // Format time for display (e.g. "1:00 PM")
       let timeDisplay = "";
-      let timeStartStr = "";
-      let timeEndStr = "";
 
+      // Helper
+      const formatTime = (d: Date) => d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
 
-      // FIX: Use raw time string components if available to avoid Timezone shifts (UTC vs IST)
-      // When relying on startAt (UTC), formatting it in browser adds +5.5h (IST).
-      // We want to show the "Booked Slot" time (e.g. 10:38) regardless of where it is viewed.
-
-      const formatTimeStr = (timeStr: string) => {
-        if (!timeStr) return "";
-        // Handle "10:38 AM" or "10:38"
-        let [time, modifier] = timeStr.split(' ');
-        let [h, m] = time.split(':').map(Number);
-
-        if (modifier) {
-          // Already has AM/PM, ensure formatting
-          return `${timeStr}`;
-        }
-
-        // Convert 24h to 12h
-        const ampm = h >= 12 ? 'PM' : 'AM';
-        h = h % 12;
-        h = h ? h : 12; // the hour '0' should be '12'
-        return `${h}:${String(m).padStart(2, '0')} ${ampm}`;
-      };
-
-      if (it.timeStart) {
-        timeDisplay = formatTimeStr(it.timeStart);
-        if (it.timeEnd) {
-          timeDisplay += ` to ${formatTimeStr(it.timeEnd)}`;
-        }
-      } else if (start) {
-        // Fallback to Date object if no string range (legacy)
-        const formatTime = (d: Date) => d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+      if (start) {
         timeDisplay = `${formatTime(start)}`;
         if (end) {
           timeDisplay += ` to ${formatTime(end)}`;
         }
+      } else if (it.timeStart) {
+        // Fallback for very old legacy data only
+        timeDisplay = it.timeStart; // Simple fallback
       }
 
       return {
@@ -176,8 +148,6 @@ const AppointmentManagement: React.FC = () => {
         session: it.session || "Video Call",
         date: dateStr,
         time: timeDisplay,
-        timeStart: timeStartStr,
-        timeEnd: timeEndStr,
         status: it.status || "Upcoming",
         reason: it.reason || "",
         notes: it.notes || "",

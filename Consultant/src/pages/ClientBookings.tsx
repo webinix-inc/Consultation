@@ -19,7 +19,7 @@ import { toast } from "react-hot-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
 import { UPCOMING_STATUSES, PAST_STATUSES } from "@/constants/appConstants";
-import { normalizeTimeString, parseSlotToRange, formatToDisplay, formatHHMM, isoDateOnly, checkIsNow, formatDateLine } from "@/utils/dateTimeUtils";
+import { normalizeTimeString, parseSlotToRange, formatToDisplay, formatHHMM, isoDateOnly, checkIsNow, formatDateLine, formatDateLineFromDates, checkIsNowFromDates } from "@/utils/dateTimeUtils";
 
 /* --------------------------------------
    Utils & Types
@@ -61,8 +61,8 @@ export type BookingItem = {
     dateLine: string;
     notes?: string;
     rawDate?: string;
-    rawTimeStart?: string;
-    rawTimeEnd?: string;
+    startAt?: Date;
+    endAt?: Date;
     title: string;
     category?: string;
     subcategory?: string;
@@ -263,23 +263,11 @@ function BookingRow({
     isConsultant?: boolean;
 }) {
     const isNow = useMemo(() => {
-        if (!b.rawDate || !b.rawTimeStart) return false;
-        const now = new Date();
-        const [h, m] = b.rawTimeStart.split(":").map(Number);
-        const start = new Date(b.rawDate);
-        start.setHours(h, m, 0, 0);
-
-        let end = new Date(start);
-        if (b.rawTimeEnd) {
-            const [eh, em] = b.rawTimeEnd.split(":").map(Number);
-            end = new Date(b.rawDate);
-            end.setHours(eh, em, 0, 0);
-        } else {
-            end = new Date(start.getTime() + 60 * 60 * 1000);
+        if (b.startAt) {
+            return checkIsNowFromDates(b.startAt, b.endAt || new Date(b.startAt.getTime() + 60 * 60 * 1000));
         }
-
-        return now >= start && now <= end;
-    }, [b.rawDate, b.rawTimeStart, b.rawTimeEnd]);
+        return false;
+    }, [b.startAt, b.endAt]);
 
     return (
         <div className="rounded-xl border bg-white p-4 flex flex-col md:flex-row md:items-start md:justify-between gap-3 relative overflow-hidden">
@@ -455,8 +443,8 @@ export default function ClientBookings() {
     });
 
     const rescheduleMutation = useMutation({
-        mutationFn: (payload: { id: string, date: string, timeStart: string, timeEnd: string }) =>
-            AppointmentAPI.update(payload.id, { date: payload.date, timeStart: payload.timeStart, timeEnd: payload.timeEnd }),
+        mutationFn: (payload: { id: string, startAt: string, endAt: string }) =>
+            AppointmentAPI.update(payload.id, { startAt: payload.startAt, endAt: payload.endAt }),
         onSuccess: () => {
             toast.success("Appointment rescheduled successfully");
             queryClient.invalidateQueries({ queryKey: ["clientAppointments"] });
@@ -475,11 +463,8 @@ export default function ClientBookings() {
         }
 
         const { start: slotStart, end: slotEnd } = parseSlotToRange(rDate, rTimeSlot, 60);
-        const startHHMM = formatHHMM(slotStart);
-        const endHHMM = formatHHMM(slotEnd);
-        const dateISO = isoDateOnly(rDate);
 
-        rescheduleMutation.mutate({ id: rescheduleItem.id, date: dateISO, timeStart: startHHMM, timeEnd: endHHMM });
+        rescheduleMutation.mutate({ id: rescheduleItem.id, startAt: slotStart.toISOString(), endAt: slotEnd.toISOString() });
     };
 
     const notesMutation = useMutation({
@@ -572,11 +557,11 @@ export default function ClientBookings() {
                                     subcategory: b.consultantSnapshot?.subcategory,
                                     status: b.status,
                                     serviceType: b.session,
-                                    dateLine: formatDateLine(b.date, b.timeStart, b.timeEnd, b.session || "Video Call", true),
+                                    dateLine: b.startAt ? formatDateLineFromDates(new Date(b.startAt), b.endAt ? new Date(b.endAt) : new Date(new Date(b.startAt).getTime() + 60 * 60 * 1000), b.session || "Video Call") : formatDateLine(b.date, b.timeStart, b.timeEnd, b.session || "Video Call", true),
                                     notes: b.notes || "NA",
                                     rawDate: b.date,
-                                    rawTimeStart: b.timeStart,
-                                    rawTimeEnd: b.timeEnd,
+                                    startAt: b.startAt ? new Date(b.startAt) : undefined,
+                                    endAt: b.endAt ? new Date(b.endAt) : undefined,
                                     consultantId: b.consultant?._id || b.consultant?.id || b.consultant,
                                     meetingLink: b.meetingLink || b.agora?.channelName || `appointment-${b._id}`,
                                 }} onOpen={setOpen} onCancel={() => setCancelId(b._id)} onReschedule={(item) => setRescheduleItem(item)} isConsultant={isConsultant} />
@@ -593,7 +578,7 @@ export default function ClientBookings() {
                                     subcategory: b.consultantSnapshot?.subcategory,
                                     status: b.status,
                                     serviceType: b.session,
-                                    dateLine: formatDateLine(b.date, b.timeStart, b.timeEnd, b.session || "Video Call", true),
+                                    dateLine: b.startAt ? formatDateLineFromDates(new Date(b.startAt), b.endAt ? new Date(b.endAt) : new Date(new Date(b.startAt).getTime() + 60 * 60 * 1000), b.session || "Video Call") : formatDateLine(b.date, b.timeStart, b.timeEnd, b.session || "Video Call", true),
                                     notes: b.notes,
                                     consultantId: b.consultant?._id || b.consultant?.id || b.consultant,
                                 }} past onOpen={setOpen} onViewNotes={setNotesItem} />

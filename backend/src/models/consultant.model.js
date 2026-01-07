@@ -113,8 +113,16 @@ const consultantSchema = new mongoose.Schema(
     lastLogin: { type: Date },
 
     // Professional
-    category: { type: String, required: true },
-    subcategory: { type: String, default: "" },
+    category: {
+      name: { type: String, required: true },
+      description: { type: String, default: "" },
+      imageUrl: { type: String, default: "" },
+    },
+    subcategory: {
+      name: { type: String, default: "" },
+      description: { type: String, default: "" },
+      imageUrl: { type: String, default: "" },
+    },
     tags: {
       type: [String],
       default: [],
@@ -317,8 +325,16 @@ const createConsultantSchema = Joi.object({
   phone: Joi.string().min(6).max(30).required(),
   mobile: Joi.string().min(6).max(30).optional(), // Optional, will sync with phone
   alternatePhone: Joi.string().allow("").max(30).optional(),
-  category: Joi.string().min(2).max(100).required(),
-  subcategory: Joi.string().allow("").max(100).optional(),
+  category: Joi.object({
+    name: Joi.string().required(),
+    description: Joi.string().allow("").optional(),
+    imageUrl: Joi.string().uri().allow("").optional(),
+  }).required(),
+  subcategory: Joi.object({
+    name: Joi.string().allow("").optional(),
+    description: Joi.string().allow("").optional(),
+    imageUrl: Joi.string().uri().allow("").optional(),
+  }).optional(),
 
   regNo: Joi.string().allow("").max(120).optional(),
   fees: Joi.number().min(0).optional(),
@@ -372,8 +388,16 @@ const updateConsultantSchema = Joi.object({
   phone: Joi.string().min(6).max(30).optional(),
   alternatePhone: Joi.string().allow("").max(30).optional(),
   displayName: Joi.string().allow("").max(120).optional(),
-  category: Joi.string().min(2).max(100).optional(),
-  subcategory: Joi.string().allow("").max(100).optional(),
+  category: Joi.object({
+    name: Joi.string().optional(),
+    description: Joi.string().allow("").optional(),
+    imageUrl: Joi.string().uri().allow("").optional(),
+  }).optional(),
+  subcategory: Joi.object({
+    name: Joi.string().allow("").optional(),
+    description: Joi.string().allow("").optional(),
+    imageUrl: Joi.string().uri().allow("").optional(),
+  }).optional(),
   regNo: Joi.string().allow("").max(120).optional(),
   fees: Joi.number().min(0).optional(),
   gender: Joi.string().allow("").max(30).optional(),

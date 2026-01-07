@@ -205,8 +205,8 @@ exports.createAppointment = async (req, res, next) => {
       name: consultantUser?.fullName || consultantDoc?.name || consultantDoc?.fullName || consultantDoc?.displayName || "Consultant",
       email: consultantUser?.email || consultantDoc?.email || "",
       mobile: consultantUser?.mobile || consultantDoc?.mobile || consultantDoc?.phone || "",
-      category: consultantUser?.category?.title || consultantDoc?.category || "General",
-      subcategory: consultantUser?.subcategory?.title || consultantDoc?.subcategory || "",
+      category: consultantUser?.category?.title || consultantDoc?.category?.name || consultantDoc?.category || "General",
+      subcategory: consultantUser?.subcategory?.title || consultantDoc?.subcategory?.name || consultantDoc?.subcategory || "",
     };
 
     // Build document — use consultantUserId if available (for proper querying), otherwise use Consultant ID
@@ -220,8 +220,7 @@ exports.createAppointment = async (req, res, next) => {
       category: value.category || "General",
       session: value.session || "Video Call",
       date: value.date || startAt.toISOString().split("T")[0],
-      timeStart: value.timeStart || `${String(startAt.getHours()).padStart(2, "0")}:${String(startAt.getMinutes()).padStart(2, "0")}`,
-      timeEnd: value.timeEnd || `${String(endAt.getHours()).padStart(2, "0")}:${String(endAt.getMinutes()).padStart(2, "0")}`,
+      // Legacy fields removed - they are no longer in the schema
       startAt,
       endAt,
       status: value.status || "Upcoming",
@@ -685,6 +684,10 @@ exports.updateAppointment = async (req, res, next) => {
       }
     }
 
+    // Capture original values before verification/modification
+    const originalStartAt = appt.startAt;
+    const originalStatus = appt.status;
+
     // Apply updates
     if (value.client) appt.client = value.client;
     if (value.consultant) appt.consultant = value.consultant;
@@ -697,18 +700,16 @@ exports.updateAppointment = async (req, res, next) => {
 
     if (newStart) {
       appt.startAt = newStart;
-      appt.timeStart = `${String(newStart.getHours()).padStart(2, "0")}:${String(newStart.getMinutes()).padStart(2, "0")}`;
       appt.date = newStart.toISOString().split("T")[0];
     }
     if (newEnd) {
       appt.endAt = newEnd;
-      appt.timeEnd = `${String(newEnd.getHours()).padStart(2, "0")}:${String(newEnd.getMinutes()).padStart(2, "0")}`;
     }
 
     // Store old values for comparison
     const oldStatus = appt.status;
     const oldDate = appt.date;
-    const oldTimeStart = appt.timeStart;
+    // const oldTimeStart = appt.timeStart; // Removed
 
     await appt.save();
 
@@ -764,11 +765,11 @@ exports.updateAppointment = async (req, res, next) => {
       const clientName = client?.fullName || client?.name || "Client";
 
       // Check if status changed
-      if (value.status && value.status !== oldStatus) {
+      if (appt.status !== originalStatus) {
         // Notification to Client
         await Notification.create({
           name: "Appointment Status Updated",
-          message: `Your appointment with ${consultantName} has been updated to ${value.status}.`,
+          message: `Your appointment with ${consultantName} has been updated to ${appt.status}.`,
           recipient: clientUserId,
           recipientRole: "Client",
           type: "appointment",
@@ -778,7 +779,7 @@ exports.updateAppointment = async (req, res, next) => {
         // Notification to Consultant
         await Notification.create({
           name: "Appointment Status Updated",
-          message: `Appointment with ${clientName} has been updated to ${value.status}.`,
+          message: `Appointment with ${clientName} has been updated to ${appt.status}.`,
           recipient: consultantUserId,
           recipientRole: "Consultant",
           type: "appointment",
@@ -787,13 +788,11 @@ exports.updateAppointment = async (req, res, next) => {
       }
 
       // Check if time/date changed
-      const timeChanged = (newStart && (oldDate !== appt.date || oldTimeStart !== appt.timeStart)) ||
-        (value.date && value.date !== oldDate) ||
-        (value.timeStart && value.timeStart !== oldTimeStart);
+      const timeChanged = originalStartAt && appt.startAt && originalStartAt.getTime() !== appt.startAt.getTime();
 
       if (timeChanged) {
-        const dateStr = appt.date || (appt.startAt ? appt.startAt.toISOString().split("T")[0] : "");
-        const timeStr = appt.timeStart || (appt.startAt ? `${String(appt.startAt.getHours()).padStart(2, "0")}:${String(appt.startAt.getMinutes()).padStart(2, "0")}` : "");
+        const dateStr = appt.startAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        const timeStr = appt.startAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 
         // Notification to Client
         await Notification.create({

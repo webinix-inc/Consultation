@@ -7,13 +7,9 @@ const createAppointmentSchema = Joi.object({
   consultant: Joi.string().required(),
   category: Joi.string().allow("", null),
   session: Joi.string().valid("Video Call").default("Video Call"),
-  // Legacy
-  date: Joi.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  timeStart: Joi.string().pattern(/^\d{2}:\d{2}$/).optional(),
-  timeEnd: Joi.string().pattern(/^\d{2}:\d{2}$/).optional(),
-  // Preferred
-  startAt: Joi.date().iso().optional(),
-  endAt: Joi.date().iso().optional(),
+
+  startAt: Joi.date().iso().required(),
+  endAt: Joi.date().iso().required(),
 
   status: Joi.string().valid("Upcoming", "Completed", "Cancelled").default("Upcoming"),
   reason: Joi.string().allow("", null),
@@ -32,9 +28,6 @@ const updateAppointmentSchema = Joi.object({
   consultant: Joi.string().optional(),
   category: Joi.string().optional(),
   session: Joi.string().valid("Video Call").optional(),
-  date: Joi.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  timeStart: Joi.string().pattern(/^\d{2}:\d{2}$/).optional(),
-  timeEnd: Joi.string().pattern(/^\d{2}:\d{2}$/).optional(),
   startAt: Joi.date().iso().optional(),
   endAt: Joi.date().iso().optional(),
   status: Joi.string().valid("Upcoming", "Completed", "Cancelled").optional(),

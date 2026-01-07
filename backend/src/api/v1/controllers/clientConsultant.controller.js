@@ -284,7 +284,6 @@ exports.getConsultantClients = async (req, res, next) => {
           _id: "$client",
           count: { $sum: 1 },
           lastSessionDate: { $first: "$date" },
-          lastSessionTime: { $first: "$timeStart" },
           lastSessionAt: { $first: "$startAt" }
         }
       }
@@ -295,19 +294,17 @@ exports.getConsultantClients = async (req, res, next) => {
       statsMap[String(stat._id)] = {
         sessions: stat.count,
         lastSessionDate: stat.lastSessionDate,
-        lastSessionTime: stat.lastSessionTime,
         lastSessionAt: stat.lastSessionAt
       };
     });
 
     // Attach stats to clients
     const clientsWithStats = allClients.map(client => {
-      const stat = statsMap[String(client._id)] || { sessions: 0, lastSessionDate: null, lastSessionTime: null, lastSessionAt: null };
+      const stat = statsMap[String(client._id)] || { sessions: 0, lastSessionDate: null, lastSessionAt: null };
       return {
         ...client,
         sessions: stat.sessions,
         lastSessionDate: stat.lastSessionDate,
-        lastSessionTime: stat.lastSessionTime,
         lastSessionAt: stat.lastSessionAt
       };
     });

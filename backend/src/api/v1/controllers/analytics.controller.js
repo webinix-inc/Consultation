@@ -215,7 +215,7 @@ exports.overview = async (req, res, next) => {
         consultant: consultantName,
         category: appt.category,
         date: appt.date,
-        timeStart: appt.timeStart,
+        time: appt.startAt ? new Date(appt.startAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : "",
         status: appt.status,
       };
     }));
@@ -666,7 +666,7 @@ exports.consultantStats = async (req, res, next) => {
     })
       .sort({ startAt: -1 })
       .limit(5)
-      .select("client date timeStart status session category")
+      .select("client date startAt status session category")
       .lean();
 
     // ... (formatting logic) ...
@@ -683,7 +683,7 @@ exports.consultantStats = async (req, res, next) => {
         name: clientName,
         with: "You",
         tag: appt.category || "General",
-        time: appt.timeStart,
+        time: appt.startAt ? new Date(appt.startAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : "",
         status: appt.status,
         avatar: clientAvatar
       };
@@ -878,7 +878,7 @@ exports.clientStats = async (req, res, next) => {
     })
       .sort({ startAt: -1 })
       .limit(5)
-      .select("consultant date timeStart startAt status category consultantSnapshot")
+      .select("consultant date startAt status category consultantSnapshot")
       .lean();
 
     // 6. Spending & Appointment Trends
@@ -959,8 +959,6 @@ exports.clientStats = async (req, res, next) => {
         const dateStr = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
         const timeStr = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
         displayTime = `${dateStr}, ${timeStr}`;
-      } else if (appt.date && appt.timeStart) {
-        displayTime = `${appt.date} ${appt.timeStart}`;
       }
 
       // Robust Consultant Lookup
@@ -1052,7 +1050,7 @@ exports.getClientStatsById = async (req, res, next) => {
     })
       .sort({ startAt: 1 })
       .limit(5)
-      .select("consultant date timeStart startAt status category consultantSnapshot")
+      .select("consultant date startAt status category consultantSnapshot")
       .lean();
 
     const User = require("../../../models/user.model");
@@ -1065,8 +1063,6 @@ exports.getClientStatsById = async (req, res, next) => {
         const dateStr = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
         const timeStr = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
         displayTime = `${dateStr}, ${timeStr}`;
-      } else if (appt.date && appt.timeStart) {
-        displayTime = `${appt.date} ${appt.timeStart}`;
       }
 
       // Robust Consultant Lookup

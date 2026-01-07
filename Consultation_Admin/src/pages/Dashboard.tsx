@@ -128,7 +128,7 @@ const AdminDashboard: React.FC = () => {
   // Fetch consultants directly
   const { data: consultantsData } = useQuery({
     queryKey: ["all-consultants"],
-    queryFn: () => ConsultantAPI.getAllConsultants({ limit: 6, sort: "-createdAt" }), // Fetch 6 most recent
+    queryFn: () => ConsultantAPI.getAllConsultants({ limit: 6, sort: "-createdAt", status: "Active" }), // Fetch 6 active
     refetchOnWindowFocus: true,
   });
 
@@ -259,13 +259,28 @@ const AdminDashboard: React.FC = () => {
           name: appointment.client || "Unknown Client",
           consultant: appointment.consultant || "Unknown Consultant",
           category: appointment.category,
+          date: appointment.date,
           time: appointment.timeStart,
           status: appointment.status,
         };
       });
   }, [data]);
 
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return "";
+    const date = new Date(dateStr);
+    return date.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
+  };
 
+  const formatTime = (timeStr: string) => {
+    if (!timeStr) return "";
+    const [hours, minutes] = timeStr.split(":");
+    const h = parseInt(hours, 10);
+    const m = parseInt(minutes, 10);
+    const suffix = h >= 12 ? "PM" : "AM";
+    const h12 = h % 12 || 12;
+    return `${h12}:${m.toString().padStart(2, "0")} ${suffix}`;
+  };
 
   // ✅ Framer Motion variants (type-safe)
   const container: Variants = {
@@ -342,8 +357,13 @@ const AdminDashboard: React.FC = () => {
                   <span className="text-xs px-2 py-1 bg-gray-100 rounded-full text-gray-600">
                     {a.category}
                   </span>
-                  <div className="text-sm text-gray-700">{a.time}</div>
-                  <span className="text-xs text-green-600 font-medium">
+                  <div className="text-right">
+                    <div className="text-xs text-gray-500">{formatDate(a.date)}</div>
+                    <div className="text-sm text-gray-700 font-medium">{formatTime(a.time)}</div>
+                  </div>
+                  <span className={`text-xs font-medium ${a.status === 'Completed' ? 'text-green-600' :
+                    a.status === 'Cancelled' ? 'text-red-600' : 'text-blue-600'
+                    }`}>
                     {a.status}
                   </span>
                 </div>
@@ -480,41 +500,67 @@ const AdminDashboard: React.FC = () => {
             View All
           </a>
         </div>
-        <div className="grid md:grid-cols-2 gap-y-2">
-          {isLoading ? (
-            <div className="col-span-2 py-4 text-center text-gray-500">
-              Loading consultants...
-            </div>
-          ) : isError ? (
-            <div className="col-span-2 py-4 text-center text-red-500">
-              Failed to load consultants
-            </div>
-          ) : consultants.length === 0 ? (
-            <div className="col-span-2 py-4 text-center text-gray-500">
-              No consultants found
-            </div>
-          ) : (
-            consultants.map((c) => (
-              <div
-                key={c.id}
-                className="flex justify-between items-center py-1 px-2 border-b"
-              >
-                <div>
-                  <p className="font-medium text-gray-800">{c.name}</p>
-                  <p className="text-sm text-gray-500">{c.field}</p>
-                </div>
-                <span
-                  className={`text-xs px-2 py-1 rounded-full ${c.status === "Available"
-                    ? "bg-green-100 text-green-700"
-                    : "bg-red-100 text-red-700"
-                    }`}
+
+        {isLoading ? (
+          <div className="py-8 text-center text-gray-500">
+            Loading consultants...
+          </div>
+        ) : isError ? (
+          <div className="py-8 text-center text-red-500">
+            Failed to load consultants
+          </div>
+        ) : consultants.length === 0 ? (
+          <div className="py-8 text-center text-gray-500">
+            No active consultants found
+          </div>
+        ) : (
+          <div className="flex flex-col md:flex-row gap-6">
+            {/* Column 1 */}
+            <div className="flex-1 space-y-4">
+              {consultants.slice(0, 3).map((c) => (
+                <div
+                  key={c.id}
+                  className="flex justify-between items-start pb-3 border-b border-gray-100 last:border-0"
                 >
-                  {c.status}
-                </span>
-              </div>
-            ))
-          )}
-        </div>
+                  <div>
+                    <p className="font-semibold text-gray-900 text-sm">{c.name}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{c.field}</p>
+                  </div>
+                  <Badge
+                    variant="secondary"
+                    className="bg-green-100 text-green-700 hover:bg-green-100 border-none font-medium px-2 py-0.5 text-[10px]"
+                  >
+                    Available
+                  </Badge>
+                </div>
+              ))}
+            </div>
+
+            {/* Vertical Separator (hidden on mobile) */}
+            <div className="hidden md:block w-px bg-gray-200 self-stretch mx-2" />
+
+            {/* Column 2 */}
+            <div className="flex-1 space-y-4">
+              {consultants.slice(3, 6).map((c) => (
+                <div
+                  key={c.id}
+                  className="flex justify-between items-start pb-3 border-b border-gray-100 last:border-0"
+                >
+                  <div>
+                    <p className="font-semibold text-gray-900 text-sm">{c.name}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{c.field}</p>
+                  </div>
+                  <Badge
+                    variant="secondary"
+                    className="bg-green-100 text-green-700 hover:bg-green-100 border-none font-medium px-2 py-0.5 text-[10px]"
+                  >
+                    Available
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </motion.div>
     </motion.div>
   );

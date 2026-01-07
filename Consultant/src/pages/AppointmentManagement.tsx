@@ -19,6 +19,7 @@ import {
   CalendarClock,
   Phone,
 } from "lucide-react";
+import { checkIsNowFromDates } from "@/utils/dateTimeUtils";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -49,8 +50,8 @@ type Appointment = {
   notes?: string;
   fee?: string;
   rawDate?: string;
-  rawTimeStart?: string;
-  rawTimeEnd?: string;
+  startAt?: Date;
+  endAt?: Date;
   meetingLink?: string;
 };
 type Slot = string;
@@ -145,25 +146,7 @@ function isoDateOnly(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
-function checkIsNow(dateStr?: string, timeStart?: string, timeEnd?: string) {
-  if (!dateStr || !timeStart) return false;
-  const now = new Date();
 
-  const [h, m] = timeStart.split(":").map(Number);
-  const start = new Date(dateStr);
-  start.setHours(h, m, 0, 0);
-
-  let end = new Date(start);
-  if (timeEnd) {
-    const [eh, em] = timeEnd.split(":").map(Number);
-    end = new Date(dateStr);
-    end.setHours(eh, em, 0, 0);
-  } else {
-    end = new Date(start.getTime() + 60 * 60 * 1000);
-  }
-
-  return now >= start && now <= end;
-}
 
 /* ========== Mini Calendar ================== */
 /* ========== Mini Calendar ================== */
@@ -439,16 +422,11 @@ const AppointmentManagementConsultant: React.FC = () => {
     });
 
     return filtered.map((it: any) => {
-      const start = (it.date && it.timeStart)
-        ? new Date(`${it.date}T${normalizeTimeString(it.timeStart)}:00`)
-        : (it.startAt ? new Date(it.startAt) : null);
-
-      const end = (it.date && it.timeEnd)
-        ? new Date(`${it.date}T${normalizeTimeString(it.timeEnd)}:00`)
-        : (it.endAt ? new Date(it.endAt) : null);
+      const start = it.startAt ? new Date(it.startAt) : null;
+      const end = it.endAt ? new Date(it.endAt) : (start ? new Date(start.getTime() + 60 * 60 * 1000) : null);
 
       const dateStr = start ? start.toLocaleDateString() : it.date ? new Date(it.date).toLocaleDateString() : "";
-      const timeStr = start && end ? `${formatToDisplay(start)} to ${formatToDisplay(end)}` : it.timeStart ? it.timeStart : "";
+      const timeStr = start && end ? `${formatToDisplay(start)} to ${formatToDisplay(end)}` : "";
 
       return {
         id: it._id || it.id,
@@ -463,8 +441,8 @@ const AppointmentManagementConsultant: React.FC = () => {
         notes: it.notes,
         fee: it.fee !== undefined && it.fee !== null ? `₹${Number(it.fee).toLocaleString("en-IN")}` : undefined,
         rawDate: it.date,
-        rawTimeStart: it.timeStart,
-        rawTimeEnd: it.timeEnd,
+        startAt: start,
+        endAt: end,
         meetingLink: it.meetingLink || it.agora?.channelName || `appointment-${it._id || it.id}`,
       } as Appointment;
     });
@@ -503,23 +481,17 @@ const AppointmentManagementConsultant: React.FC = () => {
       if (isUpcomingA && !isUpcomingB) return -1;
       if (!isUpcomingA && isUpcomingB) return 1;
 
-      // 2. Determine DateTimes
-      const dateA = a.rawDate || "";
-      const timeA = a.rawTimeStart ? normalizeTimeString(a.rawTimeStart) : "00:00";
-      // Use logical string comparison for ISO-like dates (YYYY-MM-DD + HH:mm)
-      const dateTimeA = `${dateA}T${timeA}`;
-
-      const dateB = b.rawDate || "";
-      const timeB = b.rawTimeStart ? normalizeTimeString(b.rawTimeStart) : "00:00";
-      const dateTimeB = `${dateB}T${timeB}`;
+      // 2. Compare Timestamps
+      const timeA = a.startAt ? a.startAt.getTime() : 0;
+      const timeB = b.startAt ? b.startAt.getTime() : 0;
 
       // 3. Sort within groups
       if (isUpcomingA) {
         // Upcoming: Ascending (Earliest first)
-        return dateTimeA.localeCompare(dateTimeB);
+        return timeA - timeB;
       } else {
         // Others (Past/Cancelled): Descending (Latest first)
-        return dateTimeB.localeCompare(dateTimeA);
+        return timeB - timeA;
       }
     });
   }, [mappedAppointments, debouncedSearch, activeFilter, statusFilter]);
@@ -635,15 +607,7 @@ const AppointmentManagementConsultant: React.FC = () => {
           return slotStart < aEnd && slotEnd > aStart;
         }
 
-        if (appt.date && (appt.timeStart || appt.timeEnd)) {
-          const apptStartStr = appt.timeStart ? normalizeTimeString(appt.timeStart) : null;
-          const apptEndStr = appt.timeEnd ? normalizeTimeString(appt.timeEnd) : null;
-          if (!apptStartStr && !apptEndStr) return false;
-          const aStart = apptStartStr ? new Date(`${isoDateOnly(new Date(appt.date))}T${apptStartStr}:00`) : null;
-          const aEnd = apptEndStr ? new Date(`${isoDateOnly(new Date(appt.date))}T${apptEndStr}:00`) : (aStart ? new Date(aStart.getTime() + slotDurationMin * 60 * 1000) : null);
-          if (!aStart || !aEnd) return false;
-          return slotStart < aEnd && slotEnd > aStart;
-        }
+
 
         return false;
       });
@@ -729,10 +693,6 @@ const AppointmentManagementConsultant: React.FC = () => {
         if (appt.startAt) {
           start = new Date(appt.startAt);
           end = appt.endAt ? new Date(appt.endAt) : new Date(start.getTime() + 60 * 60 * 1000);
-        } else if (appt.date && appt.timeStart) {
-          const startTime = normalizeTimeString(appt.timeStart);
-          start = new Date(`${appt.date}T${startTime}:00`);
-          end = appt.timeEnd ? new Date(`${appt.date}T${normalizeTimeString(appt.timeEnd)}:00`) : new Date(start.getTime() + 60 * 60 * 1000);
         } else {
           return null;
         }
@@ -856,9 +816,8 @@ const AppointmentManagementConsultant: React.FC = () => {
       consultant: consultantId,
       category,
       session: sched.session,
-      date: isoDateOnly(sched.date),
-      timeStart: startHHMM,
-      timeEnd: endHHMM,
+      startAt: slotStart.toISOString(),
+      endAt: slotEnd.toISOString(),
       status: "Upcoming",
       reason: sched.reason || "",
       notes: sched.notes || "",
@@ -955,9 +914,8 @@ const AppointmentManagementConsultant: React.FC = () => {
     const endHHMM = formatHHMM(slotEnd);
 
     const payload = {
-      date: isoDateOnly(sched.date),
-      timeStart: startHHMM,
-      timeEnd: endHHMM,
+      startAt: slotStart.toISOString(),
+      endAt: slotEnd.toISOString(),
       status: "Upcoming", // Reset status to Upcoming
     };
 
@@ -1049,22 +1007,22 @@ const AppointmentManagementConsultant: React.FC = () => {
                         <button
                           className={cn(
                             "p-1.5 rounded-full shadow-sm transition-all relative flex items-center justify-center",
-                            checkIsNow(a.rawDate, a.rawTimeStart, a.rawTimeEnd)
+                            checkIsNowFromDates(a.startAt!, a.endAt!)
                               ? "bg-green-100 text-green-700 hover:bg-green-200 border border-green-200 cursor-pointer"
                               : "bg-gray-200 text-gray-400 cursor-not-allowed opacity-50"
                           )}
                           onClick={() => {
-                            if (checkIsNow(a.rawDate, a.rawTimeStart, a.rawTimeEnd)) {
+                            if (checkIsNowFromDates(a.startAt!, a.endAt!)) {
                               // Navigate to video call using appointment ID and channel name
                               const channelName = a.meetingLink || `appointment-${a.id}`;
                               window.open(`/video-call/${a.id}?channel=${encodeURIComponent(channelName)}`, "_blank");
                             }
                           }}
-                          disabled={!checkIsNow(a.rawDate, a.rawTimeStart, a.rawTimeEnd)}
-                          title={checkIsNow(a.rawDate, a.rawTimeStart, a.rawTimeEnd) ? "Start Call" : "Call starts at scheduled time"}
+                          disabled={!checkIsNowFromDates(a.startAt!, a.endAt!)}
+                          title={checkIsNowFromDates(a.startAt!, a.endAt!) ? "Start Call" : "Call starts at scheduled time"}
                         >
                           <Phone size={16} />
-                          {checkIsNow(a.rawDate, a.rawTimeStart, a.rawTimeEnd) && (
+                          {checkIsNowFromDates(a.startAt!, a.endAt!) && (
                             <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
                               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
                               <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500 border-2 border-white"></span>
@@ -1077,22 +1035,22 @@ const AppointmentManagementConsultant: React.FC = () => {
                         <button
                           className={cn(
                             "p-1.5 rounded-full shadow-sm transition-all relative flex items-center justify-center",
-                            checkIsNow(a.rawDate, a.rawTimeStart, a.rawTimeEnd)
+                            checkIsNowFromDates(a.startAt!, a.endAt!)
                               ? "bg-blue-100 text-blue-700 hover:bg-blue-200 border border-blue-200 cursor-pointer"
                               : "bg-gray-200 text-gray-400 cursor-not-allowed opacity-50"
                           )}
                           onClick={() => {
-                            if (checkIsNow(a.rawDate, a.rawTimeStart, a.rawTimeEnd)) {
+                            if (checkIsNowFromDates(a.startAt!, a.endAt!)) {
                               // Navigate to video call using appointment ID and channel name
                               const channelName = a.meetingLink || `appointment-${a.id}`;
                               window.open(`/video-call/${a.id}?channel=${encodeURIComponent(channelName)}`, "_blank");
                             }
                           }}
-                          disabled={!checkIsNow(a.rawDate, a.rawTimeStart, a.rawTimeEnd)}
-                          title={checkIsNow(a.rawDate, a.rawTimeStart, a.rawTimeEnd) ? "Join Call" : "Call starts at scheduled time"}
+                          disabled={!checkIsNowFromDates(a.startAt!, a.endAt!)}
+                          title={checkIsNowFromDates(a.startAt!, a.endAt!) ? "Join Call" : "Call starts at scheduled time"}
                         >
                           <Phone size={16} />
-                          {checkIsNow(a.rawDate, a.rawTimeStart, a.rawTimeEnd) && (
+                          {checkIsNowFromDates(a.startAt!, a.endAt!) && (
                             <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
                               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
                               <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500 border-2 border-white"></span>

@@ -488,7 +488,19 @@ export default function Consultants() {
       const slotTime = sched.time || "";
       const [startHH, startMM] = slotTime.includes(" - ") ? slotTime.split(" - ")[0].split(":") : slotTime.split(":");
       const endTime = slotTime.includes(" - ") ? slotTime.split(" - ")[1] : null;
-      const [endHH, endMM] = endTime ? endTime.split(":") : [String(parseInt(startHH) + 1).padStart(2, "0"), startMM];
+      let endHH = "00";
+      let endMM = "00";
+      if (endTime) {
+        [endHH, endMM] = endTime.split(":");
+      } else {
+        const h = parseInt(startHH);
+        let endH = h + 1;
+        endHH = String(endH).padStart(2, "0");
+        endMM = startMM;
+      }
+
+      const startAtDate = new Date(`${selectedDateISO}T${startHH}:${startMM}:00`);
+      const endAtDate = new Date(`${selectedDateISO}T${endHH}:${endMM}:00`);
 
       // Step 1: Create appointment with pending payment
       const appointmentPayload = {
@@ -496,9 +508,8 @@ export default function Consultants() {
         consultant: consultantId,
         category,
         session: sched.session,
-        date: selectedDateISO,
-        timeStart: `${startHH}:${startMM}`,
-        timeEnd: `${endHH}:${endMM}`,
+        startAt: startAtDate.toISOString(),
+        endAt: endAtDate.toISOString(),
         status: "Upcoming",
         reason: sched.reason || "",
         notes: sched.notes || "",

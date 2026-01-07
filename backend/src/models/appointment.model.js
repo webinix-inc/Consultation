@@ -15,10 +15,7 @@ const appointmentSchema = new mongoose.Schema(
       required: true,
     },
 
-    category: {
-      type: String,
-      default: "General",
-    },
+
 
     session: {
       type: String,
@@ -31,15 +28,6 @@ const appointmentSchema = new mongoose.Schema(
       // "YYYY-MM-DD" (legacy) — kept for backward compatibility
       type: String,
     },
-    timeStart: {
-      // "HH:mm"
-      type: String,
-    },
-    timeEnd: {
-      // "HH:mm"
-      type: String,
-    },
-
     // Preferred canonical fields
     startAt: {
       // ISO date
@@ -168,58 +156,17 @@ appointmentSchema.statics.hasConflict = async function (id, startAt, endAt, excl
       { consultant: consultantId },
       { consultant: userId }
     ],
-    $and: [
-      {
-        $or: [
-          // existing.start < newEnd && existing.end > newStart  ==> overlap
-          { $and: [{ startAt: { $lt: endAt } }, { endAt: { $gt: startAt } }] },
-          // Fallback: if existing only has date/timeStart/timeEnd (legacy)
-          {
-            $and: [
-              { date: startAt.toISOString().split("T")[0] }, // same date
-              {
-                $or: [
-                  { timeStart: { $exists: true } },
-                  { timeEnd: { $exists: true } },
-                ],
-              },
-            ],
-          },
-        ]
-      }
-    ]
+    // existing.start < newEnd && existing.end > newStart  ==> overlap
+    $and: [{ startAt: { $lt: endAt } }, { endAt: { $gt: startAt } }]
   };
 
   if (excludeAppointmentId) {
     query._id = { $ne: excludeAppointmentId };
   }
 
-  const candidates = await this.find(query).lean();
-
-  // For candidates using startAt/endAt do exact overlap check; otherwise try legacy fields
-  for (const c of candidates) {
-    if (c.startAt && c.endAt) {
-      const aStart = new Date(c.startAt);
-      const aEnd = new Date(c.endAt);
-      if (startAt < aEnd && endAt > aStart) return true;
-    } else if (c.date && (c.timeStart || c.timeEnd)) {
-      const apptDate = c.date;
-      // build candidate start/end
-      const apptStartStr = c.timeStart || null;
-      const apptEndStr = c.timeEnd || null;
-      try {
-        if (!apptStartStr && !apptEndStr) continue;
-        const aStart = apptStartStr ? new Date(`${apptDate}T${apptStartStr}:00`) : null;
-        const aEnd = apptEndStr ? new Date(`${apptDate}T${apptEndStr}:00`) : (aStart ? new Date(aStart.getTime() + 60 * 60 * 1000) : null);
-        if (!aStart || !aEnd) continue;
-        if (startAt < aEnd && endAt > aStart) return true;
-      } catch (e) {
-        // ignore parse errors and continue
-      }
-    }
-  }
-
-  return false;
+  // Count conflicting documents directly
+  const count = await this.countDocuments(query);
+  return count > 0;
 };
 
 // Static: get available slots for consultant on a date
@@ -236,40 +183,25 @@ appointmentSchema.statics.getAvailableSlots = async function (id, dateISO /* "YY
   const dayEnd = new Date(`${dateISO}T23:59:59`);
 
   // Fetch appointments for the consultant that overlap the day
+  // Fetch appointments for the consultant that overlap the day
   const appts = await this.find({
     status: { $ne: "Cancelled" },
     $or: [
       { consultant: consultantId },
       { consultant: userId }
     ],
+    // Overlap: existing.start <= dayEnd AND existing.end >= dayStart
     $and: [
-      {
-        $or: [
-          { startAt: { $gte: dayStart, $lte: dayEnd } },
-          { endAt: { $gte: dayStart, $lte: dayEnd } },
-          { $and: [{ startAt: { $lte: dayStart } }, { endAt: { $gte: dayEnd } }] }, // fully covering
-          // Legacy: same date and have timeStart/timeEnd
-          { date: dateISO },
-        ]
-      }
+      { startAt: { $lte: dayEnd } },
+      { endAt: { $gte: dayStart } }
     ]
-  }).lean();
+  }).select("startAt endAt").lean();
 
   // Convert appointments into ranges for overlap checks
   const busyRanges = [];
   for (const ap of appts) {
     if (ap.startAt && ap.endAt) {
       busyRanges.push({ start: new Date(ap.startAt), end: new Date(ap.endAt) });
-      continue;
-    }
-    if (ap.date && (ap.timeStart || ap.timeEnd)) {
-      try {
-        const s = ap.timeStart ? new Date(`${ap.date}T${ap.timeStart}:00`) : null;
-        const e = ap.timeEnd ? new Date(`${ap.date}T${ap.timeEnd}:00`) : (s ? new Date(s.getTime() + slotDurationMin * 60 * 1000) : null);
-        if (s && e) busyRanges.push({ start: s, end: e });
-      } catch (e) {
-        // ignore
-      }
     }
   }
 
