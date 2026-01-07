@@ -145,8 +145,7 @@ const privacySettingsSchema = Joi.object({
 const securitySettingsSchema = Joi.object({
   twoFactorAuth: Joi.boolean().optional(),
   sessionTimeout: Joi.number().min(1).max(168).optional(),
-  requirePasswordChange: Joi.boolean().optional(),
-  passwordExpiryDays: Joi.number().min(1).max(365).optional(),
+
   loginNotifications: Joi.boolean().optional(),
   ipWhitelist: Joi.boolean().optional(),
   allowedIPs: Joi.array().items(Joi.string().ip()).optional(),
@@ -247,16 +246,11 @@ const consultantSettingsIdSchema = Joi.object({
   consultantId: Joi.string().pattern(objectIdPattern).required(),
 });
 
-// Password Update Schema
-const updateConsultantPasswordSchema = Joi.object({
-  currentPassword: Joi.string().required(),
-  newPassword: Joi.string().min(6).max(128).required(),
-  confirmPassword: Joi.string().valid(Joi.ref("newPassword")).required(),
-});
+
 
 module.exports = {
   createConsultantSettingsSchema,
   updateConsultantSettingsSchema,
   consultantSettingsIdSchema,
-  updateConsultantPasswordSchema,
+
 }; 

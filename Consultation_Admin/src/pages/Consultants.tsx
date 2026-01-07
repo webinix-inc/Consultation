@@ -111,7 +111,7 @@ const initialConsultantForm = {
   fullName: "",
   email: "",
   mobile: "",
-  password: "", // Optional - if not provided, will be auto-generated
+
   category: "",
   subcategory: "",
   image: "",
@@ -257,7 +257,8 @@ const ConsultantCard: React.FC<{
   onDelete: (id: ID) => void;
   onStatusUpdate: (id: ID, newStatus: string) => void;
   isUpdating?: boolean;
-}> = ({ user, onDelete, onStatusUpdate, isUpdating = false }) => {
+  fromView?: "main" | "pending";
+}> = ({ user, onDelete, onStatusUpdate, isUpdating = false, fromView = "main" }) => {
   const id = user._id || user.id || "";
   const displayName = user.fullName || "Consultant";
   const email = user.email || "—";
@@ -411,7 +412,7 @@ const ConsultantCard: React.FC<{
       {/* Action Buttons */}
       <div className="space-y-2">
         <button
-          onClick={() => navigate(`/consultant-dashboard?id=${id}`)}
+          onClick={() => navigate(`/consultant-dashboard?id=${id}`, { state: { fromView } })}
           className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
         >
           <Eye size={16} /> View
@@ -450,12 +451,38 @@ const ConsultantCard: React.FC<{
    ============================ */
 const ConsultationManagement: React.FC = () => {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const subcategoryParam = searchParams.get("subcategory") ?? "";
   const subcategoryName = searchParams.get("subcategoryName") ?? "";
   const queryClient = useQueryClient();
 
-  const [view, setView] = useState<"main" | "pending">("main");
+  // Initialize view from URL param or default to "main"
+  const initialView = (searchParams.get("view") as "main" | "pending") || "main";
+  const [view, setViewState] = useState<"main" | "pending">(initialView);
+
+  // Sync view state with URL when it changes locally is redundant if we drive from URL,
+  // but let's keep local state and sync TO URL for now to minimize refactor.
+  const setView = (newView: "main" | "pending" | ((prev: "main" | "pending") => "main" | "pending")) => {
+    setViewState((prev) => {
+      const next = typeof newView === "function" ? newView(prev) : newView;
+      // Update URL params
+      setSearchParams((prevParams) => {
+        const newParams = new URLSearchParams(prevParams);
+        newParams.set("view", next);
+        return newParams;
+      });
+      return next;
+    });
+  };
+
+  // Sync from URL changes (e.g. back button)
+  useEffect(() => {
+    const viewParam = searchParams.get("view") as "main" | "pending";
+    if (viewParam && (viewParam === "main" || viewParam === "pending")) {
+      setViewState(viewParam);
+    }
+  }, [searchParams]);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [openAdd, setOpenAdd] = useState(false);
@@ -683,10 +710,7 @@ const ConsultationManagement: React.FC = () => {
         image: payload.image || '',
       };
 
-      // Add password if provided
-      if (payload.passwordHash) {
-        consultantPayload.passwordHash = payload.passwordHash;
-      }
+
 
       // Get category name if category is an ObjectId
       if (payload.category && typeof payload.category === 'string') {
@@ -707,14 +731,7 @@ const ConsultationManagement: React.FC = () => {
       createConsultantMutation.mutate(consultantPayload, {
         onSuccess: (data: any) => {
           // Show success message with generated password if available
-          if (data?.data?.generatedPassword) {
-            toast.success(
-              `Consultant created! Password: ${data.data.generatedPassword}`,
-              { duration: 10000 }
-            );
-          } else {
-            toast.success("Consultant created successfully!");
-          }
+          toast.success("Consultant created successfully!");
           setOpenAdd(false);
           setForm(initialConsultantForm);
         },
@@ -872,13 +889,18 @@ const ConsultationManagement: React.FC = () => {
               setSearchQuery("");
               setCategoryFilter("All");
             }}
-            className={`flex items-center gap-2 px-3 py-1.5 text-sm border rounded-md font-medium transition ${view === "pending"
+            className={`relative flex items-center gap-2 px-3 py-1.5 text-sm border rounded-md font-medium transition ${view === "pending"
               ? "bg-gray-100 text-gray-700"
               : "bg-yellow-50 text-yellow-700 border-yellow-200"
               }`}
           >
             <User size={14} />{" "}
             {view === "pending" ? "Back to Consultants" : "Pending Consultants"}
+            {view !== "pending" && allPendingConsultants.length > 0 && (
+              <span className="absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] text-white shadow-sm ring-1 ring-white">
+                {allPendingConsultants.length > 99 ? "99+" : allPendingConsultants.length}
+              </span>
+            )}
           </button>
 
           <button
@@ -958,6 +980,7 @@ const ConsultationManagement: React.FC = () => {
                     }}
                     onStatusUpdate={handleStatusUpdate}
                     isUpdating={isUpdatingStatus}
+                    fromView={view}
                   />
                 </motion.div>
               ))
@@ -997,6 +1020,7 @@ const ConsultationManagement: React.FC = () => {
                     }}
                     onStatusUpdate={handleStatusUpdate}
                     isUpdating={isUpdatingStatus}
+                    fromView={view}
                   />
                 </motion.div>
               ))
@@ -1053,10 +1077,7 @@ const ConsultationManagement: React.FC = () => {
               if (form.category) userPayload.category = form.category;
               if (form.subcategory) userPayload.subcategory = form.subcategory;
 
-              // Add password if provided (otherwise will be auto-generated on backend)
-              if (form.password && form.password.trim()) {
-                userPayload.passwordHash = form.password.trim();
-              }
+             
 
               createConsultant(userPayload);
             }}
@@ -1127,20 +1148,7 @@ const ConsultationManagement: React.FC = () => {
               />
             </div>
 
-            <div>
-              <input
-                className="w-full border rounded-md p-2 text-sm bg-gray-50"
-                placeholder="Password (optional - will be auto-generated if not provided)"
-                type="password"
-                value={form.password}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, password: e.target.value }))
-                }
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Leave empty to auto-generate a password
-              </p>
-            </div>
+
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <select

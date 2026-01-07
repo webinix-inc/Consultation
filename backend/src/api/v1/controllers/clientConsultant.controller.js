@@ -264,9 +264,57 @@ exports.getConsultantClients = async (req, res, next) => {
     });
 
     const allClients = Array.from(allClientsMap.values());
-    const total = allClients.length;
 
-    return sendSuccess(res, "Clients fetched successfully", { data: allClients, total });
+    // Aggregate stats for each client (sessions count & last session date)
+    // We only want stats for appointments with THIS consultant
+    const clientIds = allClients.map(c => c._id);
+
+    // 1. Session Counts (Completed appointments)
+    const sessionCounts = await Appointment.aggregate([
+      {
+        $match: {
+          client: { $in: clientIds },
+          consultant: { $in: [consultantUserId, consultantDocId, consultantId].filter(Boolean).map(id => new mongoose.Types.ObjectId(id)) },
+          status: "Completed"
+        }
+      },
+      { $sort: { startAt: -1 } },
+      {
+        $group: {
+          _id: "$client",
+          count: { $sum: 1 },
+          lastSessionDate: { $first: "$date" },
+          lastSessionTime: { $first: "$timeStart" },
+          lastSessionAt: { $first: "$startAt" }
+        }
+      }
+    ]);
+
+    const statsMap = {};
+    sessionCounts.forEach(stat => {
+      statsMap[String(stat._id)] = {
+        sessions: stat.count,
+        lastSessionDate: stat.lastSessionDate,
+        lastSessionTime: stat.lastSessionTime,
+        lastSessionAt: stat.lastSessionAt
+      };
+    });
+
+    // Attach stats to clients
+    const clientsWithStats = allClients.map(client => {
+      const stat = statsMap[String(client._id)] || { sessions: 0, lastSessionDate: null, lastSessionTime: null, lastSessionAt: null };
+      return {
+        ...client,
+        sessions: stat.sessions,
+        lastSessionDate: stat.lastSessionDate,
+        lastSessionTime: stat.lastSessionTime,
+        lastSessionAt: stat.lastSessionAt
+      };
+    });
+
+    const total = clientsWithStats.length;
+
+    return sendSuccess(res, "Clients fetched successfully", { data: clientsWithStats, total });
   } catch (error) {
     next(error);
   }

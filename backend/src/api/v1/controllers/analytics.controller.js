@@ -406,7 +406,9 @@ exports.overview = async (req, res, next) => {
       ]
     })
       .populate("user", "fullName")
-      .select("user category subcategory rating")
+      .populate("category", "title")
+      .populate("subcategory", "title")
+      .select("user category subcategory rating name firstName lastName")
       .lean();
 
     const consultantMap = consultantDetails.reduce((acc, consultant) => {
@@ -419,8 +421,22 @@ exports.overview = async (req, res, next) => {
 
     const topConsultants = topConsultantsRaw.map((consultant, index) => {
       const details = consultantMap[consultant._id?.toString()] || {};
-      const userName = details.user?.fullName || "Unknown Consultant";
-      const categoryName = details.category?.title || details.subcategory?.title || "General";
+
+      // Try to find name from User linkage first, then direct name fields
+      const userName = details.user?.fullName || details.name ||
+        (details.firstName ? `${details.firstName} ${details.lastName || ''}`.trim() : "Unknown Consultant");
+
+      // Try to find category title from populated object, or use fallback
+      let categoryName = "General";
+      if (details.category && details.category.title) {
+        categoryName = details.category.title;
+      } else if (details.subcategory && details.subcategory.title) {
+        categoryName = details.subcategory.title;
+      } else if (typeof details.category === 'string') {
+        // Fallback if population failed but string exists (unlikely given query)
+        categoryName = details.category;
+      }
+
       const rating = details.rating || 4.5;
 
       return {

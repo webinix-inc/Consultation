@@ -15,12 +15,12 @@ exports.getProfile = async (req, res, next) => {
         // Since this route is only accessible to Clients (authorizeRoles("Client")),
         // req.user.id is the Client's _id, not a User's _id
         // Try to find Client by _id first (direct Client model)
-        let client = await Client.findById(clientId).select("-passwordHash");
+        let client = await Client.findById(clientId);
 
         // If not found by _id, try finding by user field (for backward compatibility with legacy Clients)
         if (!client) {
             console.log(`[getProfile] Client not found by _id, trying user field...`);
-            client = await Client.findOne({ user: clientId }).select("-passwordHash");
+            client = await Client.findOne({ user: clientId });
         }
 
         if (!client) {
@@ -115,22 +115,22 @@ exports.getClientProfileById = async (req, res, next) => {
         console.log(`[getClientProfileById] Looking for client with ID: ${id}`);
 
         // First, try to find Client directly by _id (modern Clients have their own IDs)
-        let client = await Client.findById(id).select("-passwordHash");
+        let client = await Client.findById(id);
 
         // If not found, try to find by user field (for backward compatibility with legacy Clients linked to User)
         if (!client) {
             console.log(`[getClientProfileById] Client not found by _id, trying user field...`);
-            client = await Client.findOne({ user: id }).select("-passwordHash");
+            client = await Client.findOne({ user: id });
         }
 
         // If still not found, try legacy approach: find User first, then Client linked to User
         if (!client) {
             console.log(`[getClientProfileById] Client not found, trying legacy User approach...`);
-            const user = await User.findById(id).select("-passwordHash");
+            const user = await User.findById(id);
 
             if (user) {
                 // Found a User, try to find Client linked to this User
-                client = await Client.findOne({ user: id }).select("-passwordHash");
+                client = await Client.findOne({ user: id });
 
                 if (client) {
                     // Merge User and Client data (legacy approach)
@@ -207,7 +207,6 @@ exports.getAllClients = async (req, res, next) => {
 
         // Fetch clients
         const clients = await Client.find(query)
-            .select("-passwordHash")
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(limitNum);
@@ -239,7 +238,7 @@ exports.updateClient = async (req, res, next) => {
             id,
             { $set: updateData },
             { new: true, runValidators: true }
-        ).select("-passwordHash");
+        );
 
         if (!client) {
             throw new ApiError(ERROR.USER_NOT_FOUND, httpStatus.NOT_FOUND);

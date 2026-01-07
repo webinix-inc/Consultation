@@ -1,8 +1,7 @@
 import axiosInstance from "./axiosInstance";
 
 const AuthAPI = {
-  login: (data: { loginId: string; password: string }) =>
-    axiosInstance.post("/auth/login", data),
+
 
   sendOtp: (data: { mobile: string }) =>
     axiosInstance.post("/auth/send-otp", data),
@@ -22,7 +21,7 @@ const AuthAPI = {
     fullName: string;
     email: string;
     mobile: string;
-    password: string;
+
     role: "Client";
   }) => axiosInstance.post("/auth/signup", data),
 

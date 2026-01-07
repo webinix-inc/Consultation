@@ -61,11 +61,11 @@ const ConsultantPublicProfile = () => {
                             <p className="text-blue-600 font-medium mb-2">
                                 {consultant.bioTitle || consultant.category?.title || "Consultant"}
                             </p>
-                            {consultant.department && (
+                            {/* {consultant.department && (
                                 <Badge variant="outline" className="mb-4 bg-slate-50">
                                     {consultant.department}
                                 </Badge>
-                            )}
+                            )} */}
 
                             <div className="flex items-center gap-2 mb-6">
                                 {consultant.ratingSummary?.average > 0 && (

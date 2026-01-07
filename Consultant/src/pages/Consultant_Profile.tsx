@@ -558,7 +558,7 @@ export default function Profile() {
     const fullName = user?.fullName || consultant?.displayName || consultant?.name || "";
 
     // Get category from user or consultant
-    const categoryTitle = user?.category?.title || user?.subcategory?.title || consultant?.category || consultant?.department || "";
+    const categoryTitle = user?.category?.title || user?.subcategory?.title || consultant?.category || "";
     const subcategoryTitle = user?.subcategory?.title || consultant?.subcategory || "";
 
     setPhoto(consultant?.image || null);
@@ -973,7 +973,6 @@ export default function Profile() {
     const lastName = nameParts.slice(1).join(" ") || "";
 
     const payload = {
-      department: categoryTitle, // Using category as department for backward compatibility
       firstName: firstName,
       lastName: lastName,
       displayName: form.fullName.trim(), // Use fullName as displayName

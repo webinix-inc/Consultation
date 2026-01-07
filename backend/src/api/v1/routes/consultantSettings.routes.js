@@ -6,7 +6,7 @@ const {
   createConsultantSettingsSchema,
   updateConsultantSettingsSchema,
   consultantSettingsIdSchema,
-  updateConsultantPasswordSchema,
+
 } = require("../validators/consultantSettings.validator.js");
 const { validate } = require("../../../middlewares/validate.middleware.js");
 const { authenticateToken, authorizeRoles } = require("../../../middlewares/auth.middleware.js");

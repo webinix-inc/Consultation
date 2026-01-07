@@ -158,7 +158,7 @@ exports.getSettings = async (req, res, next) => {
 
     if (!settings) {
       // If not found, create new settings for the Consultant ID
-      const defaultSettings = { 
+      const defaultSettings = {
         consultant: consultantId,
         // Include user reference if consultant has one (for backward compatibility)
         user: consultantDoc.user || undefined
@@ -188,7 +188,7 @@ exports.createSettings = async (req, res, next) => {
     if (!payload.consultant && req.user) {
       // If user is a consultant, find their Consultant model entry
       if (req.user.role === 'Consultant') {
-        const consultantDoc = await Consultant.findOne({ 
+        const consultantDoc = await Consultant.findOne({
           $or: [
             { email: req.user.email },
             { user: req.user.id }
@@ -625,152 +625,11 @@ exports.updateDashboardSettings = async (req, res, next) => {
   }
 };
 
-// Debug endpoint to check consultant password status
-exports.debugPasswordStatus = async (req, res, next) => {
-  try {
-    const { consultantId } = req.params;
 
-    const consultant = await Consultant.findById(consultantId);
 
-    if (!consultant) {
-      return sendError(res, "Consultant not found", 404);
-    }
 
-    const passwordInfo = {
-      consultantId: consultant._id,
-      hasAuth: !!consultant.auth,
-      hasPassword: !!(consultant.auth && consultant.auth.password),
-      passwordLength: consultant.auth?.password?.length || 0,
-      passwordPreview: consultant.auth?.password ? (consultant.auth.password.substring(0, 20) + '...') : 'none',
-      isHashed: typeof consultant.auth?.password === 'string' && consultant.auth.password.startsWith('$2'),
-      authStructure: consultant.auth || null
-    };
 
-    return sendSuccess(res, "Password status retrieved", passwordInfo);
-  } catch (err) {
-    next(err);
-  }
-};
 
-// Update Password
-exports.updatePassword = async (req, res, next) => {
-  try {
-    const { consultantId } = req.params;
-    const { currentPassword, newPassword } = req.body;
-
-    if (!currentPassword || !newPassword) {
-      return sendError(res, "currentPassword and newPassword are required", 400);
-    }
-
-    const consultant = await Consultant.findById(consultantId);
-
-    if (!consultant) {
-      return sendError(res, "Consultant not found", 404);
-    }
-
-    if (!consultant.auth) {
-      consultant.auth = {};
-      consultant.markModified('auth');
-      await consultant.save();
-    }
-
-    if (!consultant.auth.password) {
-      return sendError(res, "No password set for this consultant. Please contact administrator.", 400);
-    }
-
-    let isPasswordValid = false;
-
-    // Try bcrypt compare for hashed passwords
-    try {
-      isPasswordValid = await bcrypt.compare(currentPassword, consultant.auth.password);
-    } catch (err) {
-      // ignore, will try plain text fallback
-    }
-
-    // Plaintext fallback (legacy)
-    if (!isPasswordValid) {
-      if (currentPassword === consultant.auth.password) {
-        isPasswordValid = true;
-        // hash and replace plaintext for future
-        const salt = await bcrypt.genSalt(12);
-        consultant.auth.password = await bcrypt.hash(consultant.auth.password, salt);
-        consultant.markModified('auth');
-        await consultant.save();
-      }
-    }
-
-    // Try common defaults (last-resort)
-    if (!isPasswordValid) {
-      const commonPasswords = ['password', 'admin', '123456', 'consultant', 'test', ''];
-      if (commonPasswords.includes(currentPassword)) {
-        isPasswordValid = true;
-        const salt = await bcrypt.genSalt(12);
-        consultant.auth.password = await bcrypt.hash(currentPassword, salt);
-        consultant.markModified('auth');
-        await consultant.save();
-      }
-    }
-
-    if (!isPasswordValid) {
-      return sendError(res, "Current password is incorrect", 400);
-    }
-
-    // Hash and set new password
-    const salt = await bcrypt.genSalt(12);
-    const newHash = await bcrypt.hash(newPassword, salt);
-    consultant.auth.password = newHash;
-    consultant.auth.lastPasswordUpdatedAt = new Date();
-    consultant.auth.requirePasswordReset = false;
-    consultant.markModified('auth');
-    await consultant.save();
-
-    // verify
-    const ok = await bcrypt.compare(newPassword, consultant.auth.password);
-    if (!ok) {
-      return sendError(res, "Failed to verify new password after save", 500);
-    }
-
-    return sendSuccess(res, "Password updated successfully");
-  } catch (err) {
-    console.error('Password update error:', err);
-    next(err);
-  }
-};
-
-// Emergency password reset - sets a new password without current password verification
-exports.emergencyPasswordReset = async (req, res, next) => {
-  try {
-    const { consultantId } = req.params;
-    const { newPassword } = req.body;
-
-    if (!newPassword) {
-      return sendError(res, "newPassword is required", 400);
-    }
-
-    const consultant = await Consultant.findById(consultantId);
-
-    if (!consultant) {
-      return sendError(res, "Consultant not found", 404);
-    }
-
-    if (!consultant.auth) {
-      consultant.auth = {};
-    }
-
-    const salt = await bcrypt.genSalt(12);
-    consultant.auth.password = await bcrypt.hash(newPassword, salt);
-    consultant.auth.lastPasswordUpdatedAt = new Date();
-    consultant.auth.requirePasswordReset = false;
-
-    consultant.markModified('auth');
-    await consultant.save();
-
-    return sendSuccess(res, "Password reset successfully");
-  } catch (err) {
-    console.error('Emergency password reset error:', err);
-    next(err);
-  }
-};
 
 // Add Time Off
 exports.addTimeOff = async (req, res, next) => {

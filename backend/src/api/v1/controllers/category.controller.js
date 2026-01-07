@@ -38,7 +38,7 @@ exports.list = async (req, res, next) => {
           // 1. Count Active Consultants in to this subcategory (by title string)
           const consultantsCount = await Consultant.countDocuments({
             subcategory: subcat.title,
-            status: { $in: ["Active", "Approved"] }
+            status: { $in: ["Active", "Approved", "Pending"] }
           });
 
           // 2. Find Consultants IDs to link clients/revenue

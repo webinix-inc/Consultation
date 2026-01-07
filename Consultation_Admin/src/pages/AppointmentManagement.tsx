@@ -127,23 +127,41 @@ const AppointmentManagement: React.FC = () => {
       let timeStartStr = "";
       let timeEndStr = "";
 
-      if (start) {
+
+      // FIX: Use raw time string components if available to avoid Timezone shifts (UTC vs IST)
+      // When relying on startAt (UTC), formatting it in browser adds +5.5h (IST).
+      // We want to show the "Booked Slot" time (e.g. 10:38) regardless of where it is viewed.
+
+      const formatTimeStr = (timeStr: string) => {
+        if (!timeStr) return "";
+        // Handle "10:38 AM" or "10:38"
+        let [time, modifier] = timeStr.split(' ');
+        let [h, m] = time.split(':').map(Number);
+
+        if (modifier) {
+          // Already has AM/PM, ensure formatting
+          return `${timeStr}`;
+        }
+
+        // Convert 24h to 12h
+        const ampm = h >= 12 ? 'PM' : 'AM';
+        h = h % 12;
+        h = h ? h : 12; // the hour '0' should be '12'
+        return `${h}:${String(m).padStart(2, '0')} ${ampm}`;
+      };
+
+      if (it.timeStart) {
+        timeDisplay = formatTimeStr(it.timeStart);
+        if (it.timeEnd) {
+          timeDisplay += ` to ${formatTimeStr(it.timeEnd)}`;
+        }
+      } else if (start) {
+        // Fallback to Date object if no string range (legacy)
         const formatTime = (d: Date) => d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
         timeDisplay = `${formatTime(start)}`;
-        timeStartStr = `${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}`;
         if (end) {
-          timeEndStr = `${String(end.getHours()).padStart(2, '0')}:${String(end.getMinutes()).padStart(2, '0')}`;
+          timeDisplay += ` to ${formatTime(end)}`;
         }
-      } else if (it.timeStart) {
-        // Fallback if date parsing failed but timeStart exists
-        timeStartStr = it.timeStart;
-        timeEndStr = it.timeEnd || "";
-        try {
-          const [h, m] = timeStartStr.split(':').map(Number);
-          const ampm = h >= 12 ? 'PM' : 'AM';
-          const hour12 = h % 12 || 12;
-          timeDisplay = `${hour12}:${String(m).padStart(2, '0')} ${ampm}`;
-        } catch { timeDisplay = timeStartStr; }
       }
 
       return {

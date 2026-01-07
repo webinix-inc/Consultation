@@ -141,8 +141,12 @@ const ConsultationCategories: React.FC = () => {
                   e.stopPropagation();
                   setDeleteConfirm({ id: cat._id, title: cat.title });
                 }}
-                className="p-1.5 rounded-md bg-red-50 text-red-600 hover:bg-red-100"
-                title="Delete category"
+                disabled={cat.consultants > 0}
+                className={`p-1.5 rounded-md transition ${cat.consultants > 0
+                  ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                  : "bg-red-50 text-red-600 hover:bg-red-100"
+                  }`}
+                title={cat.consultants > 0 ? "Cannot delete category with associated consultants" : "Delete category"}
               >
                 <Trash2 size={16} />
               </button>

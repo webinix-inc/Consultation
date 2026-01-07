@@ -16,8 +16,8 @@ const {
 // PATCH /api/v1/auth/edit-profile
 router.patch("/edit-profile", authenticateToken, validate(updateProfileSchema), authController.updateProfile);
 
-// POST /api/v1/auth/login - Login with email/mobile + password
-router.post("/login", validate(loginSchema), authController.login);
+// POST /api/v1/auth/login - REMOVED
+// router.post("/login", validate(loginSchema), authController.login);
 
 // POST /api/v1/auth/send-otp
 router.post("/send-otp", validate(sendOtpSchema), authController.sendOtp);

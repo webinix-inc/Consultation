@@ -66,7 +66,9 @@ export type Client = {
   email: string;
   status: "Active" | "Inactive";
   sessions?: number;
-  lastSession?: string;
+  lastSessionDate?: string;
+  lastSessionTime?: string;
+  lastSessionAt?: string;
   avatar?: string;
 };
 
@@ -132,16 +134,7 @@ const generateUserId = () => {
   return `user${timestamp}${random}`;
 };
 
-// Generate password
-const generatePassword = () => {
-  const chars =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
-  let password = "";
-  for (let i = 0; i < 12; i += 1) {
-    password += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return password;
-};
+
 
 // ------------------------------
 // Add Client Dialog
@@ -612,8 +605,10 @@ export default function ClientManagement() {
           email: clientData.email || "—",
           status: clientData.status || "Active",
           createdAt: clientData.createdAt || clientData.created_at || "",
-          sessions: 0,
-          lastSession: "-",
+          sessions: clientData.sessions || 0,
+          lastSessionDate: clientData.lastSessionDate || null,
+          lastSessionTime: clientData.lastSessionTime || null,
+          lastSessionAt: clientData.lastSessionAt || null,
           avatar: clientData.avatar || clientData.profileImage || clientData.image || "",
         } as Client & { createdAt: string };
       });
@@ -712,6 +707,43 @@ export default function ClientManagement() {
     }
   };
 
+  const formatDateTime = (dateString: string) => {
+    if (!dateString) return "—";
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleString("en-GB", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true
+      });
+    } catch {
+      return "—";
+    }
+  };
+
+  const formatRawDateTime = (dateStr: string, timeStr: string, dateTimeStr?: string) => {
+    if (!dateStr || !timeStr) {
+      if (dateTimeStr) return formatDateTime(dateTimeStr);
+      return "—";
+    }
+    // dateStr is YYYY-MM-DD usually if from legacy 'date' field
+    // timeStr is "HH:mm AM"
+    try {
+      const [y, m, d] = dateStr.split('-');
+      // Display as DD/MM/YYYY, HH:MM AM/PM
+      if (y && m && d) {
+        return `${d}/${m}/${y}, ${timeStr}`;
+      }
+      // fallback
+      return `${dateStr}, ${timeStr}`;
+    } catch {
+      return `${dateStr}, ${timeStr}`;
+    }
+  };
+
   useEffect(() => {
     if (isError && error) {
       const err = error as any;
@@ -790,7 +822,7 @@ export default function ClientManagement() {
 
                     <td className="py-4"><span className="text-sm text-muted-foreground">{formatDate((r as any).createdAt)}</span></td>
                     <td className="py-4">{r.sessions || 0}</td>
-                    <td className="py-4">{r.lastSession || "-"}</td>
+                    <td className="py-4">{formatRawDateTime(r.lastSessionDate, r.lastSessionTime, r.lastSessionAt)}</td>
                   </tr>
                 ))}
                 {pageRows.length === 0 && (

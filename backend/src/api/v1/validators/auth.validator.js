@@ -7,23 +7,7 @@ const updateProfileSchema = Joi.object({
     "string.max": "Full name cannot exceed 50 characters",
   }),
 
-  // new password (optional) — if present must satisfy length limits
-  password: Joi.string().min(6).max(128).messages({
-    "string.min": "Password must be at least 6 characters long",
-    "string.max": "Password cannot exceed 128 characters",
-  }),
 
-  // currentPassword is required only when `password` is present
-  currentPassword: Joi.string()
-    .min(6)
-    .when("password", {
-      is: Joi.exist(),
-      then: Joi.required().messages({
-        "any.required": "Current password is required",
-        "string.min": "Current password must be at least 6 characters long",
-      }),
-      otherwise: Joi.optional(),
-    }),
 });
 
 const sendOtpSchema = Joi.object({
@@ -61,15 +45,7 @@ const verifyOtpSchema = Joi.object({
     }),
 });
 
-const loginSchema = Joi.object({
-  loginId: Joi.string().required().messages({
-    "any.required": "Email or mobile number is required",
-  }),
-  password: Joi.string().min(6).required().messages({
-    "string.min": "Password must be at least 6 characters long",
-    "any.required": "Password is required",
-  }),
-});
+
 
 const registerSchema = Joi.object({
   registrationToken: Joi.string().required(),
@@ -101,11 +77,7 @@ const signupSchema = Joi.object({
       "string.pattern.base": "Mobile number must be 10-15 digits",
       "any.required": "Mobile number is required",
     }),
-  password: Joi.string().min(6).max(128).required().messages({
-    "string.min": "Password must be at least 6 characters long",
-    "string.max": "Password cannot exceed 128 characters",
-    "any.required": "Password is required",
-  }),
+
   role: Joi.string().valid("Client", "Consultant").required().messages({
     "any.only": "Role must be either Client or Consultant",
     "any.required": "Role is required",
@@ -118,7 +90,7 @@ module.exports = {
   updateProfileSchema,
   sendOtpSchema,
   verifyOtpSchema,
-  loginSchema,
+
   registerSchema,
   signupSchema,
 };

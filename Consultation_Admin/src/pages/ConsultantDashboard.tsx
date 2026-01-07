@@ -5,7 +5,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "react-hot-toast";
 import {
@@ -15,6 +15,7 @@ import {
   Star,
   Trash2,
   Upload,
+  ArrowLeft,
 } from "lucide-react";
 import {
   Card,
@@ -306,6 +307,9 @@ const ConsultantDashboard = () => {
   const [searchParams] = useSearchParams();
   const userId = searchParams.get("id");
   const navigate = useNavigate();
+  const location = useLocation();
+  const fromView = location.state?.fromView || "main";
+
   const queryClient = useQueryClient();
   const [consultantId, setConsultantId] = useState<string | null>(null);
 
@@ -479,7 +483,7 @@ const ConsultantDashboard = () => {
     const fullName = consultant?.displayName || consultant?.name || `${consultant?.firstName || ""} ${consultant?.lastName || ""}`.trim() || "";
 
     // Get category and subcategory (category is stored as string in Consultant model)
-    const categoryTitle = consultant?.category || consultant?.department || "";
+    const categoryTitle = consultant?.category || "";
     const subcategoryTitle = consultant?.subcategory || "";
 
     setPhoto(consultant?.image || null);
@@ -890,10 +894,17 @@ const ConsultantDashboard = () => {
           </button>
         ))}
         <Button
-          variant="outline"
-          className="w-full"
-          onClick={() => navigate("/consultants")}
+          variant="ghost"
+          className="w-full justify-start gap-2 text-gray-900 bg-gray-300 hover:text-gray-900 hover:bg-gray-300 mt-2"
+          onClick={() => {
+            if (fromView === "pending") {
+              navigate("/consultants?view=pending");
+            } else {
+              navigate("/consultants");
+            }
+          }}
         >
+          <ArrowLeft className="h-4 w-4" />
           Back to Consultants
         </Button>
       </aside>

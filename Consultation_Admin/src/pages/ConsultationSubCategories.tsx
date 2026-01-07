@@ -209,8 +209,12 @@ const ConsultationSubCategories: React.FC = () => {
                     e.stopPropagation();
                     setDeleteConfirm({ id: subcat._id, title: subcat.title });
                   }}
-                  className="p-1.5 rounded-md bg-red-50 text-red-600 hover:bg-red-100"
-                  title="Delete subcategory"
+                  disabled={(subcat.consultants || 0) > 0}
+                  className={`p-1.5 rounded-md transition ${(subcat.consultants || 0) > 0
+                    ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                    : "bg-red-50 text-red-600 hover:bg-red-100"
+                    }`}
+                  title={(subcat.consultants || 0) > 0 ? "Cannot delete subcategory with associated consultants" : "Delete subcategory"}
                 >
                   <Trash2 size={16} />
                 </button>
@@ -369,9 +373,9 @@ const ConsultationSubCategories: React.FC = () => {
                   onChange={(e) =>
                     setForm({ ...form, selectedCategory: e.target.value })
                   }
-                  className={`w-full mt-1 px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 text-muted-foreground ${editingSubcategory ? 'cursor-not-allowed' : ''}`}
+                  className={`w-full mt-1 px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 text-muted-foreground cursor-not-allowed`}
                   required
-                  disabled={!!editingSubcategory}
+                  disabled={true}
                 >
                   <option value="">Select Category</option>
                   {(categoriesData?.data || []).map((cat: any) => (
