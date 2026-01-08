@@ -1,0 +1,25 @@
+--- DEBUG SCHEDULER DIAGNOSTICS ---
+NOW (UTC): 2026-01-08T15:46:58.173Z
+Window Limit (UTC + 15m): 2026-01-08T16:01:58.173Z
+
+Found 16 total upcoming appointments.
+- ID: 695f623806189eaecbc249b8 [Standard (Date)] | Start: 2026-01-09T03:30:00.000Z | In: 703.03m | Rem: PENDING | Qualifies: NO (Too far future)
+- ID: 695f642af84ed83dbf8fcba9 [Standard (Date)] | Start: 2026-01-09T04:45:00.000Z | In: 778.03m | Rem: PENDING | Qualifies: NO (Too far future)
+- ID: 695f6594f29a404da335ade6 [Standard (Date)] | Start: 2026-01-09T03:30:00.000Z | In: 703.03m | Rem: PENDING | Qualifies: NO (Too far future)
+- ID: 695f65d2f29a404da335aed9 [Standard (Date)] | Start: 2026-01-09T06:00:00.000Z | In: 853.03m | Rem: PENDING | Qualifies: NO (Too far future)
+- ID: 695f66857b3db9e7b65b3156 [Standard (Date)] | Start: 2026-01-09T07:15:00.000Z | In: 928.03m | Rem: PENDING | Qualifies: NO (Too far future)
+- ID: 695f670c7b3db9e7b65b32fb [Standard (Date)] | Start: 2026-01-09T08:30:00.000Z | In: 1003.03m | Rem: PENDING | Qualifies: NO (Too far future)
+- ID: 695f68937b3db9e7b65b359f [Standard (Date)] | Start: 2026-01-09T09:45:00.000Z | In: 1078.03m | Rem: PENDING | Qualifies: NO (Too far future)
+- ID: 695f69491bf23a2a83102d85 [Standard (Date)] | Start: 2026-01-10T03:30:00.000Z | In: 2143.03m | Rem: PENDING | Qualifies: NO (Too far future)
+- ID: 695f6b83656b17251454c2b4 [Standard (Date)] | Start: 2026-01-10T04:30:00.000Z | In: 2203.03m | Rem: PENDING | Qualifies: NO (Too far future)
+- ID: 695f6c2e656b17251454c4ec [Standard (Date)] | Start: 2026-01-10T05:30:00.000Z | In: 2263.03m | Rem: PENDING | Qualifies: NO (Too far future)
+- ID: 695f7f61aa63109aac416e4c [Standard (Date)] | Start: 2026-01-10T06:30:00.000Z | In: 2323.03m | Rem: PENDING | Qualifies: NO (Too far future)
+- ID: 695f8d075a66827fe3062682 [Standard (Date)] | Start: 2026-01-09T06:00:00.000Z | In: 853.03m | Rem: PENDING | Qualifies: NO (Too far future)
+- ID: 695f8ec25a66827fe3062b4b [Standard (Date)] | Start: 2026-01-10T07:30:00.000Z | In: 2383.03m | Rem: PENDING | Qualifies: NO (Too far future)
+- ID: 695fc3c593b05ebe3239e9c0 [Standard (Date)] | Start: 2026-01-08T15:12:00.000Z | In: -34.97m | Rem: PENDING | Qualifies: NO (Ideally Passed)
+- ID: 695fcbf2331e078775699b18 [Standard (Date)] | Start: 2026-01-08T15:45:00.000Z | In: -1.97m | Rem: SENT | Qualifies: NO (Ideally Passed)
+- ID: 695fd0e1331e078775699c30 [Standard (Date)] | Start: 2026-01-08T16:00:00.000Z | In: 13.03m | Rem: SENT | Qualifies: YES (Time Match)
+
+--- SIMULATING LIVE QUERY ---
+Standard Query Matches: 0
+Legacy Query Matches: 0

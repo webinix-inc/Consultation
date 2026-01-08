@@ -43,6 +43,11 @@ const appointmentSchema = new mongoose.Schema(
       default: "Upcoming",
     },
 
+    reminderSent: {
+      type: Boolean,
+      default: false,
+    },
+
     reason: {
       type: String,
       default: "",

@@ -213,7 +213,7 @@ const AnalyticsDashboard: React.FC = () => {
                     <div className="flex-1">
                       <div className="relative bg-gray-100 h-6 rounded-full overflow-hidden">
                         <div
-                          className="absolute top-0 left-0 h-6 rounded-full bg-gradient-to-r from-blue-500 to-indigo-500"
+                          className="absolute top-0 left-0 h-6 rounded-full bg-blue-600"
                           style={{ width: `${widthPercent}%` }}
                         />
                       </div>

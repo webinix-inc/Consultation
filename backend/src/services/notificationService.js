@@ -248,10 +248,11 @@ class NotificationService {
 
         // Notify Client
         if (appointment.client) {
+            const clientId = appointment.client._id || appointment.client;
             promises.push(
-                this.notifyUser(appointment.client, {
+                this.notifyUser(clientId, {
                     name: "Appointment Reminder",
-                    message: `Reminder: Your appointment with ${consultantName} is in 1 hour at ${timeStr}.`,
+                    message: `Reminder: Your appointment with ${consultantName} is in 15 minutes at ${timeStr}.`,
                     type: "reminder",
                     category: "reminders",
                     priority: "urgent",
@@ -266,10 +267,11 @@ class NotificationService {
 
         // Notify Consultant
         if (appointment.consultant) {
+            const consultantId = appointment.consultant._id || appointment.consultant;
             promises.push(
-                this.notifyUser(appointment.consultant, {
+                this.notifyUser(consultantId, {
                     name: "Appointment Reminder",
-                    message: `Reminder: Appointment with ${clientName} in 1 hour at ${timeStr}.`,
+                    message: `Reminder: Appointment with ${clientName} in 15 minutes at ${timeStr}.`,
                     type: "reminder",
                     category: "reminders",
                     priority: "urgent",

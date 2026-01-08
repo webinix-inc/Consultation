@@ -1,0 +1,12 @@
+--- MANUAL SCHEDULER RUN ---
+Moved Appt to 2026-01-08T16:07:21.489Z and reset reminderSent.
+[INSPECT] Raw Client ID: 695e5abc5cd972278507d1e5
+[INSPECT] Raw Consultant ID: 695ed15842a1aa1704da92d3
+[INSPECT] Populated Client: NULL
+[INSPECT] Consultant: NULL
+[WARN] Client field is missing or populate failed! Raw: null
+Calling sendAppointmentReminders()...
+[LOG] 🔔 [Scheduler] Sent reminder for appointment 695fd0e1331e078775699c30 
+Finished sendAppointmentReminders().
+Found 2 reminder notifications.
+SUCCESS! Notif ID: 695fd3e2e732f3c54a72f4a4

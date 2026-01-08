@@ -295,7 +295,7 @@ const ConsultantDashboard = () => {
   });
 
   const stats = data?.stats || [
-    { id: "total", title: "Total Appointments", value: "0", delta: "+0%", up: true },
+    { id: "total", title: "Completed Appointments", value: "0", delta: "+0%", up: true },
     { id: "today", title: "Today Appointments", value: "0", delta: "+0%", up: true },
     { id: "active", title: "Active Clients", value: "0", delta: "+0%", up: true },
     { id: "revenue", title: "Total Revenue", value: "₹0", delta: "+0%", up: true },

@@ -60,19 +60,24 @@ async function sendAppointmentReminders() {
     try {
         const now = new Date();
         const offsetMs = 5.5 * 60 * 60 * 1000;
-        const comparisonTime = new Date(now.getTime() + offsetMs);
+        // For standard Date objects (stored as UTC), use real UTC time
+        const utcWindow = new Date(now.getTime() + 15 * 60 * 1000);
 
-        // Window: appointments starting between now and 1 hour from now
-        const oneHourLater = new Date(comparisonTime.getTime() + 60 * 60 * 1000);
+        // For Legacy String dates (stored as "YYYY-MM-DD" and "HH:mm" representing IST),
+        // we shift "now" by 5.5 hours so that 21:00 IST (15:30 UTC) matches 21:00Z.
+        const shiftedNow = new Date(now.getTime() + offsetMs);
+        const shiftedWindow = new Date(shiftedNow.getTime() + 15 * 60 * 1000);
 
         // Find upcoming appointments within the reminder window that haven't been reminded yet
         const appointments = await Appointment.find({
             status: "Upcoming",
             reminderSent: { $ne: true },
             $or: [
+                // 1. Standard Date Field (Correct UTC)
                 {
-                    startAt: { $gte: comparisonTime, $lte: oneHourLater }
+                    startAt: { $gte: now, $lte: utcWindow }
                 },
+                // 2. Legacy String Fields (Fake UTC / IST interpreted as UTC)
                 {
                     $expr: {
                         $and: [
@@ -85,7 +90,7 @@ async function sendAppointmentReminders() {
                                             onNull: null
                                         }
                                     },
-                                    comparisonTime
+                                    shiftedNow
                                 ]
                             },
                             {
@@ -97,37 +102,48 @@ async function sendAppointmentReminders() {
                                             onNull: null
                                         }
                                     },
-                                    oneHourLater
+                                    shiftedWindow
                                 ]
                             }
                         ]
                     }
                 }
             ]
-        }).populate("client", "fullName").populate("consultant", "fullName").lean();
+        }).lean();
 
         if (appointments.length === 0) return;
 
         const NotificationService = require("./notificationService");
+        const User = require("../models/user.model");
         const Client = require("../models/client.model");
         const { Consultant } = require("../models/consultant.model");
 
         for (const apt of appointments) {
             try {
-                // Get names
-                let clientName = apt.client?.fullName || apt.clientSnapshot?.name || "Client";
-                let consultantName = apt.consultant?.fullName || apt.consultantSnapshot?.name || "Consultant";
+                // Get names - manual resolution since we removed populate to handle mixed refs (User vs Client)
+                let clientName = apt.clientSnapshot?.name || "Client";
+                let consultantName = apt.consultantSnapshot?.name || "Consultant";
 
-                // If client wasn't populated (might be in Client model), try to fetch
-                if (!apt.client?.fullName && apt.client) {
-                    const clientDoc = await Client.findById(apt.client).select("fullName").lean();
+                // Resolve Client Name
+                if (apt.client) {
+                    // Try User first
+                    let clientDoc = await User.findById(apt.client).select("fullName").lean();
+                    if (!clientDoc) {
+                        // Try Client model (Legacy/Agency)
+                        clientDoc = await Client.findById(apt.client).select("fullName").lean();
+                    }
                     if (clientDoc) clientName = clientDoc.fullName;
                 }
 
-                // If consultant wasn't populated, try to fetch from Consultant model
-                if (!apt.consultant?.fullName && apt.consultant) {
-                    const consultantDoc = await Consultant.findById(apt.consultant).select("name fullName").lean();
-                    if (consultantDoc) consultantName = consultantDoc.name || consultantDoc.fullName;
+                // Resolve Consultant Name
+                if (apt.consultant) {
+                    // Try User first
+                    let consultantDoc = await User.findById(apt.consultant).select("fullName").lean();
+                    if (!consultantDoc) {
+                        // Try Consultant model
+                        consultantDoc = await Consultant.findById(apt.consultant).select("name fullName").lean();
+                    }
+                    if (consultantDoc) consultantName = consultantDoc.fullName || consultantDoc.name;
                 }
 
                 // Send reminders

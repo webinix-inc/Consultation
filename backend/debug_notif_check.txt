@@ -1,0 +1,3 @@
+Found 2 notifications for Appointment 695fd0e1331e078775699c30:
+- ID: 695fd0ff331e078775699c48, Recipient: 695ed15842a1aa1704da92d3, Message: "Ashish Gupta has booked an appointment for 2026-01-08 at 9:30 PM.", Type: appointment, CreatedAt: Thu Jan 08 2026 21:15:03 GMT+0530 (India Standard Time)
+- ID: 695fd0ff331e078775699c47, Recipient: 695e5abc5cd972278507d1e5, Message: "Your appointment with Ashish Gupta on 2026-01-08 at 9:30 PM has been confirmed.", Type: appointment, CreatedAt: Thu Jan 08 2026 21:15:03 GMT+0530 (India Standard Time)

@@ -902,7 +902,7 @@ exports.consultantStats = async (req, res, next) => {
 
     return sendSuccess(res, "Consultant stats fetched", {
       stats: [
-        { id: "total", title: "Total Appointments", value: String(totalAppointments), delta: "+0%", up: true },
+        { id: "total", title: "Completed Appointments", value: String(totalAppointments), delta: "+0%", up: true },
         { id: "today", title: "Today Appointments", value: String(todayAppointments), delta: "+0%", up: true },
         { id: "active", title: "Active Clients", value: String(activeClients), delta: "+0%", up: true },
         { id: "revenue", title: "Total Revenue", value: `₹${periodRevenue.toLocaleString()}`, delta: revenueDeltaStr, up: true },
