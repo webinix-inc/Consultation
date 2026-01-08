@@ -77,7 +77,6 @@ export default function AIOBHero() {
             <a href="/" className="hover:text-white transition-colors">Home</a>
             <a href="/consultants" className="hover:text-white transition-colors">Consultants</a>
             <a href="#services" className="hover:text-white transition-colors">Services</a>
-            <a href="#" className="hover:text-white transition-colors">Portfolios</a>
             <a href="#" className="hover:text-white transition-colors">Blog</a>
             <a href="#" className="hover:text-white transition-colors">Contact</a>
           </nav>
@@ -127,7 +126,6 @@ export default function AIOBHero() {
                 <a href="/" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-white transition-colors">Home</a>
                 <a href="/consultants" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-white transition-colors">Consultants</a>
                 <a href="#services" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-white transition-colors">Services</a>
-                <a href="#" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-white transition-colors">Portfolios</a>
                 <a href="#" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-white transition-colors">Blog</a>
                 <a href="#" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-white transition-colors">Contact</a>
               </nav>
@@ -173,7 +171,7 @@ export default function AIOBHero() {
 
               <div className="flex flex-wrap items-center gap-8 pt-4">
                 <a
-                  href="#"
+                  href="/consultants"
                   className="inline-flex items-center gap-3 bg-white text-[#071530] px-6 py-4 rounded-full font-semibold shadow-lg hover:bg-slate-50 transition-colors group"
                 >
                   <div className="w-6 h-6 rounded-full border-2 border-[#071530] flex items-center justify-center">
@@ -184,10 +182,7 @@ export default function AIOBHero() {
                   Book consultation
                 </a>
 
-                <div className="hidden sm:flex items-center gap-3 text-slate-500 text-sm font-medium">
-                  <div className="w-10 h-10 rounded-full border border-slate-700 flex items-center justify-center text-xl pb-1">+</div>
-                  <span>Scroll</span>
-                </div>
+
               </div>
             </div>
 
@@ -384,7 +379,7 @@ export default function AIOBHero() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-8 pt-4">
               {/* Left Column: Checklist & Button */}
-              <div className="space-y-8">
+              <div className="space-y-8 pt-8">
                 <ul className="space-y-4">
                   {[
                     "Expertise and experience",
@@ -404,14 +399,7 @@ export default function AIOBHero() {
                   ))}
                 </ul>
 
-                <button className="inline-flex items-center gap-3 bg-[#0a1f3d] text-white pl-2 pr-6 py-2 rounded-full text-sm font-medium hover:bg-blue-900 transition-all group shadow-xl hover:shadow-2xl">
-                  <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center group-hover:scale-105 transition-transform">
-                    <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                      <path d="M5 12h14M12 5l7 7-7 7" />
-                    </svg>
-                  </div>
-                  <span>Read more</span>
-                </button>
+
               </div>
 
               {/* Right Column: Stats & Avatars */}
@@ -545,7 +533,7 @@ export default function AIOBHero() {
                 const ratingValue = consultant.ratingSummary?.average || consultant.avgRating || 4.5;
                 const rating = typeof ratingValue === 'number' ? ratingValue : parseFloat(ratingValue) || 4.5;
                 const totalReviews = consultant.ratingSummary?.totalReviews || consultant.reviews?.length || 0;
-                const clientsCount = consultant.clientInfo?.totalClients || consultant.clients || 0;
+                const clientsCount = consultant.clientsCount || consultant.clientInfo?.totalClients || consultant.clients || 0;
                 const experience = consultant.yearsOfExperience ? `${consultant.yearsOfExperience}+ years of experience` : "Experienced professional";
 
                 return (

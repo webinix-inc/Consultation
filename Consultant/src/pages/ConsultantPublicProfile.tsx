@@ -59,7 +59,7 @@ const ConsultantPublicProfile = () => {
                                 {consultant.fullName || consultant.name}
                             </h1>
                             <p className="text-blue-600 font-medium mb-2">
-                                {consultant.bioTitle || consultant.category?.title || "Consultant"}
+                                {consultant.bioTitle || (typeof consultant.category === 'object' ? (consultant.category.title || consultant.category.name) : consultant.category) || "Consultant"}
                             </p>
                             {/* {consultant.department && (
                                 <Badge variant="outline" className="mb-4 bg-slate-50">
@@ -232,10 +232,18 @@ const ConsultantPublicProfile = () => {
                         <CardContent>
                             <div className="flex flex-wrap gap-2">
                                 {consultant.category && (
-                                    <Badge variant="secondary" className="px-3 py-1 text-sm">{consultant.category.title || consultant.category}</Badge>
+                                    <Badge variant="secondary" className="px-3 py-1 text-sm">
+                                        {typeof consultant.category === 'object'
+                                            ? (consultant.category.title || consultant.category.name || "General")
+                                            : consultant.category}
+                                    </Badge>
                                 )}
                                 {consultant.subcategory && (
-                                    <Badge variant="outline" className="px-3 py-1 text-sm">{consultant.subcategory.title || consultant.subcategory}</Badge>
+                                    <Badge variant="outline" className="px-3 py-1 text-sm">
+                                        {typeof consultant.subcategory === 'object'
+                                            ? (consultant.subcategory.title || consultant.subcategory.name || "")
+                                            : consultant.subcategory}
+                                    </Badge>
                                 )}
                                 {Array.isArray(consultant.tags) && consultant.tags.map((tag: string) => (
                                     <Badge key={tag} variant="outline" className="bg-slate-50 px-3 py-1 text-sm">{tag}</Badge>

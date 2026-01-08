@@ -32,7 +32,8 @@ const AnalyticsDashboard: React.FC = () => {
   const months = analyticsData.monthlyTrends || [];
   const cards = analyticsData.cards || {};
 
-  const maxMonthRevenue = Math.max(...months.map((m: any) => m.gmv || m.revenue), 1);
+  // Safe calculation for max revenue to prevent NaN
+  const maxMonthRevenue = Math.max(...months.map((m: any) => (m.gmv || m.revenue || 0)), 1);
 
   const fadeUp = {
     hidden: { opacity: 0, y: 16 },
@@ -64,7 +65,7 @@ const AnalyticsDashboard: React.FC = () => {
           <p className="text-sm text-gray-500">Home &gt; Analytics</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          
+
           {/* View Type Toggle */}
           <div className="bg-white border rounded-md p-1 flex items-center">
             <button
@@ -203,7 +204,9 @@ const AnalyticsDashboard: React.FC = () => {
 
             <div className="space-y-3">
               {months.map((m: any) => {
-                const widthPercent = Math.round(((m.gmv || m.revenue) / maxMonthRevenue) * 100);
+                const val = m.gmv || m.revenue || 0;
+                const widthPercent = maxMonthRevenue > 0 ? Math.round((val / maxMonthRevenue) * 100) : 0;
+
                 return (
                   <div key={m.name} className="flex items-center gap-4">
                     <div className="w-14 text-sm text-gray-700 font-medium">{m.name}</div>
@@ -215,7 +218,9 @@ const AnalyticsDashboard: React.FC = () => {
                         />
                       </div>
                     </div>
-                    <div className="w-28 text-right text-sm text-gray-700 font-medium">{formatCurrency(m.gmv || m.revenue)}</div>
+                    <div className="w-28 text-right text-sm text-gray-700 font-medium">
+                      {formatCurrency(val)}
+                    </div>
                     <div className="w-20 text-sm text-gray-500 text-right">{m.appt} apt</div>
                   </div>
                 );

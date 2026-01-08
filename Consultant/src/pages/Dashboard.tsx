@@ -35,6 +35,8 @@ interface ClientStats {
 interface Appointment {
   id: string;
   name: string;
+  with?: string;
+  date?: string;
   avatar: string;
   time: string;
   status: string;
@@ -226,28 +228,42 @@ function StatCard({ title, value, delta, up, icon: Icon, stroke, data }: any) {
 
 function AppointmentItem({ a }: { a: Appointment }) {
   return (
-    <div className="group flex items-center justify-between py-3 px-1 hover:bg-muted/50 rounded-lg transition-colors -mx-1 px-3">
+    <div className="flex items-center justify-between py-4 px-1 border-b border-gray-100 last:border-0 hover:bg-gray-50/50 transition-colors">
       <div className="flex items-center gap-3">
-        <Avatar className="h-10 w-10 border-2 border-white shadow-sm">
+        {/* Avatar Added Back */}
+        <Avatar className="h-10 w-10 border border-gray-200">
           <AvatarImage src={a.avatar} />
           <AvatarFallback className="bg-primary/10 text-primary">{a.name.split(" ").map((s: string) => s[0]).join("")}</AvatarFallback>
         </Avatar>
-        <div>
-          <div className="font-semibold text-sm leading-tight text-gray-900 group-hover:text-primary transition-colors">{a.name}</div>
-          <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
-            {a.tag && <span className="inline-block px-1.5 py-0.5 rounded-md bg-muted text-[10px] font-medium uppercase tracking-wider">{a.tag}</span>}
-          </div>
+
+        {/* Col 1: Name and With */}
+        <div className="flex flex-col min-w-[140px] sm:min-w-[180px]">
+          <span className="font-semibold text-gray-900 text-base">{a.name}</span>
+          <span className="text-sm text-gray-500 mt-0.5">with {a.with || "Consultant"}</span>
         </div>
       </div>
 
-      <div className="flex items-center gap-4 text-right">
-        <div className="text-xs text-muted-foreground">
-          <div className="flex items-center justify-end gap-1"><Clock className="h-3 w-3" /> {a.time}</div>
+      {/* Col 2: Category Pill - Hidden on very small screens */}
+      <div className="hidden sm:flex justify-center flex-1">
+        {a.tag && (
+          <span className="px-3 py-1 rounded-full bg-gray-100 text-gray-600 text-xs font-medium">
+            {a.tag}
+          </span>
+        )}
+      </div>
+
+      {/* Col 3: Date/Time & Status */}
+      <div className="flex items-center gap-3 sm:gap-6 text-right">
+        <div className="hidden sm:flex flex-col items-end">
+          {a.date && <span className="text-xs text-slate-500 font-medium">{a.date}</span>}
+          <span className="text-sm text-slate-900 font-bold mt-0.5 whitespace-nowrap">{a.time}</span>
         </div>
-        <div className={cn("text-xs font-medium px-2 py-1 rounded-full",
-          a.status === 'Confirmed' ? 'bg-emerald-50 text-emerald-700' :
-            a.status === 'Upcoming' ? 'bg-blue-50 text-blue-700' :
-              'bg-gray-100 text-gray-600'
+
+        <div className={cn("px-3 py-1 rounded-full text-xs font-medium min-w-[80px] text-center",
+          a.status === 'Confirmed' ? 'bg-blue-100 text-blue-600' :
+            a.status === 'Upcoming' ? 'bg-blue-100 text-blue-600' :
+              a.status === 'Completed' ? 'bg-green-100 text-green-600' :
+                'bg-gray-100 text-gray-600'
         )}>
           {a.status}
         </div>

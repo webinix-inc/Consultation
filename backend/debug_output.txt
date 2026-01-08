@@ -1,0 +1,14 @@
+--- DEBUGGING TRANSACTIONS ---
+Total Transactions: 22
+Successful Payments: 20
+
+Last 5 Successful Payments:
+- ID: 695f8ec35a66827fe3062b52, Amount: 2000, Fee: 300, Date: Thu Jan 08 2026 16:32:27 GMT+0530 (India Standard Time), Consultant: 695ed11b42a1aa1704da927f
+- ID: 695f8d0a5a66827fe3062689, Amount: 1000, Fee: 100, Date: Thu Jan 08 2026 16:25:06 GMT+0530 (India Standard Time), Consultant: 695ed15842a1aa1704da92d3
+- ID: 695f7f63aa63109aac416e53, Amount: 2000, Fee: 300, Date: Thu Jan 08 2026 15:26:51 GMT+0530 (India Standard Time), Consultant: 695ed11b42a1aa1704da927f
+- ID: 695f6c2e656b17251454c4f3, Amount: 2000, Fee: 300, Date: Thu Jan 08 2026 14:04:54 GMT+0530 (India Standard Time), Consultant: 695ed11b42a1aa1704da927f
+- ID: 695f6b83656b17251454c2bb, Amount: 2000, Fee: 300, Date: Thu Jan 08 2026 14:02:03 GMT+0530 (India Standard Time), Consultant: 695ed11b42a1aa1704da927f
+
+--- DEBUGGING APPOINTMENTS ---
+Total Appointments: 20
+Completed Appointments: 7

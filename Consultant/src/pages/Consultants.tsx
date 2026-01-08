@@ -157,10 +157,17 @@ export default function Consultants() {
       if (selectedConsultant.category) {
         if (typeof selectedConsultant.category === 'object') {
           categoryId = selectedConsultant.category._id || selectedConsultant.category.id || "";
-          categoryTitle = selectedConsultant.category.title || "";
+          categoryTitle = selectedConsultant.category.title || selectedConsultant.category.name || "";
         } else {
-          // If string, assume it's the title
-          categoryTitle = String(selectedConsultant.category);
+          // If string, checks if it matches an ID in categories
+          const catStr = String(selectedConsultant.category);
+          const matchById = categories.find((c: any) => (c._id || c.id) === catStr);
+          if (matchById) {
+            categoryId = matchById._id || matchById.id;
+          } else {
+            // specific fallback: assume it's the title
+            categoryTitle = catStr;
+          }
         }
       }
 
@@ -669,7 +676,6 @@ export default function Consultants() {
             <a href="/" className="hover:text-white transition-colors">Home</a>
             <a href="/consultants" className="text-white font-semibold">Consultants</a>
             <a href="#services" className="hover:text-white transition-colors">Services</a>
-            <a href="#" className="hover:text-white transition-colors">Portfolios</a>
             <a href="#" className="hover:text-white transition-colors">Blog</a>
             <a href="#" className="hover:text-white transition-colors">Contact</a>
           </nav>
@@ -733,7 +739,7 @@ export default function Consultants() {
               const ratingValue = consultant.ratingSummary?.average || consultant.avgRating || 4.5;
               const rating = typeof ratingValue === 'number' ? ratingValue : parseFloat(ratingValue) || 4.5;
               const totalReviews = consultant.ratingSummary?.totalReviews || consultant.reviews?.length || 0;
-              const clientsCount = consultant.clientInfo?.totalClients || consultant.clients || 0;
+              const clientsCount = consultant.clientsCount || consultant.clientInfo?.totalClients || consultant.clients || 0;
               const experience = consultant.yearsOfExperience ? `${consultant.yearsOfExperience}+ years of experience` : "Experienced professional";
               const consultantId = consultant._id || consultant.id;
 

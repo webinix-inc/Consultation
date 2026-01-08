@@ -797,11 +797,36 @@ exports.consultantStats = async (req, res, next) => {
         displayCategory = typeof pCat === 'object' ? (pCat.name || pCat.title) : pCat;
       }
 
+      let consultantName = "Consultant";
+      if (consultantProfile) {
+        consultantName = consultantProfile.name || consultantProfile.fullName;
+      } else {
+        // Fallback or specific lookup if needed, but usually consultantProfile is available in scope or we can peek
+        // Actually `consultantProfile` variable might not be in scope here directly if not fetched earlier.
+        // Looking at lines 795, `consultantProfile` IS used. So it is available.
+      }
+
+      const dateObj = appt.startAt ? new Date(appt.startAt) : new Date();
+
+      // Relative Date Logic
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
+      const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+      const target = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate());
+
+      let dateString = dateObj.toLocaleDateString("en-GB", { day: '2-digit', month: '2-digit', year: 'numeric' });
+      if (target.getTime() === today.getTime()) dateString = "Today";
+      else if (target.getTime() === tomorrow.getTime()) dateString = "Tomorrow";
+      else if (target.getTime() === yesterday.getTime()) dateString = "Yesterday";
+
       return {
+        id: appt._id,
         name: clientName,
-        with: "You",
+        with: consultantName, // Use actual consultant name
         tag: displayCategory || "General",
-        time: appt.startAt ? new Date(appt.startAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : "",
+        time: dateObj.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
+        date: dateString, // Today, Tomorrow, Yesterday or DD/MM/YYYY
         status: appt.status,
         avatar: clientAvatar
       };
@@ -1105,11 +1130,23 @@ exports.clientStats = async (req, res, next) => {
 
     const formattedRecent = await Promise.all(recentAppointmentsRaw.map(async (appt) => {
       let displayTime = "";
+      let formattedDate = "";
       if (appt.startAt) {
         const d = new Date(appt.startAt);
-        const dateStr = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
         const timeStr = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-        displayTime = `${dateStr}, ${timeStr}`;
+        displayTime = timeStr; // Just time
+
+        // Relative Date Logic
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
+        const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+        const target = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+
+        formattedDate = d.toLocaleDateString("en-GB", { day: '2-digit', month: '2-digit', year: 'numeric' });
+        if (target.getTime() === today.getTime()) formattedDate = "Today";
+        else if (target.getTime() === tomorrow.getTime()) formattedDate = "Tomorrow";
+        else if (target.getTime() === yesterday.getTime()) formattedDate = "Yesterday";
       }
 
       // Robust Consultant Lookup
@@ -1155,11 +1192,24 @@ exports.clientStats = async (req, res, next) => {
         cAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(cName)}&background=random`;
       }
 
+      // Get Client Name (Me)
+      let clientName = "You";
+      // We can fetch it once outside loop, or just use "You" as fallback.
+      if (req.user && req.user.firstName) {
+        // req.user might be available if middleware populated it
+        // But usually we don't have req in this scope if it's a helper?
+        // It is `exports.getClientStats = async (req, res, next)` so `req` is available.
+        // But `formattedRecent` is inside.
+        if (req.user) clientName = req.user.fullName || req.user.name;
+      }
+
       return {
+        id: appt._id,
         name: cName,
-        with: "You",
+        with: clientName,
         tag: displayCategory || "General",
         time: displayTime,
+        date: formattedDate,
         status: appt.status,
         avatar: cAvatar
       };
