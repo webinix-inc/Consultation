@@ -46,7 +46,7 @@ interface DashboardData {
   clientStats: ClientStats;
   recentAppointments: Appointment[];
   monthlyRevenueTrends?: any[];
-  weeklyAppointments?: number[];
+  activityTrend?: number[];
   performance?: any;
   metrics?: any;
   monthlyApptTrends?: { name: string; total: number; completed: number }[];
@@ -294,7 +294,7 @@ const ConsultantDashboard = () => {
   };
 
   const monthlyRevenueTrends = data?.monthlyRevenueTrends || [];
-  const weeklyAppointments = data?.weeklyAppointments || [];
+  const activityTrend = data?.activityTrend || [];
 
   // Add icons and colors to stats
   const enrichedStats = stats.map((s: StatItem) => {
@@ -303,11 +303,12 @@ const ConsultantDashboard = () => {
     let chartData = sparkline(10, 5); // Default flat-ish line
 
     if (s.id === "total" || s.id === "today") {
-      // Use weekly appointment counts for appointment cards
-      if (weeklyAppointments.length > 0) {
-        chartData = weeklyAppointments.map((val, i) => ({ x: i, y: val }));
+      // Use activity trend for appointment cards sparkline
+      if (activityTrend.length > 0) {
+        chartData = activityTrend.map((val, i) => ({ x: i, y: val }));
       } else {
-        chartData = Array.from({ length: 7 }).map((_, i) => ({ x: i, y: 0 }));
+        // Fallback: empty array to render flat line (length is arbitrary, say 10 or 30)
+        chartData = Array.from({ length: 30 }).map((_, i) => ({ x: i, y: 0 }));
       }
     }
 
@@ -494,6 +495,7 @@ const ClientDashboard = () => {
   const stats = rawStats;
   // const monthlySpendingTrends = data?.monthlySpendingTrends || [];
   const monthlyApptTrends = data?.monthlyApptTrends || [];
+  const activityTrend = data?.activityTrend || [];
 
   // Add icons and colors
   const enrichedStats = stats.map((s: StatItem) => {
@@ -504,7 +506,9 @@ const ClientDashboard = () => {
     if (s.id === "total") {
       icon = ClipboardList;
       stroke = "#2563EB";
-      if (monthlyApptTrends.length > 0) {
+      if (activityTrend.length > 0) {
+        chartData = activityTrend.map((val, i) => ({ x: i, y: val }));
+      } else if (monthlyApptTrends.length > 0) {
         chartData = monthlyApptTrends.map((t: { total: number }, i: number) => ({ x: i, y: t.total }));
       } else {
         chartData = Array(12).fill(0).map((_, i) => ({ x: i, y: 0 }));

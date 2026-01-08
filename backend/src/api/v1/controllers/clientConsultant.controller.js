@@ -464,3 +464,41 @@ exports.updateRelationshipStatus = async (req, res, next) => {
     next(error);
   }
 };
+
+/**
+ * Auto-link client and consultant (used by Appointment Controller)
+ * Can be called internally without req/res
+ */
+exports.autoLink = async (clientId, consultantUserId) => {
+  try {
+    if (!clientId || !consultantUserId) return;
+
+    // Ensure both are ObjectIds
+    const client = new mongoose.Types.ObjectId(clientId);
+    const consultant = new mongoose.Types.ObjectId(consultantUserId);
+
+    // Atomic upsert
+    const filter = { client, consultant };
+    const update = {
+      $set: {
+        status: "Active",
+        linkedAt: new Date()
+      },
+      $setOnInsert: {
+        notes: "Auto-linked via appointment booking"
+      }
+    };
+    const options = { upsert: true, new: true, setDefaultsOnInsert: true };
+
+    const rel = await ClientConsultant.findOneAndUpdate(filter, update, options).lean();
+
+    // Notifications could be added here if needed, but might be redundant with appointment notifications
+    // Keeping it silent for now as per original intent
+
+    return rel;
+  } catch (error) {
+    console.error("Auto-link error:", error);
+    // Throwing here would be caught by appointment controller's try-catch
+    throw error;
+  }
+};

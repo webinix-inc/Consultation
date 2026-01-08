@@ -362,7 +362,7 @@ const ConsultantDashboard = () => {
 
   const paymentStats = useMemo(() => {
     const earnings = transactions
-      .filter(t => t.type === "Payment" && t.status === "Success")
+      .filter(t => t.type === "Payment" && t.status === "Success" && t.appointment?.status === "Completed")
       .reduce((acc, curr) => {
         // Use netAmount if available (new system), otherwise amount (legacy)
         const val = (curr.netAmount !== undefined && curr.netAmount !== null) ? curr.netAmount : curr.amount;
@@ -483,8 +483,14 @@ const ConsultantDashboard = () => {
     const fullName = consultant?.displayName || consultant?.name || `${consultant?.firstName || ""} ${consultant?.lastName || ""}`.trim() || "";
 
     // Get category and subcategory (category is stored as string in Consultant model)
-    const categoryTitle = consultant?.category || "";
-    const subcategoryTitle = consultant?.subcategory || "";
+    // Get category and subcategory (normalize object vs string)
+    const getCatLabel = (val: any) => {
+      if (!val) return "";
+      if (typeof val === "object") return val.name || val.title || "";
+      return val;
+    };
+    const categoryTitle = getCatLabel(consultant?.category);
+    const subcategoryTitle = getCatLabel(consultant?.subcategory);
 
     setPhoto(consultant?.image || null);
     setForm({

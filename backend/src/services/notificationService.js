@@ -134,22 +134,35 @@ class NotificationService {
     // APPOINTMENT NOTIFICATIONS
     // ================================
 
+    static getTime(appointment) {
+        if (appointment.timeStart) return appointment.timeStart;
+        if (appointment.startAt) {
+            return new Date(appointment.startAt).toLocaleTimeString("en-US", {
+                hour: "numeric",
+                minute: "2-digit",
+                hour12: true
+            });
+        }
+        return "";
+    }
+
     /**
      * Notify both client and consultant when appointment is booked
      */
     static async notifyAppointmentBooked(appointment, clientName, consultantName) {
         const promises = [];
+        const timeStr = this.getTime(appointment);
 
         // Notify Client
         if (appointment.client) {
             promises.push(
                 this.notifyUser(appointment.client, {
                     name: "Appointment Confirmed",
-                    message: `Your appointment with ${consultantName} on ${appointment.date} at ${appointment.timeStart} has been confirmed.`,
+                    message: `Your appointment with ${consultantName} on ${appointment.date} at ${timeStr} has been confirmed.`,
                     type: "appointment",
                     category: "appointments",
                     priority: "high",
-                    actionUrl: `/bookings`,
+                    actionUrl: `/my-bookings`,
                     actionLabel: "View Booking",
                     relatedId: appointment._id,
                     relatedType: "appointment",
@@ -163,7 +176,7 @@ class NotificationService {
             promises.push(
                 this.notifyUser(appointment.consultant, {
                     name: "New Appointment",
-                    message: `${clientName} has booked an appointment for ${appointment.date} at ${appointment.timeStart}.`,
+                    message: `${clientName} has booked an appointment for ${appointment.date} at ${timeStr}.`,
                     type: "appointment",
                     category: "appointments",
                     priority: "high",
@@ -185,6 +198,7 @@ class NotificationService {
     static async notifyAppointmentCancelled(appointment, cancelledBy, clientName, consultantName) {
         const promises = [];
         const cancellerName = cancelledBy === "client" ? clientName : consultantName;
+        const timeStr = this.getTime(appointment);
 
         // Notify Client (if consultant cancelled)
         if (appointment.client && cancelledBy !== "client") {
@@ -195,7 +209,7 @@ class NotificationService {
                     type: "appointment",
                     category: "appointments",
                     priority: "high",
-                    actionUrl: `/bookings`,
+                    actionUrl: `/my-bookings`,
                     actionLabel: "Book Again",
                     relatedId: appointment._id,
                     relatedType: "appointment",
@@ -209,7 +223,7 @@ class NotificationService {
             promises.push(
                 this.notifyUser(appointment.consultant, {
                     name: "Appointment Cancelled",
-                    message: `${clientName} has cancelled their appointment on ${appointment.date} at ${appointment.timeStart}.`,
+                    message: `${clientName} has cancelled their appointment on ${appointment.date} at ${timeStr}.`,
                     type: "appointment",
                     category: "appointments",
                     priority: "normal",
@@ -230,17 +244,18 @@ class NotificationService {
      */
     static async notifyAppointmentReminder(appointment, clientName, consultantName) {
         const promises = [];
+        const timeStr = this.getTime(appointment);
 
         // Notify Client
         if (appointment.client) {
             promises.push(
                 this.notifyUser(appointment.client, {
                     name: "Appointment Reminder",
-                    message: `Reminder: Your appointment with ${consultantName} is in 1 hour at ${appointment.timeStart}.`,
+                    message: `Reminder: Your appointment with ${consultantName} is in 1 hour at ${timeStr}.`,
                     type: "reminder",
                     category: "reminders",
                     priority: "urgent",
-                    actionUrl: `/bookings`,
+                    actionUrl: `/my-bookings`,
                     actionLabel: "Join Now",
                     relatedId: appointment._id,
                     relatedType: "appointment",
@@ -254,7 +269,7 @@ class NotificationService {
             promises.push(
                 this.notifyUser(appointment.consultant, {
                     name: "Appointment Reminder",
-                    message: `Reminder: Appointment with ${clientName} in 1 hour at ${appointment.timeStart}.`,
+                    message: `Reminder: Appointment with ${clientName} in 1 hour at ${timeStr}.`,
                     type: "reminder",
                     category: "reminders",
                     priority: "urgent",
@@ -285,7 +300,7 @@ class NotificationService {
                     type: "appointment",
                     category: "appointments",
                     priority: newStatus === "Completed" ? "low" : "normal",
-                    actionUrl: `/bookings`,
+                    actionUrl: `/my-bookings`,
                     actionLabel: "View Details",
                     relatedId: appointment._id,
                     relatedType: "appointment",
@@ -302,6 +317,24 @@ class NotificationService {
     // ================================
 
     /**
+     * Notify Admin when payment is received (Agency Model)
+     */
+    static async notifyAdminPaymentReceived(transaction, clientName, consultantName) {
+        return this.notifyRole("Admin", {
+            name: "Payment Received",
+            message: `Payment of ₹${transaction.amount} received from ${clientName} for appointment with ${consultantName}.`,
+            type: "payment",
+            category: "payments", // Fixed from 'finance'
+            priority: "high",
+            actionUrl: `/admin/revenue`,
+            actionLabel: "View Revenue",
+            relatedId: transaction._id,
+            relatedType: "payment", // Fixed from 'transaction' (model only supports 'payment')
+            senderRole: "System",
+        });
+    }
+
+    /**
      * Notify client on successful payment
      */
     static async notifyPaymentSuccess(transaction, clientName) {
@@ -313,7 +346,7 @@ class NotificationService {
             type: "payment",
             category: "payments",
             priority: "normal",
-            actionUrl: `/transactions`,
+            actionUrl: `/dashboard`,
             actionLabel: "View Receipt",
             relatedId: transaction._id,
             relatedType: "payment",
@@ -333,11 +366,29 @@ class NotificationService {
             type: "payment",
             category: "payments",
             priority: "normal",
-            actionUrl: `/transactions`,
+            actionUrl: `/dashboard`,
             actionLabel: "View Details",
             relatedId: transaction._id,
             relatedType: "payment",
             senderRole: "System",
+        });
+    }
+
+    /**
+     * Notify Consultant when a payout is processed
+     */
+    static async notifyPayoutProcessed(consultantId, amount, currency, notes) {
+        return this.notifyUser(consultantId, {
+            name: "Payout Processed",
+            message: `A payout of ${currency} ${amount} has been processed for your account.${notes ? ` Notes: ${notes}` : ""}`,
+            type: "payment",
+            category: "payments",
+            priority: "high",
+            actionUrl: `/dashboard?tab=payments`,
+            actionLabel: "View Wallet",
+            relatedId: null,
+            relatedType: "payment",
+            senderRole: "System"
         });
     }
 

@@ -30,7 +30,7 @@ exports.getTransactions = async (req, res) => {
             .sort({ createdAt: -1 })
             .skip((page - 1) * limit)
             .limit(parseInt(limit))
-            .populate("appointment", "reason session")
+            .populate("appointment", "reason session status")
             .lean();
 
         // Manually populate user (could be User or Client) and consultant (could be User or Consultant)
@@ -118,6 +118,19 @@ exports.createPayout = async (req, res) => {
             message: "Payout recorded successfully",
             data: payoutTransaction
         });
+
+        // Notify Consultant
+        try {
+            const NotificationService = require("../../../services/notificationService");
+            await NotificationService.notifyPayoutProcessed(
+                consultantId,
+                amount,
+                "INR",
+                notes
+            );
+        } catch (notifErr) {
+            console.error("Failed to send payout notification:", notifErr);
+        }
 
     } catch (error) {
         console.error("Error creating payout:", error);

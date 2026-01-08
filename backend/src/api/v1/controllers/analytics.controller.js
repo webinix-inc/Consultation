@@ -144,6 +144,37 @@ exports.overview = async (req, res, next) => {
       ]),
     ]);
 
+    // Activity Trend (Daily for Month, Monthly for Year)
+    const activityTrend = [];
+    if (viewType === "yearly") {
+      for (let i = 0; i < 12; i++) {
+        const mStart = new Date(queryYear, i, 1);
+        const mEnd = new Date(queryYear, i + 1, 0, 23, 59, 59, 999);
+        const count = await Appointment.countDocuments({
+          status: { $in: ["Upcoming", "Completed", "Confirmed"] },
+          $or: [
+            { startAt: { $gte: mStart, $lte: mEnd } },
+            { date: { $gte: mStart.toISOString().split('T')[0], $lte: mEnd.toISOString().split('T')[0] } }
+          ]
+        });
+        activityTrend.push(count);
+      }
+    } else {
+      const daysInMonth = new Date(queryYear, queryMonth + 1, 0).getDate();
+      for (let d = 1; d <= daysInMonth; d++) {
+        const dStart = new Date(queryYear, queryMonth, d, 0, 0, 0, 0);
+        const dEnd = new Date(queryYear, queryMonth, d, 23, 59, 59, 999);
+        const count = await Appointment.countDocuments({
+          status: { $in: ["Upcoming", "Completed", "Confirmed"] },
+          $or: [
+            { startAt: { $gte: dStart, $lte: dEnd } },
+            { date: dStart.toISOString().split('T')[0] }
+          ]
+        });
+        activityTrend.push(count);
+      }
+    }
+
     // Extract values with defaults
     const currentStats = revenueStats[0] || { gmv: 0, platformRevenue: 0, consultantPayouts: 0, transactionCount: 0 };
     const lastMonthStats = lastMonthRevenueStats[0] || { gmv: 0, platformRevenue: 0, consultantPayouts: 0 };
@@ -161,31 +192,45 @@ exports.overview = async (req, res, next) => {
     const monthlyPlatformGrowth = calcGrowth(currentStats.platformRevenue, lastMonthStats.platformRevenue);
     const yoyGrowth = calcGrowth(yearStats.platformRevenue, prevYearStats.platformRevenue);
 
-    const topCategoriesRaw = await Category.find({})
-      .sort({ monthlyRevenue: -1 })
-      .limit(6)
-      .select("title monthlyRevenue consultants clients rating")
+    // Dynamic Top Categories from Appointments (Resolving "General")
+    const allAppointments = await Appointment.find({ status: { $ne: "Cancelled" } })
+      .select("category consultant consultantSnapshot")
+      .populate("consultant", "category subcategory")
       .lean();
 
-    // Aggregate appointment counts by category
-    const categoryAppointmentCounts = await Appointment.aggregate([
-      {
-        $group: {
-          _id: "$category",
-          count: { $sum: 1 },
-        },
-      },
-    ]);
+    const categoryCounts = {};
 
-    const appointmentCountMap = categoryAppointmentCounts.reduce((acc, curr) => {
-      acc[curr._id] = curr.count;
-      return acc;
-    }, {});
+    for (const appt of allAppointments) {
+      let cat = appt.category || "General";
 
-    const topCategories = topCategoriesRaw.map((cat) => ({
-      ...cat,
-      appointmentCount: appointmentCountMap[cat.title] || 0,
-    }));
+      // Fallback if category is "General"
+      if (cat === "General") {
+        if (appt.consultantSnapshot?.category) {
+          const snapCat = appt.consultantSnapshot.category;
+          cat = typeof snapCat === 'object' ? (snapCat.name || snapCat.title || "General") : snapCat;
+        } else if (appt.consultant?.category) {
+          const dbCat = appt.consultant.category;
+          cat = typeof dbCat === 'object' ? (dbCat.name || dbCat.title || "General") : dbCat;
+        }
+      }
+
+      if (cat) {
+        categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
+      }
+    }
+
+    const topCategories = Object.entries(categoryCounts)
+      .map(([title, count]) => ({
+        title,
+        appointmentCount: count,
+        // Mock revenue/rating/clients if needed by frontend types, though mostly count is used for chart
+        monthlyRevenue: 0,
+        consultants: 0,
+        clients: 0,
+        rating: 4.5
+      }))
+      .sort((a, b) => b.appointmentCount - a.appointmentCount)
+      .slice(0, 5);
 
     const recentAppointmentsRaw = await Appointment.find({})
       .sort({ createdAt: -1 })
@@ -342,67 +387,70 @@ exports.overview = async (req, res, next) => {
     // Calculate category performance with revenue, sessions, and growth
     // Note: startOfLastMonth and endOfLastMonth already declared at top of function
 
-    const categoryPerformance = await Promise.all(
-      topCategories.map(async (cat) => {
-        // Current month stats
-        const currentMonthStats = await Appointment.aggregate([
-          {
-            $match: {
-              category: cat.title,
-              $or: [
-                { startAt: { $gte: startOfMonth } },
-                { date: { $gte: startOfMonth.toISOString().split('T')[0] } }
-              ],
-              status: { $in: ["Completed", "Upcoming"] }
-            }
-          },
-          {
-            $group: {
-              _id: null,
-              revenue: { $sum: "$fee" },
-              sessions: { $sum: 1 }
-            }
-          }
-        ]);
+    // Dynamic Category Performance (Current vs Last Month)
+    // Fetch all relevant appointments for the performance window
+    const performanceAppointments = await Appointment.find({
+      $or: [
+        { startAt: { $gte: startOfLastMonth, $lte: endOfMonth } },
+        { date: { $gte: startOfLastMonth.toISOString().split('T')[0], $lte: endOfMonth.toISOString().split('T')[0] } }
+      ],
+      status: { $in: ["Completed", "Upcoming"] }
+    })
+      .select("category consultant consultantSnapshot startAt date fee status")
+      .populate("consultant", "category subcategory")
+      .lean();
 
-        // Last month stats
-        const lastMonthStats = await Appointment.aggregate([
-          {
-            $match: {
-              category: cat.title,
-              $or: [
-                { startAt: { $gte: startOfLastMonth, $lte: endOfLastMonth } },
-                { date: { $gte: startOfLastMonth.toISOString().split('T')[0], $lte: endOfLastMonth.toISOString().split('T')[0] } }
-              ],
-              status: { $in: ["Completed", "Upcoming"] }
-            }
-          },
-          {
-            $group: {
-              _id: null,
-              revenue: { $sum: "$fee" },
-              sessions: { $sum: 1 }
-            }
-          }
-        ]);
+    const perfStats = {};
 
-        const currentRevenue = currentMonthStats[0]?.revenue || 0;
-        const currentSessions = currentMonthStats[0]?.sessions || 0;
-        const lastRevenue = lastMonthStats[0]?.revenue || 0;
-        const avgRate = currentSessions > 0 ? Math.round(currentRevenue / currentSessions) : 0;
-        const growth = lastRevenue > 0
-          ? Math.round(((currentRevenue - lastRevenue) / lastRevenue) * 100)
-          : 0;
+    // Helper to get category from appt
+    const getCategory = (appt) => {
+      let cat = appt.category || "General";
+      if (cat === "General") {
+        if (appt.consultantSnapshot?.category) {
+          const snapCat = appt.consultantSnapshot.category;
+          cat = typeof snapCat === 'object' ? (snapCat.name || snapCat.title || "General") : snapCat;
+        } else if (appt.consultant?.category) {
+          const dbCat = appt.consultant.category;
+          cat = typeof dbCat === 'object' ? (dbCat.name || dbCat.title || "General") : dbCat;
+        }
+      }
+      return cat || "General";
+    };
 
-        return {
-          name: cat.title,
-          revenue: currentRevenue,
-          sessions: currentSessions,
-          rate: `₹${avgRate}/hr avg`,
-          growth: `${growth >= 0 ? '+' : ''}${growth}%`
-        };
-      })
-    );
+    performanceAppointments.forEach(appt => {
+      const cat = getCategory(appt);
+      if (!perfStats[cat]) perfStats[cat] = { currentRevenue: 0, currentSessions: 0, lastRevenue: 0 };
+
+      const apptDate = appt.startAt ? new Date(appt.startAt) : new Date(appt.date);
+      const isCurrentMonth = apptDate >= startOfMonth && apptDate <= endOfMonth;
+      const isLastMonth = apptDate >= startOfLastMonth && apptDate <= endOfLastMonth;
+
+      if (isCurrentMonth) {
+        if (appt.status === "Completed") {
+          perfStats[cat].currentRevenue += (appt.fee || 0);
+          perfStats[cat].currentSessions += 1;
+        }
+      } else if (isLastMonth) {
+        if (appt.status === "Completed") {
+          perfStats[cat].lastRevenue += (appt.fee || 0);
+        }
+      }
+    });
+
+    const categoryPerformance = Object.entries(perfStats).map(([name, stats]) => {
+      const avgRate = stats.currentSessions > 0 ? Math.round(stats.currentRevenue / stats.currentSessions) : 0;
+      const growth = stats.lastRevenue > 0
+        ? Math.round(((stats.currentRevenue - stats.lastRevenue) / stats.lastRevenue) * 100)
+        : 0;
+
+      return {
+        name,
+        revenue: stats.currentRevenue,
+        sessions: stats.currentSessions,
+        rate: `₹${avgRate}/hr avg`,
+        growth: `${growth >= 0 ? '+' : ''}${growth}%`
+      };
+    }).sort((a, b) => b.revenue - a.revenue); // Sort by revenue descending
 
     // Get top performing consultants (by revenue this month)
     const topConsultantsRaw = await Appointment.aggregate([
@@ -412,7 +460,7 @@ exports.overview = async (req, res, next) => {
             { startAt: { $gte: startOfMonth } },
             { date: { $gte: startOfMonth.toISOString().split('T')[0] } }
           ],
-          status: { $in: ["Completed", "Upcoming"] }
+          status: "Completed"
         }
       },
       {
@@ -456,10 +504,10 @@ exports.overview = async (req, res, next) => {
 
       // Try to find category title from populated object, or use fallback
       let categoryName = "General";
-      if (details.category && details.category.title) {
-        categoryName = details.category.title;
-      } else if (details.subcategory && details.subcategory.title) {
-        categoryName = details.subcategory.title;
+      if (details.category && details.category.name) {
+        categoryName = details.category.name;
+      } else if (details.subcategory && details.subcategory.name) {
+        categoryName = details.subcategory.name;
       } else if (typeof details.category === 'string') {
         // Fallback if population failed but string exists (unlikely given query)
         categoryName = details.category;
@@ -503,12 +551,15 @@ exports.overview = async (req, res, next) => {
       recentAppointments,
       monthlyTrends,
       categoryPerformance,
-      topConsultants
+      topConsultants,
+      activityTrend,
     });
   } catch (err) {
     next(err);
   }
 };
+
+
 
 exports.consultantStats = async (req, res, next) => {
   try {
@@ -538,7 +589,7 @@ exports.consultantStats = async (req, res, next) => {
 
     // Resolve Consultant Profile ID
     const ConsultantModel = require("../../../models/consultant.model").Consultant;
-    const consultantProfile = await ConsultantModel.findOne({ user: userId });
+    const consultantProfile = await ConsultantModel.findOne({ user: userId }).populate("category");
 
     const consultantIds = [userId];
     if (consultantProfile) {
@@ -552,7 +603,7 @@ exports.consultantStats = async (req, res, next) => {
     // 1. Total Appointments (Filtered by Period)
     const totalAppointments = await Appointment.countDocuments({
       consultant: { $in: consultantIds },
-      status: { $in: ["Upcoming", "Completed"] },
+      status: "Completed",
       $or: [
         { startAt: { $gte: startOfPeriod, $lte: endOfPeriod } },
         { date: { $gte: startOfPeriod.toISOString().split('T')[0], $lte: endOfPeriod.toISOString().split('T')[0] } }
@@ -573,24 +624,35 @@ exports.consultantStats = async (req, res, next) => {
     const inactiveClients = await require("../../../models/clientConsultant.model").countDocuments({ consultant: { $in: consultantIds }, status: "Inactive" });
 
     // 4. Revenue (Filtered by Period)
+    // 4. Revenue (Filtered by Period) - Realized Revenue from Completed Appointments
+    // 4. Revenue (Filtered by Period) - Realized Net Revenue from Completed Appointments
     const periodRevenueResult = await Transaction.aggregate([
       {
         $match: {
-          $or: [
-            { consultant: { $in: consultantObjectIds } },
-            { user: { $in: consultantObjectIds } }
-          ],
-          createdAt: { $gte: startOfPeriod, $lte: endOfPeriod },
+          consultant: { $in: consultantObjectIds },
           status: "Success",
-          type: "Payment"
+          type: "Payment",
+          createdAt: { $gte: startOfPeriod, $lte: endOfPeriod }
+        }
+      },
+      {
+        $lookup: {
+          from: "appointments",
+          localField: "appointment",
+          foreignField: "_id",
+          as: "appt"
+        }
+      },
+      { $unwind: "$appt" },
+      {
+        $match: {
+          "appt.status": "Completed"
         }
       },
       {
         $group: {
           _id: null,
-          revenue: {
-            $sum: { $ifNull: ["$netAmount", "$amount"] }
-          }
+          revenue: { $sum: "$netAmount" }
         }
       },
     ]);
@@ -629,50 +691,69 @@ exports.consultantStats = async (req, res, next) => {
       }
     }
 
-    // Helper to get revenue
+    // Helper to get revenue from Completed Appointments
     async function getRevenueForRange(ids, start, end) {
       const res = await Transaction.aggregate([
         {
           $match: {
-            $or: [{ consultant: { $in: ids } }, { user: { $in: ids } }],
-            createdAt: { $gte: start, $lte: end },
+            consultant: { $in: ids },
+            type: "Payment",
             status: "Success",
-            type: "Payment"
+            createdAt: { $gte: start, $lte: end }
           }
         },
-        { $group: { _id: null, rev: { $sum: { $ifNull: ["$netAmount", "$amount"] } } } }
+        {
+          $lookup: {
+            from: "appointments",
+            localField: "appointment",
+            foreignField: "_id",
+            as: "appt"
+          }
+        },
+        { $unwind: "$appt" },
+        {
+          $match: { "appt.status": "Completed" }
+        },
+        { $group: { _id: null, rev: { $sum: "$netAmount" } } }
       ]);
       return res[0]?.rev || 0;
     }
 
-    // 7. Weekly Appointments (Activity for Sparklines)
-    // If filtered, show "Daily" breakdown of the selected period? 
-    // Or just last 7 days ending at `endOfPeriod`?
-    // Let's do last 7 days ending at `endOfPeriod`.
-    const weeklyAppointments = [];
-    for (let i = 6; i >= 0; i--) {
-      const dayStart = new Date(endOfPeriod); // clone end date
-      dayStart.setDate(dayStart.getDate() - i); // subtract days
-      dayStart.setHours(0, 0, 0, 0); // start of that day
+    // 7. Activity Trend (Daily for Month, Monthly for Year)
+    const activityTrend = [];
+    if (viewType === "yearly") {
+      // Monthly breakdown for the year
+      for (let i = 0; i < 12; i++) {
+        const mStart = new Date(queryYear, i, 1);
+        const mEnd = new Date(queryYear, i + 1, 0, 23, 59, 59, 999);
 
-      // But if endOfPeriod is e.g. 31st Jan 23:59, dayStart is 31st Jan 00:00
-      // We want distinct days.
-      // Let's reset `dayStart` to the correct calendar day
-      const specificDay = new Date(endOfPeriod);
-      specificDay.setDate(specificDay.getDate() - i);
+        const count = await Appointment.countDocuments({
+          consultant: { $in: consultantIds },
+          status: { $in: ["Upcoming", "Completed", "Confirmed"] },
+          $or: [
+            { startAt: { $gte: mStart, $lte: mEnd } },
+            { date: { $gte: mStart.toISOString().split('T')[0], $lte: mEnd.toISOString().split('T')[0] } }
+          ]
+        });
+        activityTrend.push(count);
+      }
+    } else {
+      // Daily breakdown for the month
+      const daysInMonth = new Date(queryYear, queryMonth + 1, 0).getDate();
+      for (let d = 1; d <= daysInMonth; d++) {
+        const dStart = new Date(queryYear, queryMonth, d, 0, 0, 0, 0);
+        const dEnd = new Date(queryYear, queryMonth, d, 23, 59, 59, 999);
 
-      const dStart = new Date(specificDay); dStart.setHours(0, 0, 0, 0);
-      const dEnd = new Date(specificDay); dEnd.setHours(23, 59, 59, 999);
-
-      const count = await Appointment.countDocuments({
-        consultant: { $in: consultantIds },
-        $or: [
-          { startAt: { $gte: dStart, $lte: dEnd } },
-          { date: dStart.toISOString().split('T')[0] }
-        ]
-      });
-
-      weeklyAppointments.push(count);
+        const count = await Appointment.countDocuments({
+          consultant: { $in: consultantIds },
+          status: { $in: ["Upcoming", "Completed", "Confirmed"] },
+          $or: [
+            { startAt: { $gte: dStart, $lte: dEnd } },
+            { date: dStart.toISOString().split('T')[0] }
+          ]
+        });
+        activityTrend.push(count);
+      }
     }
 
     // ... (Rest of existing metrics calculations like completion rate, etc) ...
@@ -694,7 +775,7 @@ exports.consultantStats = async (req, res, next) => {
     })
       .sort({ startAt: -1 })
       .limit(5)
-      .select("client date startAt status session category")
+      .select("client date startAt status session category consultantSnapshot")
       .lean();
 
     // ... (formatting logic) ...
@@ -707,10 +788,19 @@ exports.consultantStats = async (req, res, next) => {
         clientName = clientDoc.fullName;
         clientAvatar = clientDoc.avatar || clientDoc.profileImage || clientAvatar;
       }
+      let displayCategory = "General";
+      if (appt.consultantSnapshot?.category) {
+        const snapCat = appt.consultantSnapshot.category;
+        displayCategory = typeof snapCat === 'object' ? (snapCat.name || snapCat.title) : snapCat;
+      } else if (consultantProfile?.category) {
+        const pCat = consultantProfile.category;
+        displayCategory = typeof pCat === 'object' ? (pCat.name || pCat.title) : pCat;
+      }
+
       return {
         name: clientName,
         with: "You",
-        tag: appt.category || "General",
+        tag: displayCategory || "General",
         time: appt.startAt ? new Date(appt.startAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : "",
         status: appt.status,
         avatar: clientAvatar
@@ -751,7 +841,7 @@ exports.consultantStats = async (req, res, next) => {
         $match: {
           consultant: { $in: consultantIds },
           createdAt: { $gte: thirtyDaysAgo },
-          status: { $in: ["Completed", "Upcoming"] }
+          status: "Completed"
         }
       },
       {
@@ -801,7 +891,7 @@ exports.consultantStats = async (req, res, next) => {
       },
       recentAppointments: formattedRecent,
       monthlyRevenueTrends,
-      weeklyAppointments,
+      activityTrend,
       performance: {
         sessionCompletion: sessionCompletionRate,
         avgRating: parseFloat(avgRating.toFixed(1)),
@@ -977,6 +1067,39 @@ exports.clientStats = async (req, res, next) => {
       }
     }
 
+    // Activity Trend (Daily for Month, Monthly for Year)
+    const activityTrend = [];
+    if (viewType === "yearly") {
+      for (let i = 0; i < 12; i++) {
+        const mStart = new Date(queryYear, i, 1);
+        const mEnd = new Date(queryYear, i + 1, 0, 23, 59, 59, 999);
+        const count = await Appointment.countDocuments({
+          client: userId,
+          status: { $in: ["Upcoming", "Completed", "Confirmed"] },
+          $or: [
+            { startAt: { $gte: mStart, $lte: mEnd } },
+            { date: { $gte: mStart.toISOString().split('T')[0], $lte: mEnd.toISOString().split('T')[0] } }
+          ]
+        });
+        activityTrend.push(count);
+      }
+    } else {
+      const daysInMonth = new Date(queryYear, queryMonth + 1, 0).getDate();
+      for (let d = 1; d <= daysInMonth; d++) {
+        const dStart = new Date(queryYear, queryMonth, d, 0, 0, 0, 0);
+        const dEnd = new Date(queryYear, queryMonth, d, 23, 59, 59, 999);
+        const count = await Appointment.countDocuments({
+          client: userId,
+          status: { $in: ["Upcoming", "Completed", "Confirmed"] },
+          $or: [
+            { startAt: { $gte: dStart, $lte: dEnd } },
+            { date: dStart.toISOString().split('T')[0] }
+          ]
+        });
+        activityTrend.push(count);
+      }
+    }
+
     const User = require("../../../models/user.model");
     const Consultant = require("../../../models/consultant.model").Consultant;
 
@@ -1002,7 +1125,7 @@ exports.clientStats = async (req, res, next) => {
         cAvatar = cDoc.profileImage || cDoc.avatar || cAvatar;
       } else {
         // 2. Try Consultant
-        cDoc = await Consultant.findById(appt.consultant).select("name firstName lastName fullName email image");
+        cDoc = await Consultant.findById(appt.consultant).select("name firstName lastName fullName email image category");
         if (cDoc) {
           cName = cDoc.name || cDoc.fullName || `${cDoc.firstName} ${cDoc.lastName}`.trim();
           cEmail = cDoc.email;
@@ -1016,6 +1139,18 @@ exports.clientStats = async (req, res, next) => {
         }
       }
 
+      let displayCategory = "General";
+      if (cDoc && cDoc.category) {
+        if (typeof cDoc.category === 'object') {
+          displayCategory = cDoc.category.name || cDoc.category.title || "General";
+        } else {
+          displayCategory = cDoc.category;
+        }
+      } else if (appt.consultantSnapshot && appt.consultantSnapshot.category) {
+        const snapCat = appt.consultantSnapshot.category;
+        displayCategory = typeof snapCat === 'object' ? (snapCat.name || snapCat.title) : snapCat;
+      }
+
       if (cAvatar.includes("via.placeholder")) {
         cAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(cName)}&background=random`;
       }
@@ -1023,7 +1158,7 @@ exports.clientStats = async (req, res, next) => {
       return {
         name: cName,
         with: "You",
-        tag: appt.category || "General",
+        tag: displayCategory || "General",
         time: displayTime,
         status: appt.status,
         avatar: cAvatar
@@ -1038,7 +1173,8 @@ exports.clientStats = async (req, res, next) => {
       ],
       recentAppointments: formattedRecent,
       monthlySpendingTrends,
-      monthlyApptTrends
+      monthlyApptTrends,
+      activityTrend
     });
   } catch (err) {
     console.error("❌ [Analytics] Error fetching client stats:", err);
@@ -1143,7 +1279,7 @@ exports.getClientStatsById = async (req, res, next) => {
 
       ],
       recentAppointments: formattedRecent,
-      monthlySpendingTrends
+      monthlySpendingTrends: [] // Placeholder as the calculation logic seems to be missing
     });
   } catch (err) {
     console.error("❌ [Analytics] Error fetching client stats by ID:", err);

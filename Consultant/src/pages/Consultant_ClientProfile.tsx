@@ -523,9 +523,12 @@ function Modal({
     );
 }
 function formatDateLine(date: string, start: string, end: string, session: string) {
+    if (!date) return "Date not set";
     const d = new Date(date);
     // "Fri, 24 Oct 2025"
     const dateStr = d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+
+    if (!start || !end) return `${dateStr}`;
 
     const [sH, sM] = start.split(':').map(Number);
     const [eH, eM] = end.split(':').map(Number);
@@ -624,9 +627,13 @@ function BookingsTab({ appointments, profile }: { appointments: any[], profile: 
                             id: b._id,
                             price: b.payment?.amount,
                             doctor: b.consultantSnapshot?.name || "NA",
-                            tags: [b.category || "General", b.status || "Pending"],
+                            tags: [
+                                (typeof b.consultantSnapshot?.category === 'object' ? b.consultantSnapshot.category.name : b.consultantSnapshot?.category) ||
+                                (typeof b.category === 'object' ? b.category.name : b.category) || "General",
+                                b.status || "Pending"
+                            ],
                             title: `${b.consultantSnapshot?.subcategory || "General"} • ${b.reason || "Consultation"}`,
-                            category: b.category,
+                            category: typeof b.category === 'object' ? b.category.name : b.category,
                             subcategory: b.consultantSnapshot?.subcategory,
                             status: b.status,
                             serviceType: b.session,
@@ -818,13 +825,12 @@ const DocRow = ({ d, onDelete, canDelete }: { d: any; onDelete: (id: string) => 
     return (
         <div className="flex items-center justify-between p-3 bg-white border rounded-lg shadow-sm">
             <div className="flex items-center gap-3">
-                <div className={cn("p-2 rounded-lg", typeBadgeCls[d.type as keyof typeof typeBadgeCls] || "bg-gray-100")}>
+                <div className="p-2 rounded-lg bg-gray-100">
                     <FileText className="w-5 h-5 text-gray-600" />
                 </div>
                 <div>
                     <h4 className="text-sm font-medium text-gray-900">{d.title}</h4>
                     <div className="flex items-center gap-2 text-xs text-gray-500">
-                        <Badge variant="outline" className="text-[10px] h-4 px-1">{d.type}</Badge>
                         <span>• {d.size || "0 KB"}</span>
                         <span>• {d.date}</span>
                     </div>
@@ -990,23 +996,6 @@ function DocumentsTab({ consultantId }: { consultantId: string }) { // consultan
                         <Button className="gap-2 bg-blue-500 hover:bg-blue-600" onClick={() => setIsUploadOpen(true)}>
                             <UploadIcon className="h-4 w-4" /> Upload Document
                         </Button>
-                        <Select value={cat} onValueChange={setCat}>
-                            <SelectTrigger className="w-[160px]">
-                                <SelectValue placeholder="All Categories" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="All Categories">All Categories</SelectItem>
-                                <SelectItem value="Medical Report">Medical Report</SelectItem>
-                                <SelectItem value="Consultation Notes">
-                                    Consultation Notes
-                                </SelectItem>
-                                <SelectItem value="Prescription">Prescription</SelectItem>
-                                <SelectItem value="Invoice">Invoice</SelectItem>
-                                <SelectItem value="Lab Results">Lab Results</SelectItem>
-                                <SelectItem value="Treatment Plan">Treatment Plan</SelectItem>
-                                <SelectItem value="Other">Other</SelectItem>
-                            </SelectContent>
-                        </Select>
                     </div>
 
                     <div className="relative">
@@ -1045,22 +1034,7 @@ function DocumentsTab({ consultantId }: { consultantId: string }) { // consultan
                         <Input value={uploadTitle} onChange={(e) => setUploadTitle(e.target.value)} placeholder="e.g. Lab Report - Oct 24" />
                     </div>
 
-                    <div className="grid gap-2">
-                        <label className="text-sm font-medium">Type</label>
-                        <Select value={uploadType} onValueChange={setUploadType}>
-                            <SelectTrigger>
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="Medical Report">Medical Report</SelectItem>
-                                <SelectItem value="Consultation Notes">Consultation Notes</SelectItem>
-                                <SelectItem value="Prescription">Prescription</SelectItem>
-                                <SelectItem value="Lab Results">Lab Results</SelectItem>
-                                <SelectItem value="Treatment Plan">Treatment Plan</SelectItem>
-                                <SelectItem value="Other">Other</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
+
 
                     <div className="grid gap-2">
                         <label className="text-sm font-medium">Description (Optional)</label>
@@ -1226,9 +1200,11 @@ function PaymentsTab({ transactions }: { transactions: any[] }) {
         id: t._id,
         initials: getInitials(t.consultantSnapshot?.name || t.consultant?.fullName || t.consultant?.name || "Unknown"),
         doctor: t.consultantSnapshot?.name || t.consultant?.fullName || t.consultant?.name || "Unknown",
-        dept: t.consultantSnapshot?.category || t.consultant?.category || "General",
+        dept: (typeof (t.consultantSnapshot?.category || t.consultant?.category) === 'object'
+            ? (t.consultantSnapshot?.category?.name || t.consultant?.category?.name)
+            : (t.consultantSnapshot?.category || t.consultant?.category)) || "General",
         status: t.status,
-        title: `${t.consultantSnapshot?.subcategory || t.consultant?.subcategory || t.consultant?.title || "Consultation"} • ${t.appointment?.reason || "Session"}`,
+        title: `${(typeof (t.consultantSnapshot?.subcategory || t.consultant?.subcategory) === 'object' ? (t.consultantSnapshot?.subcategory?.name || t.consultant?.subcategory?.name) : (t.consultantSnapshot?.subcategory || t.consultant?.subcategory)) || t.consultant?.title || "Consultation"} • ${t.appointment?.reason || "Session"}`,
         date: new Date(t.createdAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
         method: t.paymentMethod,
         txn: t.transactionId || "N/A",

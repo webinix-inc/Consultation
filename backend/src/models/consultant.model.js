@@ -325,16 +325,22 @@ const createConsultantSchema = Joi.object({
   phone: Joi.string().min(6).max(30).required(),
   mobile: Joi.string().min(6).max(30).optional(), // Optional, will sync with phone
   alternatePhone: Joi.string().allow("").max(30).optional(),
-  category: Joi.object({
-    name: Joi.string().required(),
-    description: Joi.string().allow("").optional(),
-    imageUrl: Joi.string().uri().allow("").optional(),
-  }).required(),
-  subcategory: Joi.object({
-    name: Joi.string().allow("").optional(),
-    description: Joi.string().allow("").optional(),
-    imageUrl: Joi.string().uri().allow("").optional(),
-  }).optional(),
+  category: Joi.alternatives().try(
+    Joi.object({
+      name: Joi.string().required(),
+      description: Joi.string().allow("").optional(),
+      imageUrl: Joi.string().uri().allow("").optional(),
+    }),
+    Joi.string().required()
+  ).required(),
+  subcategory: Joi.alternatives().try(
+    Joi.object({
+      name: Joi.string().allow("").optional(),
+      description: Joi.string().allow("").optional(),
+      imageUrl: Joi.string().uri().allow("").optional(),
+    }),
+    Joi.string().allow("").optional()
+  ).optional(),
 
   regNo: Joi.string().allow("").max(120).optional(),
   fees: Joi.number().min(0).optional(),
@@ -388,16 +394,22 @@ const updateConsultantSchema = Joi.object({
   phone: Joi.string().min(6).max(30).optional(),
   alternatePhone: Joi.string().allow("").max(30).optional(),
   displayName: Joi.string().allow("").max(120).optional(),
-  category: Joi.object({
-    name: Joi.string().optional(),
-    description: Joi.string().allow("").optional(),
-    imageUrl: Joi.string().uri().allow("").optional(),
-  }).optional(),
-  subcategory: Joi.object({
-    name: Joi.string().allow("").optional(),
-    description: Joi.string().allow("").optional(),
-    imageUrl: Joi.string().uri().allow("").optional(),
-  }).optional(),
+  category: Joi.alternatives().try(
+    Joi.object({
+      name: Joi.string().optional(),
+      description: Joi.string().allow("").optional(),
+      imageUrl: Joi.string().uri().allow("").optional(),
+    }),
+    Joi.string().allow("").optional()
+  ).optional(),
+  subcategory: Joi.alternatives().try(
+    Joi.object({
+      name: Joi.string().allow("").optional(),
+      description: Joi.string().allow("").optional(),
+      imageUrl: Joi.string().uri().allow("").optional(),
+    }),
+    Joi.string().allow("").optional()
+  ).optional(),
   regNo: Joi.string().allow("").max(120).optional(),
   fees: Joi.number().min(0).optional(),
   gender: Joi.string().allow("").max(30).optional(),

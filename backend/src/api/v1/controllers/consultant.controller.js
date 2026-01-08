@@ -77,6 +77,8 @@ exports.getOne = async (req, res, next) => {
 exports.create = async (req, res, next) => {
   try {
     const consultantData = { ...req.body };
+    console.log("🛠️ [Consultant Create] Incoming Body:", JSON.stringify(req.body, null, 2));
+    console.log("🛠️ [Consultant Create] Initial Category:", req.body.category, "Type:", typeof req.body.category);
 
     // Check if consultant already exists (by email or mobile/phone)
     const existingConsultant = await Consultant.findOne({
@@ -173,7 +175,17 @@ exports.create = async (req, res, next) => {
       }
     }
 
+
+    // Failsafe: Ensure name exists if it's an object
+    if (consultantData.category && typeof consultantData.category === 'object' && !consultantData.category.name) {
+      console.log("⚠️ [Consultant Create] Category name missing after logic, forcing 'General'");
+      consultantData.category.name = "General";
+    }
+
+    console.log("🛠️ [Consultant Create] Final Category Payload:", JSON.stringify(consultantData.category, null, 2));
+
     const consultant = await Consultant.create(consultantData);
+    console.log("🛠️ [Consultant Create] Created successfully:", consultant._id);
 
     // Return consultant data with generated password if applicable
     const consultantResponse = consultant.toObject();

@@ -171,30 +171,31 @@ appointmentSchema.statics.hasConflict = async function (id, startAt, endAt, excl
 
 // Static: get available slots for consultant on a date
 // options: { slotDurationMin = 60, startHour = 9, endHour = 17 }
-// returns array of "HH:mm" strings
+// returns array of "HH:mm - HH:mm" strings
 appointmentSchema.statics.getAvailableSlots = async function (id, dateISO /* "YYYY-MM-DD" */, options = {}) {
   const { slotDurationMin = 60, startHour = 9, endHour = 17 } = options || {};
   if (!id || !dateISO) return [];
 
   const { consultantId, userId } = await resolveConsultantIds(id);
 
-  // Build the day's start and end as Date objects (UTC / server timezone)
-  const dayStart = new Date(`${dateISO}T00:00:00`);
-  const dayEnd = new Date(`${dateISO}T23:59:59`);
+  // Define IST Offset (UTC+5:30)
+  const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
 
-  // Fetch appointments for the consultant that overlap the day
-  // Fetch appointments for the consultant that overlap the day
+  // Build the day range in UTC covering the full IST day
+  // To cover "2023-11-23" in IST, we need to inspect a range that surely includes it in UTC.
+  // IST is ahead of UTC, so 00:00 IST is previous day 18:30 UTC.
+  // Let's grab a wide enough UTC range to capture all potential overlaps.
+  const queryStart = new Date(new Date(`${dateISO}T00:00:00`).getTime() - 24 * 60 * 60 * 1000);
+  const queryEnd = new Date(new Date(`${dateISO}T23:59:59`).getTime() + 24 * 60 * 60 * 1000);
+
+  // Fetch appointments for the consultant that overlap this broad range
   const appts = await this.find({
     status: { $ne: "Cancelled" },
     $or: [
       { consultant: consultantId },
       { consultant: userId }
     ],
-    // Overlap: existing.start <= dayEnd AND existing.end >= dayStart
-    $and: [
-      { startAt: { $lte: dayEnd } },
-      { endAt: { $gte: dayStart } }
-    ]
+    startAt: { $gte: queryStart, $lte: queryEnd }
   }).select("startAt endAt").lean();
 
   // Convert appointments into ranges for overlap checks
@@ -205,14 +206,8 @@ appointmentSchema.statics.getAvailableSlots = async function (id, dateISO /* "YY
     }
   }
 
-  // Helper to check overlap
-  function overlaps(aStart, aEnd, bStart, bEnd) {
-    return aStart < bEnd && aEnd > bStart;
-  }
-
   // Fetch Consultant Settings to get generated slots
   const ConsultantSettings = mongoose.model("ConsultantSettings");
-  // Try to find settings by User ID first (preferred), then Consultant ID
   let settings = await ConsultantSettings.findOne({ consultant: userId }).lean();
   if (!settings) {
     settings = await ConsultantSettings.findOne({ consultant: consultantId }).lean();
@@ -220,76 +215,87 @@ appointmentSchema.statics.getAvailableSlots = async function (id, dateISO /* "YY
 
   let candidateSlots = [];
 
+  // Helper to force Date interpretation as IST
+  // Input: "HH:mm" string
+  // Output: Date object representing that time on dateISO in UTC (derived from IST)
+  // Example: dateISO="2023-11-23", timeStr="09:00"
+  // "2023-11-23T09:00:00" is treated as UTC by new Date(ISOString) usually, or Local.
+  // We want to treat it as IST.
+  // So 09:00 IST = 03:30 UTC.
+  const createDateAsIST = (timeStr) => {
+    // 1. Create a "UTC" date as if the string was UTC
+    // e.g. 2023-11-23T09:00:00.000Z
+    const naiveDate = new Date(`${dateISO}T${timeStr}:00.000Z`);
+    // 2. Subtract the IST offset (5.5 hours) to shift it to the correct absolute time
+    return new Date(naiveDate.getTime() - IST_OFFSET_MS);
+  };
+
   if (settings && settings.availability && settings.availability.workingHours) {
-    const dayOfWeek = dayStart.toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
+    // Need to get the day of week for dateISO
+    const dateObj = new Date(dateISO);
+    const dayOfWeek = dateObj.toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
     const daySettings = settings.availability.workingHours[dayOfWeek];
 
     if (daySettings && daySettings.enabled && daySettings.generatedSlots && daySettings.generatedSlots.length > 0) {
-      // Use generated slots from settings
       candidateSlots = daySettings.generatedSlots.map(slotStr => {
-        // slotStr is "HH:mm - HH:mm"
         const [startStr, endStr] = slotStr.split(" - ");
-        return { start: startStr, end: endStr };
+        return { startStr, endStr };
       });
     }
   }
 
-  // Fallback if no settings or generated slots: generate hourly slots
-  // if (candidateSlots.length === 0) {
-  //   for (let h = startHour; h <= endHour; h++) {
-  //     const hh = String(h).padStart(2, "0");
-  //     candidateSlots.push({ start: `${hh}:00`, end: `${String(h + 1).padStart(2, "0")}:00` }); // Default 1 hour duration
-  //   }
-  // }
+  // Fallback: Generate 09:00 to 17:00 IST slots if no settings found
+  if (candidateSlots.length === 0) {
+    for (let h = startHour; h < endHour; h++) {
+      const startStr = `${String(h).padStart(2, "0")}:00`;
+      const endStr = `${String(h + 1).padStart(2, "0")}:00`;
+      candidateSlots.push({ startStr, endStr });
+    }
+  }
 
-  // Get current time for filtering past slots (only relevant for today)
-  // Use IST (India Standard Time = UTC+5:30) for proper comparison
+  // Helper to check overlap
+  function overlaps(aStart, aEnd, bStart, bEnd) {
+    return aStart < bEnd && aEnd > bStart;
+  }
+
   const nowUTC = new Date();
-  const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000; // 5 hours 30 minutes in milliseconds
-  const nowIST = new Date(nowUTC.getTime() + IST_OFFSET_MS);
+  // We compare "now" vs buffer time.
+  // Let's add a small buffer (e.g. 15 mins) to prevent booking immediately
+  const nowWithBuffer = new Date(nowUTC.getTime() + 15 * 60 * 1000);
 
-  // Get today's date in IST
-  const todayIST = nowIST.toISOString().split('T')[0];
-  const isToday = dateISO === todayIST;
-
-  // Filter candidate slots against busy ranges and past times
   const availableSlots = [];
+
   for (const slot of candidateSlots) {
-    const slotStart = new Date(`${dateISO}T${slot.start}:00`);
-    // Handle end time crossing midnight if needed, but for now assume same day
-    // If slot.end is smaller than slot.start, it might mean next day, but generatedSlots usually within day
-    let slotEnd = new Date(`${dateISO}T${slot.end}:00`);
+    // Convert "HH:mm" (IST) -> Actual UTC Date objects
+    const slotStartUTC = createDateAsIST(slot.startStr);
 
-    // If using default hourly slots, calculate end based on duration if not explicit
-    if (!slot.end) {
-      slotEnd = new Date(slotStart.getTime() + slotDurationMin * 60 * 1000);
+    let slotEndUTC;
+    if (slot.endStr) {
+      slotEndUTC = createDateAsIST(slot.endStr);
+    } else {
+      // If no end string, add duration
+      slotEndUTC = new Date(slotStartUTC.getTime() + slotDurationMin * 60 * 1000);
     }
 
-    // Skip slots that have already passed (only for today)
-    // Compare using IST: slotStart is in IST (parsed from dateISO + time), nowIST is current time in IST
-    // Since slotStart is parsed without timezone, it's treated as local/UTC, so we need to compare hours/minutes
-    if (isToday) {
-      const slotHour = parseInt(slot.start.split(':')[0], 10);
-      const slotMinute = parseInt(slot.start.split(':')[1], 10);
-      const nowHourIST = nowIST.getUTCHours();
-      const nowMinuteIST = nowIST.getUTCMinutes();
-
-      // Skip if slot time has passed in IST
-      if (slotHour < nowHourIST || (slotHour === nowHourIST && slotMinute <= nowMinuteIST)) {
-        continue;
-      }
-    }
-
+    // 1. Check strict overlap with existing appointments
     let isFree = true;
     for (const br of busyRanges) {
-      if (overlaps(slotStart, slotEnd, br.start, br.end)) {
+      // br.start/end are already Date objects (UTC) from DB
+      if (overlaps(slotStartUTC, slotEndUTC, br.start, br.end)) {
         isFree = false;
         break;
       }
     }
 
+    // 2. Check if slot is in the past (using UTC to UTC comparison is safest)
+    if (slotStartUTC < nowWithBuffer) {
+      isFree = false;
+    }
+
     if (isFree) {
-      availableSlots.push(`${slot.start} - ${slot.end}`);
+      // Return the string as expected by frontend (e.g., "09:00 - 10:00")
+      // Frontend assumes these are "Display Time" which implies IST for this app context
+      availableSlots.push(`${slot.startStr} - ${slot.endStr || slot.endStr}`);
     }
   }
 

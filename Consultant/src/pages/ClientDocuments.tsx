@@ -61,15 +61,6 @@ const DocRow = ({ d, onDelete, canDelete }: { d: any; onDelete: (id: string) => 
         <div className="rounded-xl border bg-white p-4 flex items-start justify-between gap-3">
             <div className="space-y-1">
                 <div className="flex items-center gap-2">
-                    <Badge
-                        variant="outline"
-                        className={cn(
-                            "px-2 py-0.5 text-[11px] rounded-md",
-                            typeBadgeCls[d.type as keyof typeof typeBadgeCls] || "bg-gray-100 text-gray-700"
-                        )}
-                    >
-                        {d.type}
-                    </Badge>
                     <div className="font-medium">{d.title}</div>
                 </div>
                 <div className="text-xs text-muted-foreground flex flex-wrap items-center gap-4">
@@ -274,20 +265,6 @@ export default function ClientDocuments() {
                         <Button className="gap-2 bg-blue-500 hover:bg-blue-600" onClick={() => setIsUploadOpen(true)}>
                             <UploadIcon className="h-4 w-4" /> Upload Document
                         </Button>
-                        <Select value={cat} onValueChange={setCat}>
-                            <SelectTrigger className="w-[160px]">
-                                <SelectValue placeholder="All Categories" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="All Categories">All Categories</SelectItem>
-                                <SelectItem value="Medical Report">Medical Report</SelectItem>
-                                <SelectItem value="Consultation Notes">
-                                    Consultation Notes
-                                </SelectItem>
-                                <SelectItem value="Prescription">Prescription</SelectItem>
-                                <SelectItem value="Invoice">Invoice</SelectItem>
-                            </SelectContent>
-                        </Select>
                     </div>
 
                     <div className="relative">
@@ -343,22 +320,7 @@ export default function ClientDocuments() {
                         </Select>
                     </div>
 
-                    <div className="grid gap-2">
-                        <label className="text-sm font-medium">Type</label>
-                        <Select value={uploadType} onValueChange={setUploadType}>
-                            <SelectTrigger>
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="Medical Report">Medical Report</SelectItem>
-                                <SelectItem value="Consultation Notes">Consultation Notes</SelectItem>
-                                <SelectItem value="Prescription">Prescription</SelectItem>
-                                <SelectItem value="Lab Results">Lab Results</SelectItem>
-                                <SelectItem value="Treatment Plan">Treatment Plan</SelectItem>
-                                <SelectItem value="Other">Other</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
+
 
                     <div className="grid gap-2">
                         <label className="text-sm font-medium">File</label>

@@ -389,18 +389,61 @@ exports.signup = async (req, res, next) => {
         throw new ApiError("Consultant with this email or mobile already exists", httpStatus.CONFLICT);
       }
 
-      // Resolve Category Title if ID is provided
-      let categoryName = category || 'General';
-      const objectIdPattern = /^[0-9a-fA-F]{24}$/;
-      if (category && objectIdPattern.test(category)) {
-        try {
-          const Category = require("../../../models/category.model");
-          const categoryDoc = await Category.findById(category);
-          if (categoryDoc) {
-            categoryName = categoryDoc.title;
+      // Validate and Normalize Category
+      let categoryData = { name: 'General' };
+      if (category) {
+        if (typeof category === 'object') {
+          categoryData = {
+            name: category.name || 'General',
+            description: category.description || '',
+            imageUrl: category.imageUrl || ''
+          };
+        } else if (typeof category === 'string') {
+          const objectIdPattern = /^[0-9a-fA-F]{24}$/;
+          if (objectIdPattern.test(category)) {
+            try {
+              const Category = require("../../../models/category.model");
+              const categoryDoc = await Category.findById(category);
+              if (categoryDoc) {
+                categoryData = {
+                  name: categoryDoc.title,
+                  description: categoryDoc.description,
+                  imageUrl: categoryDoc.image
+                };
+              }
+            } catch (err) { console.error("Category lookup failed", err); }
+          } else {
+            categoryData = { name: category };
           }
-        } catch (err) {
-          // Ignore lookup error, treat as raw string
+        }
+      }
+
+      // Validate and Normalize Subcategory
+      let subcategoryData = { name: '' };
+      if (subcategory) {
+        if (typeof subcategory === 'object') {
+          subcategoryData = {
+            name: subcategory.name || '',
+            description: subcategory.description || '',
+            imageUrl: subcategory.imageUrl || ''
+          };
+        } else if (typeof subcategory === 'string') {
+          const objectIdPattern = /^[0-9a-fA-F]{24}$/;
+          if (objectIdPattern.test(subcategory)) {
+            try {
+              const SubCategory = require("../../../models/subcategory.model");
+              const subDoc = await SubCategory.findById(subcategory);
+              if (subDoc) {
+                subcategoryData = {
+                  name: subDoc.title,
+                  description: subDoc.description,
+                  imageUrl: subDoc.image
+                };
+              }
+            } catch (err) { console.error("Subcategory lookup failed", err); }
+          } else {
+            subcategoryData = { name: subcategory };
+          }
         }
       }
 
@@ -410,9 +453,9 @@ exports.signup = async (req, res, next) => {
         email: email.toLowerCase(),
         phone: normalizedMobile,
         mobile: normalizedMobile,
-        
-        category: categoryName,
-        subcategory: subcategory || '',
+
+        category: categoryData,
+        subcategory: subcategoryData,
         status: 'Pending'
       });
 
@@ -460,7 +503,7 @@ exports.signup = async (req, res, next) => {
         fullName,
         email: email.toLowerCase(),
         mobile: normalizedMobile,
-       
+
         status: 'Active'
       });
 

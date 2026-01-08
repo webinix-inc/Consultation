@@ -428,11 +428,25 @@ const AppointmentManagementConsultant: React.FC = () => {
       const dateStr = start ? start.toLocaleDateString() : it.date ? new Date(it.date).toLocaleDateString() : "";
       const timeStr = start && end ? `${formatToDisplay(start)} to ${formatToDisplay(end)}` : "";
 
+      let resolvedCategory = it.category;
+      if (!resolvedCategory || resolvedCategory === "N/A" || resolvedCategory === "General") {
+        const snapCat = it.consultantSnapshot?.category;
+        if (snapCat) {
+          resolvedCategory = typeof snapCat === 'object' ? (snapCat.name || snapCat.title || "General") : snapCat;
+        } else {
+          const liveCat = it.consultant?.category;
+          if (liveCat) {
+            resolvedCategory = typeof liveCat === 'object' ? (liveCat.name || liveCat.title || "General") : liveCat;
+          }
+        }
+      }
+      resolvedCategory = resolvedCategory || "General";
+
       return {
         id: it._id || it.id,
         client: it.clientName || (typeof it.client === "string" ? it.client : it.client?.fullName || it.client?.name) || "Client",
         consultant: it.consultantName || (typeof it.consultant === "string" ? it.consultant : it.consultant?.fullName || it.consultant?.name) || "NA",
-        category: it.category || "N/A",
+        category: resolvedCategory,
         session: it.session || "Video Call",
         date: dateStr,
         time: timeStr,

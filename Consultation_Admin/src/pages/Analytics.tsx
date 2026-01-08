@@ -24,6 +24,7 @@ const AnalyticsDashboard: React.FC = () => {
     },
   });
 
+  console.log("ddata", data?.data.topConsultants);
   const analyticsData = data?.data || {};
   const revenueBreakdown = analyticsData.revenueBreakdown || {};
   const categoryData = analyticsData.categoryPerformance || [];

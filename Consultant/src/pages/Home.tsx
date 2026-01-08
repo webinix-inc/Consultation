@@ -567,7 +567,13 @@ export default function AIOBHero() {
                     </div>
                     <div className="p-6 flex-grow flex flex-col">
                       <h3 className="text-xl font-bold text-[#071530] mb-1">{consultantName}</h3>
-                      <p className="text-blue-600 font-medium text-sm mb-4">{consultant.category || "Consultant"}</p>
+                      <p className="text-blue-600 font-medium text-sm mb-4">
+                        {String(
+                          (typeof consultant.category === "object"
+                            ? consultant.category?.title || consultant.category?.name
+                            : consultant.category) || "Consultant"
+                        )}
+                      </p>
 
                       <div className="space-y-2 mb-6">
                         <div className="flex items-center gap-3 text-slate-500 text-sm">

@@ -1218,64 +1218,7 @@ export default function Profile() {
               </div>
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-                <div>
-                  <Label className="text-xs text-muted-foreground mb-1 block">
-                    Category
-                  </Label>
-                  <Select
-                    value={form.category}
-                    disabled={disabled}
-                    onValueChange={(val) => setForm({ ...form, category: val, subcategory: "" })}
-                  >
-                    <SelectTrigger className="h-9">
-                      <SelectValue placeholder="Select Category" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {categories.map((cat: any) => (
-                        <SelectItem key={cat._id} value={cat.title}>
-                          {cat.title}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground mb-1 block">
-                    Subcategory
-                  </Label>
-                  <Select
-                    value={form.subcategory}
-                    disabled={disabled || !form.category}
-                    onValueChange={(val) => setForm({ ...form, subcategory: val })}
-                  >
-                    <SelectTrigger className="h-9">
-                      <SelectValue placeholder="Select Subcategory" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {subcategories
-                        .filter((sub: any) => {
-                          if (!form.category) return false;
-                          // Find ID of currently selected category title
-                          const selectedCat = categories.find((c: any) => c.title === form.category);
-                          if (!selectedCat) return false;
 
-                          // Handle parentCategory variations (ID string vs object)
-                          const pVal = sub.parentCategory;
-                          const pId = typeof pVal === 'object' && pVal !== null ? pVal._id : pVal;
-
-                          // Also check legacy categoryId field if present
-                          const cId = sub.categoryId;
-
-                          return String(pId) === String(selectedCat._id) || String(cId) === String(selectedCat._id);
-                        })
-                        .map((sub: any) => (
-                          <SelectItem key={sub._id} value={sub.title}>
-                            {sub.title}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
-                </div>
                 <div>
                   <Label className="text-xs text-muted-foreground mb-1 block">
                     Full Name

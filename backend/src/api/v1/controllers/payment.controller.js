@@ -205,8 +205,25 @@ exports.verifyPayment = async (req, res, next) => {
           const clientName = client?.fullName || "Client";
 
           // Get consultant name
-          const consultant = await User.findById(appointment.consultant);
-          const consultantName = consultant?.fullName || "Consultant";
+          const consultantUser = await User.findById(appointment.consultant);
+          let consultantName = consultantUser?.fullName || consultantUser?.name || consultantUser?.displayName || "Consultant";
+
+          // Try to get better name from Consultant profile if possible
+          if (consultantName === "Consultant") {
+            const ConsultantModel = require("../../../models/consultant.model").Consultant;
+            const consultantProfile = await ConsultantModel.findOne({ user: appointment.consultant });
+            if (consultantProfile) {
+              const combinedName = `${consultantProfile.firstName || ""} ${consultantProfile.lastName || ""}`.trim();
+              consultantName = consultantProfile.name || consultantProfile.fullName || consultantProfile.displayName || combinedName || consultantName;
+            } else {
+              // Fallback 2: Check if appointment.consultant is directly the Consultant Profile ID (not User ID)
+              const consultantProfileDirect = await ConsultantModel.findById(appointment.consultant);
+              if (consultantProfileDirect) {
+                const combinedName = `${consultantProfileDirect.firstName || ""} ${consultantProfileDirect.lastName || ""}`.trim();
+                consultantName = consultantProfileDirect.name || consultantProfileDirect.fullName || consultantProfileDirect.displayName || combinedName || consultantName;
+              }
+            }
+          }
 
           // Payment success notification for client
           await NotificationService.notifyPaymentSuccess(
@@ -214,12 +231,17 @@ exports.verifyPayment = async (req, res, next) => {
             clientName
           );
 
-          // Payment received notification for consultant
-          await NotificationService.notifyPaymentReceived(
-            transaction.toObject(),
-            clientName,
-            appointment.consultant
-          );
+          // Payment received notification for consultant - REMOVED (Agency Model)
+          // instead notify Admin
+          try {
+            await NotificationService.notifyAdminPaymentReceived(
+              transaction.toObject(),
+              clientName,
+              consultantName
+            );
+          } catch (adminNotifErr) {
+            console.error("Failed to send admin payment notification:", adminNotifErr);
+          }
 
           // Appointment confirmed notifications
           await NotificationService.notifyAppointmentBooked(

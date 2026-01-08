@@ -52,12 +52,14 @@ const registerSchema = Joi.object({
   fullName: Joi.string().min(2).max(50).required(),
   email: Joi.string().email().required(),
   role: Joi.string().valid("Consultant", "Client").required(),
-  category: Joi.string()
-    .pattern(/^[0-9a-fA-F]{24}$/)
-    .optional(),
-  subcategory: Joi.string()
-    .pattern(/^[0-9a-fA-F]{24}$/)
-    .optional(),
+  category: Joi.alternatives().try(
+    Joi.string(),
+    Joi.object()
+  ).optional(),
+  subcategory: Joi.alternatives().try(
+    Joi.string(),
+    Joi.object()
+  ).optional(),
 });
 
 const signupSchema = Joi.object({
@@ -82,8 +84,8 @@ const signupSchema = Joi.object({
     "any.only": "Role must be either Client or Consultant",
     "any.required": "Role is required",
   }),
-  category: Joi.string().optional(),
-  subcategory: Joi.string().optional(),
+  category: Joi.alternatives().try(Joi.string(), Joi.object()).optional(),
+  subcategory: Joi.alternatives().try(Joi.string(), Joi.object()).optional(),
 });
 
 module.exports = {

@@ -139,7 +139,11 @@ const AdminDashboard: React.FC = () => {
       .map((expert: any) => ({
         id: expert._id || expert.id,
         name: expert.name || expert.fullName || "Consultant",
-        field: expert.category || "General",
+        field: String(
+          (typeof expert.category === "object"
+            ? (expert.category as any)?.title || (expert.category as any)?.name
+            : expert.category) || "General"
+        ),
         // Map status to UI friendly string
         status: (expert.status === 'Active' || expert.status === 'Approved') ? "Available" : "Unavailable"
       }));
@@ -205,7 +209,13 @@ const AdminDashboard: React.FC = () => {
         up: true,
         icon: Calendar,
         stroke: "#f97316",
-        data: sparklineData("appt"),
+        data: (() => {
+          const activity = data?.data?.activityTrend || [];
+          if (activity.length > 0) {
+            return activity.map((val: number, i: number) => ({ x: i, y: val }));
+          }
+          return sparklineData("appt");
+        })(),
       },
       {
         id: "clients",
@@ -371,7 +381,11 @@ const AdminDashboard: React.FC = () => {
                 </div>
                 <div className="flex items-center gap-6">
                   <span className="text-xs px-2.5 py-1 bg-gray-100 rounded-full text-gray-600 font-medium">
-                    {a.category}
+                    {String(
+                      (typeof a.category === "object"
+                        ? (a.category as any)?.title || (a.category as any)?.name
+                        : a.category) || "General"
+                    )}
                   </span>
                   <div className="text-right min-w-[90px]">
                     <div className="text-xs text-gray-500">{formatDate(a.date)}</div>

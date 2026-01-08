@@ -217,7 +217,7 @@ exports.createAppointment = async (req, res, next) => {
       consultant: consultantUserId || value.consultant, // Use User ID if available, otherwise Consultant ID
       clientSnapshot,
       consultantSnapshot,
-      category: value.category || "General",
+      category: value.category || consultantSnapshot.category || "General",
       session: value.session || "Video Call",
       date: value.date || startAt.toISOString().split("T")[0],
       // Legacy fields removed - they are no longer in the schema
@@ -252,18 +252,24 @@ exports.createAppointment = async (req, res, next) => {
     await appointment.populate("consultant", "fullName email mobile role");
 
     // Trigger Notifications for both Consultant and Client using NotificationService
-    try {
-      const NotificationService = require("../../../services/notificationService");
-      const clientName = client.fullName || client.name || "Client";
-      const consultantName = consultantDoc?.fullName || consultantDoc?.name || consultantDoc?.displayName || "Consultant";
+    // Only trigger duplication notification if NO payment is required (fee is 0)
+    // If fee > 0, it's a paid appointment and notification will be sent after payment verification
+    const isPaidAppointment = appointment.fee && appointment.fee > 0;
 
-      await NotificationService.notifyAppointmentBooked(
-        { ...doc, _id: appointment._id, client: value.client, consultant: consultantUserId },
-        clientName,
-        consultantName
-      );
-    } catch (notifErr) {
-      console.error("Failed to create appointment notifications:", notifErr);
+    if (!isPaidAppointment) {
+      try {
+        const NotificationService = require("../../../services/notificationService");
+        const clientName = client.fullName || client.name || "Client";
+        const consultantName = consultantDoc?.fullName || consultantDoc?.name || consultantDoc?.displayName || "Consultant";
+
+        await NotificationService.notifyAppointmentBooked(
+          { ...doc, _id: appointment._id, client: value.client, consultant: consultantUserId },
+          clientName,
+          consultantName
+        );
+      } catch (notifErr) {
+        console.error("Failed to create appointment notifications:", notifErr);
+      }
     }
 
     // 5. Handle Payment & Transaction Creation (if payment details provided)
@@ -473,7 +479,8 @@ exports.getAppointments = async (req, res, next) => {
             fullName: consultantData.fullName || consultantData.name || consultantData.displayName,
             email: consultantData.email,
             mobile: consultantData.mobile || consultantData.phone,
-            role: "Consultant"
+            role: "Consultant",
+            category: consultantData.category?.name || "General",
           } : null,
         };
       })

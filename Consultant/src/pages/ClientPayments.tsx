@@ -227,9 +227,11 @@ export default function ClientPayments() {
         id: t._id,
         initials: getInitials(t.consultantSnapshot?.name || t.consultant?.fullName || t.consultant?.name || "Unknown"),
         doctor: t.consultantSnapshot?.name || t.consultant?.fullName || t.consultant?.name || "Unknown",
-        dept: t.consultantSnapshot?.category || t.consultant?.category || "General",
+        dept: (typeof (t.consultantSnapshot?.category || t.consultant?.category) === 'object'
+            ? (t.consultantSnapshot?.category?.name || t.consultant?.category?.name)
+            : (t.consultantSnapshot?.category || t.consultant?.category)) || "General",
         status: t.status,
-        title: `${t.consultantSnapshot?.subcategory || t.consultant?.subcategory || t.consultant?.title || "Consultation"} • ${t.appointment?.reason || "Session"}`,
+        title: `${(typeof (t.consultantSnapshot?.subcategory || t.consultant?.subcategory) === 'object' ? (t.consultantSnapshot?.subcategory?.name || t.consultant?.subcategory?.name) : (t.consultantSnapshot?.subcategory || t.consultant?.subcategory)) || t.consultant?.title || "Consultation"} • ${t.appointment?.reason || "Session"}`,
         date: new Date(t.createdAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
         method: t.paymentMethod,
         txn: t.transactionId || "N/A",

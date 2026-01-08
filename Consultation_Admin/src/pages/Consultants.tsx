@@ -263,14 +263,17 @@ const ConsultantCard: React.FC<{
   const displayName = user.fullName || "Consultant";
   const email = user.email || "—";
   const mobile = user.mobile || "—";
-  const categoryLabel =
-    typeof user.category === "string"
-      ? user.category || "General"
-      : (user.category as any)?.name || (user.category as Category)?.title || "General";
-  const subcategoryLabel =
-    typeof user.subcategory === "string"
-      ? user.subcategory || ""
-      : (user.subcategory as any)?.name || (user.subcategory as Subcategory)?.title || "";
+  const getLabel = (val: any) => {
+    if (!val) return "";
+    if (typeof val === "string") return val;
+    if (typeof val === "object") {
+      const label = val.name || val.title || "";
+      return typeof label === "string" ? label : "";
+    }
+    return "";
+  };
+  const categoryLabel = getLabel(user.category) || "General";
+  const subcategoryLabel = getLabel(user.subcategory);
   const yearsOfExperience = user.yearsOfExperience ?? 0;
   const location =
     user.city && user.state
@@ -328,10 +331,10 @@ const ConsultantCard: React.FC<{
       <div className="flex justify-between items-start mb-4">
         <div className="flex flex-col">
           <div className="text-sm font-semibold text-gray-800">
-            {categoryLabel}{" "}
+            {String(categoryLabel)}{" "}
             {subcategoryLabel && (
               <span className="text-gray-500 font-normal">
-                ({subcategoryLabel})
+                ({String(subcategoryLabel)})
               </span>
             )}
           </div>
@@ -371,7 +374,7 @@ const ConsultantCard: React.FC<{
           {displayName}
         </h3>
         <p className="text-sm text-gray-500 text-center">
-          {subcategoryLabel || categoryLabel}
+          {String(subcategoryLabel || categoryLabel)}
         </p>
       </div>
 
