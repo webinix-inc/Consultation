@@ -15,11 +15,17 @@ const createAppointmentSchema = Joi.object({
   reason: Joi.string().allow("", null),
   notes: Joi.string().allow("", null),
   fee: Joi.number().min(0).optional(),
+  holdId: Joi.string().optional(),
   payment: Joi.object({
     amount: Joi.number().min(0).optional(),
     status: Joi.string().valid("Pending", "Success", "Failed").optional(),
     method: Joi.string().optional(),
     transactionId: Joi.string().optional(),
+    razorpayResponse: Joi.object({
+      razorpay_order_id: Joi.string().required(),
+      razorpay_payment_id: Joi.string().required(),
+      razorpay_signature: Joi.string().required(),
+    }).optional(),
   }).optional(),
 });
 

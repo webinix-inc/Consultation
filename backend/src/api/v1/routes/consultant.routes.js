@@ -71,6 +71,24 @@ router.post(
   controller.reject
 );
 
+// POST /api/v1/consultants/:id/block
+router.post(
+  "/:id/block",
+  authenticateToken,
+  authorizeRoles("Admin"),
+  validateParams(consultantIdSchema),
+  controller.block
+);
+
+// POST /api/v1/consultants/:id/unblock
+router.post(
+  "/:id/unblock",
+  authenticateToken,
+  authorizeRoles("Admin"),
+  validateParams(consultantIdSchema),
+  controller.unblock
+);
+
 module.exports = router;
 
 

@@ -6,11 +6,99 @@ const { sendSuccess, sendError, ApiError } = require("../../../utils/response");
 const httpStatus = require("../../../constants/httpStatus");
 const { createAppointmentSchema, updateAppointmentSchema, availableSlotsQuerySchema } = require("../validators/appointment.validator");
 const agoraService = require("../../../services/agora.service");
+const mongoose = require("mongoose");
+// const BookingHold = require("../../../models/bookingHold.model"); // Removed
+const crypto = require("crypto");
+const Transaction = require("../../../models/transaction.model");
 
 // Helper: parse "HH:mm" on dateISO -> Date
 function buildDateFromDateAndHHMM(dateISO, hhmm) {
   return new Date(`${dateISO}T${hhmm}:00`);
 }
+
+// Temporary Hold Slot (locks for 5 mins)
+exports.holdSlot = async (req, res, next) => {
+  try {
+    const { consultant, client, startAt, endAt, date, timeStart, timeEnd, amount } = req.body;
+
+    // Validate required fields
+    if (!consultant || !client) {
+      throw new ApiError("Consultant and Client are required", httpStatus.BAD_REQUEST);
+    }
+
+    // Determine start/end times
+    let start = startAt ? new Date(startAt) : null;
+    let end = endAt ? new Date(endAt) : null;
+
+    if (!start && date && timeStart) {
+      start = buildDateFromDateAndHHMM(date, timeStart);
+      if (timeEnd) {
+        end = buildDateFromDateAndHHMM(date, timeEnd);
+      } else {
+        end = new Date(start.getTime() + 60 * 60 * 1000); // default 60 mins
+      }
+    }
+
+    if (!start || !end) {
+      throw new ApiError("Invalid time provided", httpStatus.BAD_REQUEST);
+    }
+
+    if (start < new Date()) {
+      throw new ApiError("Cannot hold slots in the past", httpStatus.BAD_REQUEST);
+    }
+    // 0. Check if Client ALREADY has a hold on this slot (Retry Payment Case)
+    // If exact same consultant, client, start, end exists and is 'Hold', reuse it.
+    const existingHold = await Appointment.findOne({
+      consultant,
+      client,
+      startAt: start,
+      endAt: end,
+      status: "Hold",
+      expiresAt: { $gt: new Date() }
+    });
+
+    if (existingHold) {
+      // Extend the hold time since they are retrying
+      existingHold.expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+      await existingHold.save();
+
+      return sendSuccess(res, "Slot hold refreshed", {
+        holdId: existingHold._id,
+        expiresAt: existingHold.expiresAt,
+      });
+    }
+
+    // 1. Check Availability (standard conflict check)
+    // Note: hasConflict checks 'Hold' status too. 
+    // Since we didn't find *our* hold above, any conflict found here is someone else's.
+    const hasConflict = await Appointment.hasConflict(consultant, start, end);
+    if (hasConflict) {
+      return res.status(httpStatus.CONFLICT).json({
+        success: false,
+        message: "Slot is already booked or held by another user",
+      });
+    }
+
+    // Create Booking Hold (Appointment with status 'Hold' and TTL)
+    const hold = await Appointment.create({
+      consultant,
+      client,
+      startAt: start,
+      endAt: end,
+      fee: amount || 0,
+      payment: { amount: amount || 0, status: "Pending" },
+      status: "Hold", // New status
+      expiresAt: new Date(Date.now() + 5 * 60 * 1000), // 5 minutes TTL
+    });
+
+    return sendSuccess(res, "Slot held successfully", {
+      holdId: hold._id,
+      expiresAt: hold.expiresAt,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
 
 // Create new appointment - with role-based validation
 // Create new appointment - with role-based validation
@@ -179,18 +267,109 @@ exports.createAppointment = async (req, res, next) => {
     // Prevent booking appointments in the past
     const now = new Date();
     if (startAt < now) {
-      throw new ApiError("Cannot book appointments in the past", httpStatus.BAD_REQUEST);
+      // Allow a small grace period (e.g., 1 minute) for network latency if strictly checking "now"
+      if (now.getTime() - startAt.getTime() > 60000) {
+        throw new ApiError("Cannot book appointments in the past", httpStatus.BAD_REQUEST);
+      }
     }
 
-    // Conflict detection: use model static
-    const hasConflict = await Appointment.hasConflict(value.consultant, startAt, endAt);
-    if (hasConflict) {
-      // Return 409 Conflict
-      return res.status(httpStatus.CONFLICT).json({
-        success: false,
-        message: "Time slot not available for this consultant",
-        code: httpStatus.CONFLICT,
-      });
+    // 🔴 1. Handle Hold Verification (If holdId provided)
+    if (value.holdId) {
+      // Find the existing HOLD appointment
+      const holdAppointment = await Appointment.findById(value.holdId);
+
+      if (!holdAppointment) {
+        throw new ApiError("Booking hold expired or invalid", httpStatus.BAD_REQUEST);
+      }
+
+      if (holdAppointment.status !== "Hold") {
+        // It might be already confirmed or cancelled
+        if (holdAppointment.status === "Upcoming") {
+          return sendSuccess(res, "Appointment already confirmed", holdAppointment);
+        }
+        throw new ApiError("Invalid booking status", httpStatus.BAD_REQUEST);
+      }
+
+      // Verify hold matches request details (basic security)
+      // (Optional strict checks here)
+
+      // 🔴 2. Verify Payment for Hold (If payment required)
+      if (value.payment && value.payment.razorpayResponse) {
+        const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = value.payment.razorpayResponse;
+
+        // Verify Signature
+        const text = `${razorpay_order_id}|${razorpay_payment_id}`;
+        const generatedSignature = crypto
+          .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET || "")
+          .update(text)
+          .digest("hex");
+
+        if (generatedSignature !== razorpay_signature) {
+          throw new ApiError("Invalid payment signature", httpStatus.BAD_REQUEST);
+        }
+
+        // Update Transaction to Success
+        const transaction = await Transaction.findOne({
+          "metadata.razorpayOrderId": razorpay_order_id
+        });
+
+        if (transaction) {
+          transaction.status = "Success";
+          transaction.transactionId = razorpay_payment_id;
+          transaction.appointment = holdAppointment._id; // Link transaction to appointment
+          transaction.metadata = {
+            ...transaction.metadata,
+            razorpayPaymentId: razorpay_payment_id,
+            razorpaySignature: razorpay_signature,
+            verifiedAt: new Date(),
+          };
+          await transaction.save();
+
+          // Prepare payment object for appointment
+          holdAppointment.payment = {
+            amount: transaction.amount,
+            status: "Success",
+            method: "Razorpay",
+            transactionId: transaction._id
+          };
+        }
+      }
+
+      // Convert HOLD to UPCOMING
+      holdAppointment.status = "Upcoming";
+      holdAppointment.reason = value.reason || holdAppointment.reason;
+      holdAppointment.notes = value.notes || holdAppointment.notes;
+      holdAppointment.session = value.session || holdAppointment.session;
+
+      // IMPORTANT: Remove expiresAt so it doesn't get deleted
+      holdAppointment.expiresAt = undefined;
+      // Also update snapshots if needed from request
+      if (value.clientSnapshot) holdAppointment.clientSnapshot = value.clientSnapshot;
+      if (value.consultantSnapshot) holdAppointment.consultantSnapshot = value.consultantSnapshot;
+
+      await holdAppointment.save();
+
+      // Trigger Notifications / Agora manually since we aren't creating new
+      try {
+        const channelName = agoraService.generateChannelName(holdAppointment._id.toString());
+        holdAppointment.agora = { channelName };
+        await holdAppointment.save();
+      } catch (err) {
+        console.error("Agora Error:", err);
+      }
+
+      return sendSuccess(res, "Appointment confirmed successfully", holdAppointment, httpStatus.CREATED);
+
+    } else {
+      // Legacy/Direct path: Check conflict as usual
+      const hasConflict = await Appointment.hasConflict(value.consultant, startAt, endAt);
+      if (hasConflict) {
+        return res.status(httpStatus.CONFLICT).json({
+          success: false,
+          message: "Time slot not available for this consultant",
+          code: httpStatus.CONFLICT,
+        });
+      }
     }
 
     // Prepare snapshots for historical data preservation
@@ -230,6 +409,9 @@ exports.createAppointment = async (req, res, next) => {
     };
 
     const appointment = await Appointment.create(doc);
+    // (No need to delete hold, we used creating a new one above. But if we are in the ELSE block, we create new.)
+    // Wait, the logic above in `if (value.holdId)` returns early.
+    // So this `Appointment.create` is only for the `else` block (direct creation without hold).
 
     // ✅ Generate Agora channel name and store in appointment
     try {
@@ -391,6 +573,8 @@ exports.getAppointments = async (req, res, next) => {
 
     // Additional filters
     if (status) query.status = status;
+    else query.status = { $ne: "Hold" }; // Default: hide "Hold" appointments
+
     if (consultant && userRole === "Admin") query.consultant = consultant; // Only admin can filter by consultant
     if (client && (userRole === "Admin" || userRole === "Consultant")) query.client = client; // Admin and Consultant can filter by client
 
@@ -976,7 +1160,8 @@ exports.getAvailableSlots = async (req, res, next) => {
     }
     if (!consultantExists) throw new ApiError("Consultant not found", httpStatus.NOT_FOUND);
 
-    const slots = await Appointment.getAvailableSlots(consultant, date, { slotDurationMin, startHour, endHour });
+    const clientId = req.user ? (req.user._id || req.user.id) : null;
+    const slots = await Appointment.getAvailableSlots(consultant, date, { slotDurationMin, startHour, endHour, clientId });
 
     return sendSuccess(res, "Available slots fetched", slots);
   } catch (error) {

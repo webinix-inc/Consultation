@@ -39,8 +39,14 @@ const appointmentSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["Upcoming", "Completed", "Cancelled"],
+      enum: ["Upcoming", "Completed", "Cancelled", "Hold"],
       default: "Upcoming",
+    },
+
+    // TTL for "Hold" status (automatically deleted if not confirmed)
+    expiresAt: {
+      type: Date,
+      index: { expireAfterSeconds: 0 },
     },
 
     reminderSent: {
@@ -169,9 +175,9 @@ appointmentSchema.statics.hasConflict = async function (id, startAt, endAt, excl
     query._id = { $ne: excludeAppointmentId };
   }
 
-  // Count conflicting documents directly
-  const count = await this.countDocuments(query);
-  return count > 0;
+  // Check Appointments (Upcoming, Completed, Hold)
+  const appointmentCount = await this.countDocuments(query);
+  return appointmentCount > 0;
 };
 
 // Static: get available slots for consultant on a date
@@ -193,20 +199,29 @@ appointmentSchema.statics.getAvailableSlots = async function (id, dateISO /* "YY
   const queryStart = new Date(new Date(`${dateISO}T00:00:00`).getTime() - 24 * 60 * 60 * 1000);
   const queryEnd = new Date(new Date(`${dateISO}T23:59:59`).getTime() + 24 * 60 * 60 * 1000);
 
-  // Fetch appointments for the consultant that overlap this broad range
-  const appts = await this.find({
-    status: { $ne: "Cancelled" },
+  // Fetch appointments (including Holds) for the consultant that overlap this broad range
+  const query = {
+    status: { $ne: "Cancelled" }, // Includes 'Upcoming', 'Completed', 'Hold'
     $or: [
       { consultant: consultantId },
       { consultant: userId }
     ],
     startAt: { $gte: queryStart, $lte: queryEnd }
-  }).select("startAt endAt").lean();
+  };
+
+  const appts = await this.find(query).select("startAt endAt status client").lean();
 
   // Convert appointments into ranges for overlap checks
+  // If a slot is "Hold" AND belongs to the requesting client, treat it as FREE (ignore it)
   const busyRanges = [];
+  const reqClientIdStr = options.clientId ? String(options.clientId) : null;
+
   for (const ap of appts) {
     if (ap.startAt && ap.endAt) {
+      if (ap.status === "Hold" && reqClientIdStr && String(ap.client) === reqClientIdStr) {
+        // This is MY hold, so I can see it as available to re-book/pay
+        continue;
+      }
       busyRanges.push({ start: new Date(ap.startAt), end: new Date(ap.endAt) });
     }
   }

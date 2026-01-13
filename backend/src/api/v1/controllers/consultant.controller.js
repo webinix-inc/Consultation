@@ -355,3 +355,37 @@ exports.reject = async (req, res, next) => {
     next(error);
   }
 };
+
+exports.block = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const updated = await Consultant.findByIdAndUpdate(
+      id,
+      { status: "Blocked" },
+      { new: true }
+    );
+    if (!updated) {
+      throw new ApiError("Consultant not found", httpStatus.NOT_FOUND);
+    }
+    return sendSuccess(res, "Consultant blocked", updated);
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.unblock = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const updated = await Consultant.findByIdAndUpdate(
+      id,
+      { status: "Active" },
+      { new: true }
+    );
+    if (!updated) {
+      throw new ApiError("Consultant not found", httpStatus.NOT_FOUND);
+    }
+    return sendSuccess(res, "Consultant unblocked", updated);
+  } catch (error) {
+    next(error);
+  }
+};

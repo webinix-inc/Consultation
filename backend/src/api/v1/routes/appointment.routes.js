@@ -14,6 +14,7 @@ router.get("/available-slots", authenticateToken, authorizeRoles("Admin", "Consu
 router.get("/:id", authenticateToken, authorizeRoles("Admin", "Consultant", "Client"), appointmentController.getAppointmentById);
 
 // Create (allow Client and Consultant roles)
+router.post("/hold", authenticateToken, authorizeRoles("Client", "Consultant"), appointmentController.holdSlot);
 router.post("/", authenticateToken, authorizeRoles("Admin", "Consultant", "Client"), appointmentController.createAppointment);
 
 // Update (allow Client and Consultant roles)

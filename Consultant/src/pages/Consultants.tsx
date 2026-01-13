@@ -509,37 +509,36 @@ export default function Consultants() {
       const startAtDate = new Date(`${selectedDateISO}T${startHH}:${startMM}:00`);
       const endAtDate = new Date(`${selectedDateISO}T${endHH}:${endMM}:00`);
 
-      // Step 1: Create appointment with pending payment
-      const appointmentPayload = {
-        client: sched.client,
-        consultant: consultantId,
-        category,
-        session: sched.session,
-        startAt: startAtDate.toISOString(),
-        endAt: endAtDate.toISOString(),
-        status: "Upcoming",
-        reason: sched.reason || "",
-        notes: sched.notes || "",
-        fee: fee,
-      };
+      // Step 1: Hold the slot
+      let holdId: string | null = null;
+      try {
+        const holdResponse = await AppointmentAPI.holdSlot({
+          consultant: consultantId,
+          client: sched.client,
+          date: selectedDateISO,
+          timeStart: startHH + ":" + startMM, // Pass time range or start/end dates
+          timeEnd: endHH + ":" + endMM,
+          amount: fee
+        });
 
-      const appointmentResponse = await AppointmentAPI.create(appointmentPayload);
-      const appointmentId = appointmentResponse?.data?._id || appointmentResponse?._id || appointmentResponse?.data?.id;
-
-      if (!appointmentId) {
-        toast.error("Failed to create appointment. Please try again");
+        if (holdResponse && (holdResponse.data?.holdId || holdResponse.holdId)) {
+          holdId = holdResponse.data?.holdId || holdResponse.holdId;
+        } else {
+          throw new Error("Failed to secure slot. Please try again.");
+        }
+      } catch (holdError: any) {
+        console.error("Error holding slot:", holdError);
+        toast.error(holdError?.message || "Slot is not available. Please try another time.");
         setIsProcessingPayment(false);
         return;
       }
 
-      setPendingAppointmentId(appointmentId);
-
-      // Step 2: Create Razorpay order
+      // Step 2: Create Razorpay order using holdId (no appointment created yet)
       let orderResponse;
       try {
         orderResponse = await PaymentAPI.createOrder({
           amount: fee,
-          appointmentId: appointmentId,
+          holdId: holdId, // Pass holdId instead of appointmentId
           consultantId: consultantId,
           clientId: sched.client,
         });
@@ -547,10 +546,6 @@ export default function Consultants() {
         console.error("Error creating Razorpay order:", orderError);
         toast.error(orderError?.response?.data?.message || "Failed to initialize payment. Please try again");
         setIsProcessingPayment(false);
-        // Clean up pending appointment
-        if (appointmentId) {
-          AppointmentAPI.remove(appointmentId).catch(console.error);
-        }
         return;
       }
 
@@ -562,10 +557,6 @@ export default function Consultants() {
       if (!razorpayOrderId || !razorpayKey) {
         toast.error("Payment gateway initialization failed. Please try again");
         setIsProcessingPayment(false);
-        // Clean up pending appointment
-        if (appointmentId) {
-          AppointmentAPI.remove(appointmentId).catch(console.error);
-        }
         return;
       }
 
@@ -581,17 +572,36 @@ export default function Consultants() {
         order_id: razorpayOrderId,
         handler: async function (response: any) {
           try {
-            // Step 4: Verify payment
-            await PaymentAPI.verifyPayment({
-              razorpay_order_id: response.razorpay_order_id,
-              razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_signature: response.razorpay_signature,
-              transactionId: transactionId,
-              appointmentId: appointmentId,
-            });
+            // Step 4: Create Appointment after Payment Success
+            // We pass the holdId and the payment proof to createAppointment
+            const appointmentPayload = {
+              client: sched.client,
+              consultant: consultantId,
+              category,
+              session: sched.session,
+              startAt: startAtDate.toISOString(),
+              endAt: endAtDate.toISOString(),
+              status: "Upcoming",
+              reason: sched.reason || "",
+              notes: sched.notes || "",
+              fee: fee,
+              holdId: holdId, // Critical: confirm this hold
+              payment: {
+                razorpayResponse: {
+                  razorpay_order_id: response.razorpay_order_id,
+                  razorpay_payment_id: response.razorpay_payment_id,
+                  razorpay_signature: response.razorpay_signature
+                }
+              }
+            };
+
+            const appointmentResponse = await AppointmentAPI.create(appointmentPayload);
 
             toast.success("Payment successful! Appointment confirmed.");
             queryClient.invalidateQueries({ queryKey: ["appointments"] });
+            // Refresh available slots for this consultant
+            queryClient.invalidateQueries({ queryKey: ["available-slots", "consultant", sched.consultant, selectedDateISO] });
+
             setShowBookingModal(false);
             setShowConfirmModal(false);
             setSelectedConsultant(null);
@@ -609,8 +619,8 @@ export default function Consultants() {
             });
             setSelectedCategoryForBooking("");
           } catch (error: any) {
-            console.error("Payment verification error:", error);
-            toast.error(error?.response?.data?.message || "Payment verification failed");
+            console.error("Booking confirmation error:", error);
+            toast.error(error?.response?.data?.message || "Payment successful but booking failed. Please contact support.");
             setIsProcessingPayment(false);
           }
         },
@@ -626,10 +636,7 @@ export default function Consultants() {
           ondismiss: function () {
             toast.error("Payment cancelled");
             setIsProcessingPayment(false);
-            // Optionally delete the pending appointment
-            if (appointmentId) {
-              AppointmentAPI.remove(appointmentId).catch(console.error);
-            }
+            // Hold will expire automatically
           },
         },
       };

@@ -770,6 +770,32 @@ const ConsultantDashboard = () => {
     },
   });
 
+  const { mutate: approveConsultant } = useMutation({
+    mutationFn: (id: string) => ConsultantAPI.approve(id),
+    onSuccess: () => {
+      toast.success("Consultant approved successfully");
+      queryClient.invalidateQueries({ queryKey: ["consultant", userId] });
+      queryClient.invalidateQueries({ queryKey: ["consultants"] });
+      navigate("/consultants");
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.message || "Failed to approve consultant");
+    },
+  });
+
+  const { mutate: rejectConsultant } = useMutation({
+    mutationFn: (id: string) => ConsultantAPI.reject(id),
+    onSuccess: () => {
+      toast.success("Consultant rejected");
+      queryClient.invalidateQueries({ queryKey: ["consultant", userId] });
+      queryClient.invalidateQueries({ queryKey: ["consultants"] });
+      navigate("/consultants");
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.message || "Failed to reject consultant");
+    },
+  });
+
   const handleSave = () => {
     if (!consultant) {
       toast.error("Consultant data not available");
@@ -943,11 +969,33 @@ const ConsultantDashboard = () => {
             )}
             {activeTab === "profile" && (
               <div className="space-y-5">
-                <div>
-                  <h1 className="text-xl font-semibold">Consultant Profile</h1>
-                  <p className="text-xs text-muted-foreground">
-                    Home » Consultant Profile
-                  </p>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h1 className="text-xl font-semibold">Consultant Profile</h1>
+                    <p className="text-xs text-muted-foreground">
+                      Home » Consultant Profile
+                    </p>
+                  </div>
+                  {(user?.verificationStatus === "Pending" || user?.status === "Pending" || user?.verificationStatus === "Inactive") && (
+                    <div className="flex gap-2">
+                      <Button
+                        className="bg-green-600 hover:bg-green-700 text-white"
+                        onClick={() => {
+                          if (consultantId) approveConsultant(consultantId);
+                        }}
+                      >
+                        Approve
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        onClick={() => {
+                          if (consultantId) rejectConsultant(consultantId);
+                        }}
+                      >
+                        Reject
+                      </Button>
+                    </div>
+                  )}
                 </div>
 
                 <Tabs value={profileSubTab} onValueChange={(v) => setProfileSubTab(v as any)} className="w-full">

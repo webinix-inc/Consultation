@@ -11,11 +11,11 @@ import {
 
   Plus,
   Eye,
-  Link2,
-  ChevronDown,
+  Upload,
+  Ban,
+  LockOpen,
   Check,
   X,
-  Upload,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import UserAPI from "@/api/user.api";
@@ -81,6 +81,7 @@ interface User {
   state?: string;
   clientsCount?: number;
   profileImage?: string;
+  fees?: number;
 }
 
 interface ConsultantModel {
@@ -102,6 +103,7 @@ interface ConsultantModel {
   image?: string;
   category?: string;
   subcategory?: string;
+  fees?: number;
 }
 
 /* ============================
@@ -115,6 +117,7 @@ const initialConsultantForm = {
   category: "",
   subcategory: "",
   image: "",
+  fees: "",
 };
 
 const generateUserId = () => {
@@ -227,6 +230,28 @@ function useConsultants() {
     },
   });
 
+  const blockConsultantMutation = useMutation({
+    mutationFn: (id: string) => ConsultantAPI.block(id),
+    onSuccess: () => {
+      toast.success("Consultant blocked");
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ["consultants"] });
+      qc.invalidateQueries({ queryKey: ["users"] });
+    },
+  });
+
+  const unblockConsultantMutation = useMutation({
+    mutationFn: (id: string) => ConsultantAPI.unblock(id),
+    onSuccess: () => {
+      toast.success("Consultant unblocked");
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ["consultants"] });
+      qc.invalidateQueries({ queryKey: ["users"] });
+    },
+  });
+
   return {
     usersQuery,
     consultantsQuery,
@@ -237,6 +262,8 @@ function useConsultants() {
     updateUserMutation,
     approveConsultantMutation,
     rejectConsultantMutation,
+    blockConsultantMutation,
+    unblockConsultantMutation,
     invalidate: () => {
       qc.invalidateQueries({ queryKey: ["users"] });
       qc.invalidateQueries({ queryKey: ["consultants"] });
@@ -279,6 +306,7 @@ const ConsultantCard: React.FC<{
     user.city && user.state
       ? `${user.city}, ${user.state}`
       : user.city || user.state || "—";
+  const fees = (user as any).fees ?? 0;
   const currentStatus = user.status || "Active";
   const verificationStatus = user.verificationStatus || "Pending";
 
@@ -382,10 +410,10 @@ const ConsultantCard: React.FC<{
       <div className="grid grid-cols-2 gap-4 border-t border-b border-gray-100 py-4 mb-5">
         <div className="text-center border-r border-gray-100">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
-            Experience
+            Experience / Fee
           </p>
           <p className="text-sm font-bold text-gray-800">
-            {yearsOfExperience}+ Years
+            {yearsOfExperience}+ Yrs <span className="text-gray-400">|</span> ₹{fees}
           </p>
         </div>
         <div className="text-center">
@@ -442,6 +470,29 @@ const ConsultantCard: React.FC<{
               <X size={16} /> Reject
             </button>
           </div>
+        )}
+        {verificationStatus === "Active" && !isUpdating && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onStatusUpdate(id, "Blocked");
+            }}
+            className="w-full py-2.5 bg-red-100 hover:bg-red-200 text-red-700 text-sm font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
+          >
+            <Ban size={16} /> Block
+          </button>
+        )}
+
+        {verificationStatus === "Blocked" && !isUpdating && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onStatusUpdate(id, "Active"); // Unblock -> Active
+            }}
+            className="w-full py-2.5 bg-green-100 hover:bg-green-200 text-green-700 text-sm font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
+          >
+            <LockOpen size={16} /> Unblock
+          </button>
         )}
       </div>
     </motion.div>
@@ -517,6 +568,8 @@ const ConsultationManagement: React.FC = () => {
     updateUserMutation,
     approveConsultantMutation,
     rejectConsultantMutation,
+    blockConsultantMutation,
+    unblockConsultantMutation,
     invalidate,
   } = useConsultants();
 
@@ -562,6 +615,7 @@ const ConsultationManagement: React.FC = () => {
           category: c.category || null,
           subcategory: c.subcategory || null,
           profileImage: c.image || "",
+          fees: c.fees || 0,
         } as User;
       });
   }, [consultantsQuery.data]);
@@ -589,6 +643,7 @@ const ConsultationManagement: React.FC = () => {
           category: c.category || null,
           subcategory: c.subcategory || null,
           profileImage: c.image || "",
+          fees: c.fees || 0,
         } as User;
       });
   }, [consultantsQuery.data]);
@@ -713,6 +768,7 @@ const ConsultationManagement: React.FC = () => {
         category: payload.category || 'General',
         subcategory: payload.subcategory || '',
         image: payload.image || '',
+        fees: Number(payload.fees) || 0,
       };
 
 
@@ -785,45 +841,40 @@ const ConsultationManagement: React.FC = () => {
   );
 
   // Status update wrapper
-  const isUpdatingStatus = approveConsultantMutation.isPending || rejectConsultantMutation.isPending;
+  const isUpdatingStatus = approveConsultantMutation.isPending ||
+    rejectConsultantMutation.isPending ||
+    blockConsultantMutation.isPending ||
+    unblockConsultantMutation.isPending;
   const handleStatusUpdate = useCallback(
     (id: ID, newStatus: string) => {
       if (newStatus === "Active") {
-        approveConsultantMutation.mutate(id, {
-          onError: (err: any) => {
-            const status = err?.response?.status;
-            if (status === 401)
-              toast.error("Authentication failed. Please login again.");
-            else if (status === 403)
-              toast.error("Access denied. Admin privileges required.");
-            else if (status === 404) toast.error("Consultant not found.");
-            else
-              toast.error(
-                err?.response?.data?.message ||
-                "Failed to approve consultant"
-              );
-          },
-        });
+        // Check if we are unblocking or approving. Status logic can be inferred or explicit.
+        // If current status is Blocked, we call unblock. If Pending, approve.
+        // But here we rely on the Button's intent.
+        // If current status was Blocked, the button calls this with "Active".
+        // Let's check status from mutation context if possible, or just default to approve/unblock flow?
+        // Actually, `ConsultantCard` logic sends "Active" for both Approve and Unblock. 
+        // We should differentiate. 
+        // Strategy: Let's simply handle based on the action we want.
+        // The Buttons sending "Active" is ambiguous.
+        // Let's check if the consultant is currently Blocked?
+        const target = allConsultants.find(c => (c._id === id || c.id === id)) || allPendingConsultants.find(c => (c._id === id || c.id === id));
+        const isBlocked = target?.verificationStatus === "Blocked";
+
+        if (isBlocked) {
+          unblockConsultantMutation.mutate(id);
+        } else {
+          approveConsultantMutation.mutate(id); // Default to approve
+        }
       } else if (newStatus === "Rejected") {
-        rejectConsultantMutation.mutate(id, {
-          onError: (err: any) => {
-            const status = err?.response?.status;
-            if (status === 401)
-              toast.error("Authentication failed. Please login again.");
-            else if (status === 403)
-              toast.error("Access denied. Admin privileges required.");
-            else if (status === 404) toast.error("Consultant not found.");
-            else
-              toast.error(
-                err?.response?.data?.message ||
-                "Failed to reject consultant"
-              );
-          },
-        });
+        rejectConsultantMutation.mutate(id);
+      } else if (newStatus === "Blocked") {
+        blockConsultantMutation.mutate(id);
       }
     },
-    [approveConsultantMutation, rejectConsultantMutation]
+    [approveConsultantMutation, rejectConsultantMutation, blockConsultantMutation, unblockConsultantMutation, allConsultants, allPendingConsultants]
   );
+
 
   // UI animations variants
   const container: Variants = {
@@ -1084,6 +1135,11 @@ const ConsultationManagement: React.FC = () => {
 
 
 
+
+              if (form.category) userPayload.category = form.category;
+              if (form.subcategory) userPayload.subcategory = form.subcategory;
+              if (form.fees) userPayload.fees = form.fees;
+
               createConsultant(userPayload);
             }}
           >
@@ -1150,6 +1206,18 @@ const ConsultationManagement: React.FC = () => {
                   setForm((f) => ({ ...f, mobile: e.target.value }))
                 }
                 required
+              />
+            </div>
+
+            <div className="w-full">
+              <input
+                className="w-full border rounded-md p-2 text-sm bg-gray-50"
+                placeholder="Consultation Fee (₹)"
+                value={form.fees}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/[^0-9]/g, '');
+                  setForm((f) => ({ ...f, fees: val }));
+                }}
               />
             </div>
 

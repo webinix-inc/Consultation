@@ -15,27 +15,33 @@ const razorpay = new Razorpay({
  */
 exports.createOrder = async (req, res, next) => {
   try {
-    const { amount, appointmentId, consultantId, clientId } = req.body;
+    const { amount, appointmentId, holdId, consultantId, clientId } = req.body;
     const user = req.user;
 
     if (!amount || amount <= 0) {
       throw new ApiError("Invalid amount", httpStatus.BAD_REQUEST);
     }
 
-    if (!appointmentId) {
-      throw new ApiError("Appointment ID is required", httpStatus.BAD_REQUEST);
+    if (!appointmentId && !holdId) {
+      throw new ApiError("Appointment ID or Hold ID is required", httpStatus.BAD_REQUEST);
     }
 
     // Convert amount to paise (Razorpay uses smallest currency unit)
     const amountInPaise = Math.round(amount * 100);
 
-    // Generate receipt - must be max 40 characters (Razorpay requirement)
-    // Format: APPT + last 12 chars of appointmentId + timestamp (last 8 digits)
-    // This ensures we stay under 40 chars: APPT (4) + _ (1) + 12 chars + _ (1) + 8 digits = 26 chars
-    const appointmentIdStr = String(appointmentId);
-    const shortApptId = appointmentIdStr.length > 12 ? appointmentIdStr.slice(-12) : appointmentIdStr;
+    // Generate receipt
+    let receiptPrefix = "APPT";
+    let idStr = String(appointmentId || "");
+    if (holdId) {
+      receiptPrefix = "HOLD";
+      idStr = String(holdId);
+    }
+
+    // Format: TYPE + last 12 chars of ID + timestamp (last 8 digits)
+    const shortId = idStr.length > 12 ? idStr.slice(-12) : idStr;
     const timestamp = String(Date.now()).slice(-8); // Last 8 digits of timestamp
-    const receipt = `APPT_${shortApptId}_${timestamp}`.substring(0, 40); // Ensure max 40 chars
+    // Prefix (4) + _ (1) + 12 chars + _ (1) + 8 digits = 26 chars
+    const receipt = `${receiptPrefix}_${shortId}_${timestamp}`.substring(0, 40);
 
     // Create Razorpay order
     const options = {
@@ -43,7 +49,8 @@ exports.createOrder = async (req, res, next) => {
       currency: "INR",
       receipt: receipt,
       notes: {
-        appointmentId: appointmentId,
+        appointmentId: appointmentId || "",
+        holdId: holdId || "",
         consultantId: consultantId || "",
         clientId: clientId || user._id || user.id,
         userId: user._id || user.id,
@@ -52,12 +59,18 @@ exports.createOrder = async (req, res, next) => {
 
     const order = await razorpay.orders.create(options);
 
-    // Check if a pending transaction already exists for this appointment
-    let transaction = await Transaction.findOne({
-      appointment: appointmentId,
-      status: "Pending",
-      type: "Payment"
-    });
+    // Check if a pending transaction already exists
+    let transaction = null;
+
+    // Only search for existing pending transaction if we have an appointmentId
+    // If it's a hold, we likely create a new transaction every time as holds are temporary
+    if (appointmentId) {
+      transaction = await Transaction.findOne({
+        appointment: appointmentId,
+        status: "Pending",
+        type: "Payment"
+      });
+    }
 
     // Calculate Commission
     let platformFee = 0;
@@ -74,7 +87,6 @@ exports.createOrder = async (req, res, next) => {
         }
       } catch (err) {
         console.error("Error calculating commission:", err);
-        // Default to 0 fee if error
       }
     }
 
@@ -107,6 +119,7 @@ exports.createOrder = async (req, res, next) => {
         metadata: {
           razorpayOrderId: order.id,
           razorpayReceipt: order.receipt,
+          holdId: holdId || null,
         },
       });
     }

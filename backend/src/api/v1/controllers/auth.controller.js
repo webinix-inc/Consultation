@@ -237,7 +237,7 @@ exports.login = async (req, res, next) => {
 
 exports.register = async (req, res, next) => {
   try {
-    const { registrationToken, fullName, email, role, category, subcategory } = req.body;
+    const { registrationToken, fullName, email, role, category, subcategory, fees } = req.body;
 
     let decoded;
     try {
@@ -278,7 +278,8 @@ exports.register = async (req, res, next) => {
         phone: mobile,
         mobile: mobile,
         category: categoryName,
-        status: 'Pending'
+        status: 'Pending',
+        fees: fees || 0
       });
 
       // Notify Admins about new registration
@@ -368,7 +369,7 @@ exports.register = async (req, res, next) => {
 
 exports.signup = async (req, res, next) => {
   try {
-    const { fullName, email, mobile, role, category, subcategory } = req.body;
+    const { fullName, email, mobile, role, category, subcategory, fees } = req.body;
 
     // Validate role
     if (role !== 'Client' && role !== 'Consultant') {
@@ -456,7 +457,8 @@ exports.signup = async (req, res, next) => {
 
         category: categoryData,
         subcategory: subcategoryData,
-        status: 'Pending'
+        status: 'Pending',
+        fees: fees || 0
       });
 
       // Notify Admins about new consultant signup

@@ -33,6 +33,14 @@ const ConsultantAPI = {
     const res = await axiosInstance.post(`/consultants/${id}/reject`);
     return res.data;
   },
+  block: async (id: string) => {
+    const res = await axiosInstance.post(`/consultants/${id}/block`);
+    return res.data;
+  },
+  unblock: async (id: string) => {
+    const res = await axiosInstance.post(`/consultants/${id}/unblock`);
+    return res.data;
+  },
 
   // Settings
   getSettings: async (consultantId: string) => {

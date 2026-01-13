@@ -4,6 +4,7 @@ const PaymentAPI = {
   createOrder: async (data: {
     amount: number;
     appointmentId?: string;
+    holdId?: string;
     consultantId?: string;
     clientId?: string;
   }) => {

@@ -18,6 +18,7 @@ const Signup = () => {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [mobile, setMobile] = useState(searchParams.get("mobile")?.replace(/\D/g, "") || "");
+  const [fees, setFees] = useState("");
 
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -58,7 +59,7 @@ const Signup = () => {
   const isFormValid = () => {
     const baseFieldsValid = fullName && email && mobile.length >= 10 && termsAccepted;
     if (userRole === 'Consultant') {
-      return baseFieldsValid && category && subcategory;
+      return baseFieldsValid && category && subcategory && fees;
     }
     return baseFieldsValid;
   };
@@ -88,6 +89,11 @@ const Signup = () => {
       return;
     }
 
+    if (userRole === 'Consultant' && !fees) {
+      toast.error("Please enter a consultation fee");
+      return;
+    }
+
     if (!termsAccepted) {
       toast.error("Please accept the Terms and Conditions to continue");
       return;
@@ -105,10 +111,10 @@ const Signup = () => {
         fullName,
         email,
         mobile,
-       
         role: userRole,
         category: userRole === 'Consultant' ? categoryTitle : undefined,
         subcategory: userRole === 'Consultant' ? subcategory : undefined,
+        fees: userRole === 'Consultant' ? Number(fees) : undefined,
       };
 
       const response = await AuthAPI.signup(payload);
@@ -222,6 +228,26 @@ const Signup = () => {
             </>
           )}
 
+          {/* Fee Field for Consultant */}
+          {userRole === 'Consultant' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Consultation Fee (₹)
+              </label>
+              <input
+                className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#2E7FC4] text-gray-700 placeholder-gray-400"
+                value={fees}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/[^0-9]/g, '');
+                  setFees(val);
+                }}
+                placeholder="0"
+                type="text" // numeric input controlled
+                inputMode="numeric"
+              />
+            </div>
+          )}
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Full Name
@@ -321,7 +347,7 @@ const Signup = () => {
           © {new Date().getFullYear()} AIOB. All rights reserved.
         </div>
       </div>
-    </div>
+    </div >
   );
 };
 

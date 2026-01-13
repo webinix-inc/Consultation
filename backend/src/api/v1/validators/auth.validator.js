@@ -60,6 +60,7 @@ const registerSchema = Joi.object({
     Joi.string(),
     Joi.object()
   ).optional(),
+  fees: Joi.number().min(0).optional(),
 });
 
 const signupSchema = Joi.object({
@@ -86,6 +87,7 @@ const signupSchema = Joi.object({
   }),
   category: Joi.alternatives().try(Joi.string(), Joi.object()).optional(),
   subcategory: Joi.alternatives().try(Joi.string(), Joi.object()).optional(),
+  fees: Joi.number().min(0).optional(),
 });
 
 module.exports = {

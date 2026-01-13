@@ -103,6 +103,15 @@ const AppointmentAPI = {
     }
   },
 
+  holdSlot: async (payload: Record<string, any>) => {
+    try {
+      const res = await axiosInstance.post("/appointments/hold", payload);
+      return res.data;
+    } catch (err) {
+      throw normalizeAxiosError(err);
+    }
+  },
+
 
 };
 
