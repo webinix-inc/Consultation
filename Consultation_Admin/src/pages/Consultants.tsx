@@ -636,7 +636,8 @@ const ConsultationManagement: React.FC = () => {
     // This would need to be handled differently if subcategories are needed
     if (subcategoryName) {
       filtered = filtered.filter((u) => {
-        const uSub = typeof u.subcategory === "string" ? u.subcategory : (u.subcategory as Subcategory)?.title || "";
+        const uSubObj = u.subcategory as any;
+        const uSub = typeof uSubObj === "string" ? uSubObj : (uSubObj?.name || uSubObj?.title || "");
         return uSub === decodeURIComponent(subcategoryName);
       });
     } else if (subcategoryParam) {
@@ -644,7 +645,8 @@ const ConsultationManagement: React.FC = () => {
       const targetSub = subcategories.find(s => s._id === subcategoryParam);
       if (targetSub) {
         filtered = filtered.filter((u) => {
-          const uSub = typeof u.subcategory === "string" ? u.subcategory : (u.subcategory as Subcategory)?.title || "";
+          const uSubObj = u.subcategory as any;
+          const uSub = typeof uSubObj === "string" ? uSubObj : (uSubObj?.name || uSubObj?.title || "");
           return uSub === targetSub.title;
         });
       }

@@ -481,6 +481,7 @@ exports.getAppointments = async (req, res, next) => {
             mobile: consultantData.mobile || consultantData.phone,
             role: "Consultant",
             category: consultantData.category?.name || "General",
+            subcategory: consultantData.subcategory?.name || "",
           } : null,
         };
       })
@@ -550,7 +551,9 @@ exports.getAppointmentById = async (req, res, next) => {
       fullName: consultantData.fullName || consultantData.name || consultantData.displayName,
       email: consultantData.email,
       mobile: consultantData.mobile || consultantData.phone,
-      role: "Consultant"
+      role: "Consultant",
+      category: consultantData.category?.name || "General",
+      subcategory: consultantData.subcategory?.name || "",
     } : null;
 
     // Role-based authorization check
@@ -757,7 +760,9 @@ exports.updateAppointment = async (req, res, next) => {
       fullName: consultantData.fullName || consultantData.name || consultantData.displayName,
       email: consultantData.email,
       mobile: consultantData.mobile || consultantData.phone,
-      role: "Consultant"
+      role: "Consultant",
+      category: consultantData.category?.name || "General",
+      subcategory: consultantData.subcategory?.name || "",
     } : null;
 
     // Send notifications for appointment updates

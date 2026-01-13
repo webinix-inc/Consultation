@@ -10,13 +10,13 @@ const httpStatus = require("../../../constants/httpStatus");
 const calculateSubcategoryStats = async (subcategoryId, subcategoryTitle) => {
   // 1. Count Active Consultants in to this subcategory (by title string)
   const consultantsCount = await Consultant.countDocuments({
-    subcategory: subcategoryTitle,
-    status: { $in: ["Active", "Approved"] }
+    "subcategory.name": subcategoryTitle,
+    status: { $in: ["Active", "Approved", "Pending"] }
   });
 
   // 2. Find Consultants IDs to link clients/revenue
   const consultants = await Consultant.find({
-    subcategory: subcategoryTitle
+    "subcategory.name": subcategoryTitle
   }).select('_id');
   const consultantIds = consultants.map(c => c._id);
 
@@ -147,8 +147,8 @@ exports.update = async (req, res, next) => {
     // Cascade update: If title changed, update all consultants with the old subcategory name
     if (req.body.title && req.body.title !== oldTitle) {
       await Consultant.updateMany(
-        { subcategory: oldTitle },
-        { $set: { subcategory: req.body.title } }
+        { "subcategory.name": oldTitle },
+        { $set: { "subcategory.name": req.body.title } }
       );
     }
 

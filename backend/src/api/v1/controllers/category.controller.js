@@ -37,13 +37,13 @@ exports.list = async (req, res, next) => {
         const subcategoriesWithStats = await Promise.all(subcategories.map(async (subcat) => {
           // 1. Count Active Consultants in to this subcategory (by title string)
           const consultantsCount = await Consultant.countDocuments({
-            subcategory: subcat.title,
+            "subcategory.name": subcat.title,
             status: { $in: ["Active", "Approved", "Pending"] }
           });
 
           // 2. Find Consultants IDs to link clients/revenue
           const consultants = await Consultant.find({
-            subcategory: subcat.title
+            "subcategory.name": subcat.title
           }).select('_id');
           const consultantIds = consultants.map(c => c._id);
 
@@ -127,8 +127,8 @@ exports.update = async (req, res, next) => {
     // Cascade update: If title changed, update all consultants with the old category name
     if (req.body.title && req.body.title !== oldTitle) {
       await Consultant.updateMany(
-        { category: oldTitle },
-        { $set: { category: req.body.title } }
+        { "category.name": oldTitle },
+        { $set: { "category.name": req.body.title } }
       );
     }
 

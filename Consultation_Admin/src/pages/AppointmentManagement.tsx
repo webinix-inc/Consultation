@@ -144,7 +144,7 @@ const AppointmentManagement: React.FC = () => {
         consultant: consultantName,
         consultantId: consultantId,
         category: (it.category && it.category !== "General") ? it.category : (it.consultant?.category || "General"),
-        subcategory: it.subcategory || it.categorySnapshot?.subcategory || "",
+        subcategory: it.subcategory || it.consultant?.subcategory || it.consultantSnapshot?.subcategory || "",
         session: it.session || "Video Call",
         date: dateStr,
         time: timeDisplay,
