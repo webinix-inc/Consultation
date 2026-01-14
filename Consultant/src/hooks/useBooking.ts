@@ -177,11 +177,31 @@ export function useBooking({ user, isAuthenticated, activeConsultants, categorie
                 order_id: orderData.orderId,
                 handler: async function (response: any) {
                     try {
+                        // Re-calculate timestamps to satisfy backend validator (Joi requires startAt/endAt)
+                        const dateISO = formatDateToISO(sched.date);
+                        const slotTime = sched.time || "";
+                        const [startHH, startMM] = slotTime.split(" - ")[0].split(":");
+                        const endTimeStr = slotTime.split(" - ")[1];
+                        let endHH = "00", endMM = "00";
+
+                        if (endTimeStr) {
+                            [endHH, endMM] = endTimeStr.split(":");
+                        } else {
+                            const h = parseInt(startHH);
+                            endHH = String(h + 1).padStart(2, '0');
+                            endMM = startMM;
+                        }
+
+                        const startAt = `${dateISO}T${startHH}:${startMM}:00+05:30`;
+                        const endAt = `${dateISO}T${endHH}:${endMM}:00+05:30`;
+
                         // 4. Confirm Appointment
                         const confirmPayload = {
                             client: sched.client || user?.id || user?._id,
                             consultant: sched.consultant,
                             status: "Upcoming",
+                            startAt,
+                            endAt,
                             reason: sched.reason,
                             notes: sched.notes,
                             fee: consultationFee,
@@ -215,6 +235,7 @@ export function useBooking({ user, isAuthenticated, activeConsultants, categorie
                     } catch (confirmErr: any) {
                         console.error("Confirm failed", confirmErr);
                         toast.error("Payment success but booking failed. Contact support.");
+                        setShowConfirmModal(false); // Close on API failure
                     } finally {
                         setIsProcessingPayment(false);
                     }
@@ -223,6 +244,7 @@ export function useBooking({ user, isAuthenticated, activeConsultants, categorie
                     ondismiss: function () {
                         toast.error("Payment cancelled");
                         setIsProcessingPayment(false);
+                        setShowConfirmModal(false); // Close on dismiss
                     }
                 },
                 prefill: {
@@ -245,6 +267,7 @@ export function useBooking({ user, isAuthenticated, activeConsultants, categorie
             rzp.on("payment.failed", function (response: any) {
                 toast.error("Payment Failed");
                 setIsProcessingPayment(false);
+                setShowConfirmModal(false); // Close on failure
             });
             rzp.open();
 
