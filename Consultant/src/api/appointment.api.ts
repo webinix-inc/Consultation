@@ -11,8 +11,8 @@ export interface AppointmentItem {
   consultantId?: string;
   category?: string;
   session?: string;
-  startAt?: string;
-  endAt?: string;
+  startAt?: string; // ISO String (offset included)
+  endAt?: string;   // ISO String (offset included)
   date?: string; // "YYYY-MM-DD"
   timeStart?: string; // "HH:mm"
   timeEnd?: string;   // "HH:mm"

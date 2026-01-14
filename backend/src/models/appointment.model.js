@@ -162,13 +162,21 @@ appointmentSchema.statics.hasConflict = async function (id, startAt, endAt, excl
   const { consultantId, userId } = await resolveConsultantIds(id);
 
   const query = {
-    status: { $ne: "Cancelled" },
+    $and: [
+      { status: { $ne: "Cancelled" } },
+      {
+        $or: [
+          { status: { $ne: "Hold" } }, // Confirmed/Upcoming/Completed are always conflicts
+          { status: "Hold", expiresAt: { $gt: new Date() } } // Holds are only conflicts if NOT expired
+        ]
+      },
+      { startAt: { $lt: endAt } },
+      { endAt: { $gt: startAt } }
+    ],
     $or: [
       { consultant: consultantId },
       { consultant: userId }
-    ],
-    // existing.start < newEnd && existing.end > newStart  ==> overlap
-    $and: [{ startAt: { $lt: endAt } }, { endAt: { $gt: startAt } }]
+    ]
   };
 
   if (excludeAppointmentId) {
@@ -183,23 +191,20 @@ appointmentSchema.statics.hasConflict = async function (id, startAt, endAt, excl
 // Static: get available slots for consultant on a date
 // options: { slotDurationMin = 60, startHour = 9, endHour = 17 }
 // returns array of "HH:mm - HH:mm" strings
+// Static: get available slots for consultant on a date
+// options: { slotDurationMin = 60, startHour = 9, endHour = 17 }
+// returns array of "HH:mm - HH:mm" strings
 appointmentSchema.statics.getAvailableSlots = async function (id, dateISO /* "YYYY-MM-DD" */, options = {}) {
   const { slotDurationMin = 60, startHour = 9, endHour = 17 } = options || {};
   if (!id || !dateISO) return [];
 
+  const dateUtil = require("../utils/date.util");
   const { consultantId, userId } = await resolveConsultantIds(id);
 
-  // Define IST Offset (UTC+5:30)
-  const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
-
   // Build the day range in UTC covering the full IST day
-  // To cover "2023-11-23" in IST, we need to inspect a range that surely includes it in UTC.
-  // IST is ahead of UTC, so 00:00 IST is previous day 18:30 UTC.
-  // Let's grab a wide enough UTC range to capture all potential overlaps.
-  const queryStart = new Date(new Date(`${dateISO}T00:00:00`).getTime() - 24 * 60 * 60 * 1000);
-  const queryEnd = new Date(new Date(`${dateISO}T23:59:59`).getTime() + 24 * 60 * 60 * 1000);
+  const { start: queryStart, end: queryEnd } = dateUtil.getISTDayRangeInUTC(dateISO);
 
-  // Fetch appointments (including Holds) for the consultant that overlap this broad range
+  // Fetch appointments (including Holds) for the consultant that overlap this range
   const query = {
     status: { $ne: "Cancelled" }, // Includes 'Upcoming', 'Completed', 'Hold'
     $or: [
@@ -235,25 +240,17 @@ appointmentSchema.statics.getAvailableSlots = async function (id, dateISO /* "YY
 
   let candidateSlots = [];
 
-  // Helper to force Date interpretation as IST
-  // Input: "HH:mm" string
-  // Output: Date object representing that time on dateISO in UTC (derived from IST)
-  // Example: dateISO="2023-11-23", timeStr="09:00"
-  // "2023-11-23T09:00:00" is treated as UTC by new Date(ISOString) usually, or Local.
-  // We want to treat it as IST.
-  // So 09:00 IST = 03:30 UTC.
+  // Helper: Correctly parse IST time string to UTC Date on the given IST date
   const createDateAsIST = (timeStr) => {
-    // 1. Create a "UTC" date as if the string was UTC
-    // e.g. 2023-11-23T09:00:00.000Z
-    const naiveDate = new Date(`${dateISO}T${timeStr}:00.000Z`);
-    // 2. Subtract the IST offset (5.5 hours) to shift it to the correct absolute time
-    return new Date(naiveDate.getTime() - IST_OFFSET_MS);
+    // dateUtil.parseBookingDate takes "YYYY-MM-DD" and "HH:mm" and returns UTC Date
+    return dateUtil.parseBookingDate(dateISO, timeStr);
   };
 
   if (settings && settings.availability && settings.availability.workingHours) {
-    // Need to get the day of week for dateISO
-    const dateObj = new Date(dateISO);
-    const dayOfWeek = dateObj.toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
+    // Need to get the day of week for dateISO (parsed as IST)
+    const dateObj = dateUtil.parseBookingDate(dateISO, "12:00"); // midday IST
+    const dayOfWeek = dateUtil.formatToIST(dateObj, "EEEE").toLowerCase(); // e.g. "thursday"
+
     const daySettings = settings.availability.workingHours[dayOfWeek];
 
     if (daySettings && daySettings.enabled && daySettings.generatedSlots && daySettings.generatedSlots.length > 0) {
@@ -278,23 +275,24 @@ appointmentSchema.statics.getAvailableSlots = async function (id, dateISO /* "YY
     return aStart < bEnd && aEnd > bStart;
   }
 
-  const nowUTC = new Date();
-  // We compare "now" vs buffer time.
-  // Let's add a small buffer (e.g. 15 mins) to prevent booking immediately
-  const nowWithBuffer = new Date(nowUTC.getTime() + 15 * 60 * 1000);
-
   const availableSlots = [];
 
   for (const slot of candidateSlots) {
     // Convert "HH:mm" (IST) -> Actual UTC Date objects
-    const slotStartUTC = createDateAsIST(slot.startStr);
+    let slotStartUTC, slotEndUTC;
+    try {
+      slotStartUTC = createDateAsIST(slot.startStr);
 
-    let slotEndUTC;
-    if (slot.endStr) {
-      slotEndUTC = createDateAsIST(slot.endStr);
-    } else {
-      // If no end string, add duration
-      slotEndUTC = new Date(slotStartUTC.getTime() + slotDurationMin * 60 * 1000);
+      if (slot.endStr) {
+        slotEndUTC = createDateAsIST(slot.endStr);
+      } else {
+        // If no end string, add duration
+        // We can safely add minutes to the UTC date
+        slotEndUTC = new Date(slotStartUTC.getTime() + slotDurationMin * 60 * 1000);
+      }
+    } catch (e) {
+      console.warn(`Invalid slot time: ${slot.startStr} - ${slot.endStr}`, e);
+      continue;
     }
 
     // 1. Check strict overlap with existing appointments
@@ -307,14 +305,15 @@ appointmentSchema.statics.getAvailableSlots = async function (id, dateISO /* "YY
       }
     }
 
-    // 2. Check if slot is in the past (using UTC to UTC comparison is safest)
-    if (slotStartUTC < nowWithBuffer) {
+    // 2. Check if slot is in the past (Use IST-aware check)
+    // 15 minute buffer
+    if (dateUtil.isPastIST(slotStartUTC, 15)) {
       isFree = false;
     }
 
     if (isFree) {
       // Return the string as expected by frontend (e.g., "09:00 - 10:00")
-      // Frontend assumes these are "Display Time" which implies IST for this app context
+      // Frontend receives these strings and displays them
       availableSlots.push(`${slot.startStr} - ${slot.endStr || slot.endStr}`);
     }
   }

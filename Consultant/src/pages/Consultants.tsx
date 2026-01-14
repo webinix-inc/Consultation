@@ -13,6 +13,7 @@ import { toast } from "react-hot-toast";
 import { ScheduleModal } from "@/components/appointments/ScheduleModal";
 import { ConfirmModal } from "@/components/appointments/ConfirmModal";
 import { MiniCalendar } from "@/components/appointments/MiniCalendar";
+import { useBooking } from "@/hooks/useBooking";
 
 // Declare Razorpay types
 declare global {
@@ -23,90 +24,75 @@ declare global {
 
 export default function Consultants() {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
+  const handleViewProfile = (consultantId: string) => {
+    navigate(`/consultant/${consultantId}`);
+  };
+  // const queryClient = useQueryClient(); // Handled in hook
   const { user, isAuthenticated } = useSelector((state: RootState) => state.auth);
   const [searchTerm, setSearchTerm] = useState("");
-  const [showBookingModal, setShowBookingModal] = useState(false);
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [selectedConsultant, setSelectedConsultant] = useState<any>(null);
 
-  // Fetch all consultants from API (only Approved status) - using public endpoint
+  // Hook Initialization
+  // We need to pass activeConsultants and categories to the hook if needed, 
+  // currently the hook handles state, but standardizing data passing is good.
+  const {
+    sched,
+    setSched,
+    showBookingModal,
+    setShowBookingModal,
+    showConfirmModal,
+    setShowConfirmModal,
+    isProcessingPayment, // exposed as isPending
+    selectedConsultant,
+    setSelectedConsultant,
+    selectedCategoryForBooking,
+    setSelectedCategoryForBooking,
+    handlePreBooking,
+    confirmBooking,
+    formatDateToISO,
+    holdExpiresAt,
+    handleExpire
+  } = useBooking({
+    user,
+    isAuthenticated,
+    activeConsultants: [], // We'll pass empty for now as hook doesn't heavily use it yet, can refactor hook later to own data fetching if needed
+    categories: []
+  });
+
+  // Fetch all consultants (public)
   const { data: consultantsData, isLoading: isLoadingConsultants } = useQuery({
     queryKey: ["consultants", "public"],
     queryFn: async () => {
       try {
-        const params: any = { status: "Active" };
-        const response = await axiosInstance.get("/consultants/public", { params });
-        let data = [];
-        if (response.data?.data && Array.isArray(response.data.data)) {
-          data = response.data.data;
-        } else if (Array.isArray(response.data)) {
-          data = response.data;
-        }
-        return data;
-      } catch (error: any) {
+        const response = await axiosInstance.get("/consultants/public", { params: { status: "Active" } });
+        return response.data?.data || response.data || [];
+      } catch (error) {
         console.error("Error fetching consultants:", error);
         return [];
       }
     },
   });
 
-  // Fetch categories for filter and booking
+  // Fetch categories
   const { data: categoriesData } = useQuery({
     queryKey: ["categories", "public"],
     queryFn: async () => {
       try {
-        const response = await CategoryAPI.getAll();
-        if (response?.data && Array.isArray(response.data)) {
-          return response.data;
-        } else if (Array.isArray(response)) {
-          return response;
-        }
-        return [];
-      } catch (error: any) {
-        console.error("Error fetching categories:", error);
-        return [];
-      }
-    },
+        const res = await CategoryAPI.getAll();
+        return res.data || res || [];
+      } catch (err) { return []; }
+    }
   });
 
-  // Fetch active consultants for booking (only when logged in as client)
+  // Fetch active consultants (for booking logic consistency)
   const { data: activeConsultantsData } = useQuery({
     queryKey: ["active-consultants"],
-    queryFn: async () => {
-      const response = await UserAPI.getActiveConsultants();
-      return response;
-    },
+    queryFn: async () => UserAPI.getActiveConsultants(),
     enabled: isAuthenticated && user?.role === "Client",
     staleTime: 5 * 60 * 1000,
   });
 
   const consultants = Array.isArray(consultantsData) ? consultantsData : [];
   const categories = Array.isArray(categoriesData) ? categoriesData : [];
-
-  // Client-side filtering: case-insensitive category search with partial matching
-  const filteredConsultantsList = useMemo(() => {
-    if (!searchTerm.trim()) {
-      return consultants; // Show all consultants if no search term
-    }
-
-    const searchLower = searchTerm.toLowerCase().trim();
-
-    return consultants.filter((consultant: any) => {
-      // Get category title (handle both object and string formats)
-      let categoryTitle = "";
-      if (consultant.category) {
-        if (typeof consultant.category === 'object') {
-          categoryTitle = consultant.category.title || "";
-        } else {
-          categoryTitle = String(consultant.category);
-        }
-      }
-
-      // Case-insensitive partial match
-      return categoryTitle.toLowerCase().includes(searchLower);
-    });
-  }, [consultants, searchTerm]);
 
   // Normalize active consultants
   const activeConsultants = useMemo(() => {
@@ -125,547 +111,139 @@ export default function Consultants() {
     }));
   }, [activeConsultantsData, isAuthenticated, user?.role]);
 
-  // Booking state
-  const [sched, setSched] = useState({
-    client: "",
-    consultant: "",
-    date: new Date(),
-    time: null as string | null,
-    session: "Video Call" as const,
-    reason: "",
-    notes: "",
-  });
-
-  const [selectedCategoryForBooking, setSelectedCategoryForBooking] = useState("");
+  // Client-side filtering
+  const filteredConsultantsList = useMemo(() => {
+    if (!searchTerm.trim()) return consultants;
+    const searchLower = searchTerm.toLowerCase().trim();
+    return consultants.filter((c: any) => {
+      let categoryTitle = "";
+      if (c.category) {
+        categoryTitle = typeof c.category === 'object' ? (c.category.title || "") : String(c.category);
+      }
+      return categoryTitle.toLowerCase().includes(searchLower);
+    });
+  }, [consultants, searchTerm]);
 
   // Auto-set client when logged in
   useEffect(() => {
     if (isAuthenticated && user?.role === "Client" && user?.id) {
-      setSched((s) => ({ ...s, client: user.id || (user as any)._id || "" }));
+      // Only set if not already set
+      if (!sched.client) {
+        setSched((s) => ({ ...s, client: user.id || (user as any)._id || "" }));
+      }
     }
-  }, [isAuthenticated, user]);
+  }, [isAuthenticated, user, sched.client, setSched]);
 
-  // Auto-populate category and consultant when booking from card
+
+  // Auto-populate logic (Simplified from original)
   useEffect(() => {
     if (selectedConsultant && showBookingModal) {
-      const consultantId = selectedConsultant._id || selectedConsultant.id;
+      const cId = selectedConsultant._id || selectedConsultant.id;
+      setSched(s => ({ ...s, consultant: String(cId) }));
 
-      // Extract category - handle both object and string formats
-      let categoryId = "";
-      let categoryTitle = "";
-
+      // Try to set category
+      let catId = "";
       if (selectedConsultant.category) {
         if (typeof selectedConsultant.category === 'object') {
-          categoryId = selectedConsultant.category._id || selectedConsultant.category.id || "";
-          categoryTitle = selectedConsultant.category.title || selectedConsultant.category.name || "";
+          catId = selectedConsultant.category._id || selectedConsultant.category.id;
         } else {
-          // If string, checks if it matches an ID in categories
-          const catStr = String(selectedConsultant.category);
-          const matchById = categories.find((c: any) => (c._id || c.id) === catStr);
-          if (matchById) {
-            categoryId = matchById._id || matchById.id;
-          } else {
-            // specific fallback: assume it's the title
-            categoryTitle = catStr;
-          }
+          // simple string match
+          const match = categories.find((c: any) => (c._id || c.id) === String(selectedConsultant.category) || c.title === String(selectedConsultant.category));
+          if (match) catId = match._id || match.id;
         }
       }
-
-      // If we only have title but no ID, try to find ID from categories list
-      if (!categoryId && categoryTitle && categories.length > 0) {
-        const foundCat = categories.find((cat: any) => cat.title === categoryTitle);
-        if (foundCat) {
-          categoryId = foundCat._id || foundCat.id;
-        }
-      }
-
-      // Fallback: Try to find from activeConsultants logic if still not found
-      let matchingConsultant = null;
-      if (!categoryId) {
-        matchingConsultant = activeConsultants.find((c: any) => {
-          const cId = c._id || c.id;
-          return String(cId) === String(consultantId);
-        });
-
-        if (matchingConsultant) {
-          const cat = matchingConsultant.category;
-          if (cat) {
-            if (typeof cat === 'object') {
-              categoryId = cat._id || cat.id || "";
-            } else {
-              // If it's a string title, look it up again in categories
-              const foundCat = categories.find((c: any) => c.title === cat);
-              if (foundCat) {
-                categoryId = foundCat._id || foundCat.id;
-              }
-            }
-          }
-        }
-      } else {
-        // Just find it for logging purposes if needed, or leave null
-        matchingConsultant = activeConsultants.find((c: any) => {
-          const cId = c._id || c.id;
-          return String(cId) === String(consultantId);
-        });
-      }
-
-      // Set consultant immediately
-      setSched((s) => ({ ...s, consultant: String(consultantId) }));
-
-      // Set category if available
-      if (categoryId) {
-        setSelectedCategoryForBooking(String(categoryId));
-      }
-
-      console.log("Auto-populating booking:", {
-        consultantId,
-        categoryId,
-        selectedConsultant,
-        matchingConsultant: !!matchingConsultant,
-        activeConsultantsCount: activeConsultants.length
-      });
+      if (catId) setSelectedCategoryForBooking(String(catId));
     }
-  }, [selectedConsultant, showBookingModal, activeConsultants]);
+  }, [selectedConsultant, showBookingModal, categories, setSched, setSelectedCategoryForBooking]);
 
-  // Filter consultants by category for booking
-  // If consultant is pre-selected from card, always include it and lock it
+
+  // Filter consultants for Booking Modal
   const filteredConsultants = useMemo(() => {
     let filtered: any[] = [];
 
-    // If consultant is pre-selected from card, always include it first
+    // 1. If Consultant is Pre-Selected (from card)
     if (selectedConsultant && sched.consultant) {
-      const consultantId = selectedConsultant._id || selectedConsultant.id;
-      const selected = activeConsultants.find((c: any) => {
-        const cId = c._id || c.id;
-        return String(cId) === String(consultantId);
+      // Return just this one
+      // Try to find full details in activeConsultants
+      const fullDetails = activeConsultants.find((c: any) => (c._id || c.id) === (selectedConsultant._id || selectedConsultant.id));
+      const item = fullDetails || {
+        ...selectedConsultant,
+        fullName: selectedConsultant.name || selectedConsultant.fullName
+      };
+      return [item];
+    }
+
+    // 2. Filter by Category
+    if (selectedCategoryForBooking) {
+      filtered = activeConsultants.filter((c: any) => {
+        const cCat = c.category?._id || c.category?.id || c.category;
+        return String(cCat) === String(selectedCategoryForBooking);
       });
-
-      if (selected) {
-        filtered = [selected];
-      } else {
-        // If not found in activeConsultants, create a temporary entry from selectedConsultant
-        filtered = [{
-          _id: consultantId,
-          id: consultantId,
-          fullName: selectedConsultant.name || selectedConsultant.fullName || `${selectedConsultant.firstName || ""} ${selectedConsultant.lastName || ""}`.trim(),
-          name: selectedConsultant.name || selectedConsultant.fullName,
-          category: selectedConsultant.category,
-          subcategory: selectedConsultant.subcategory,
-        }];
-      }
     } else {
-      // Normal filtering by category
-      if (selectedCategoryForBooking) {
-        filtered = activeConsultants.filter((c: any) => {
-          const catId = c.category?._id || c.category?.id || c.category;
-          return String(catId) === String(selectedCategoryForBooking);
-        });
-      } else {
-        // If no category selected, show all active consultants
-        filtered = [...activeConsultants];
-      }
-
-      // If consultant is already selected, ensure it's in the list
-      if (sched.consultant) {
-        const selected = activeConsultants.find((c: any) => {
-          const cId = c._id || c.id;
-          return String(cId) === String(sched.consultant);
-        });
-
-        if (selected && !filtered.find((c: any) => {
-          const cId = c._id || c.id;
-          return String(cId) === String(sched.consultant);
-        })) {
-          // Add selected consultant if not already in filtered list
-          filtered = [selected, ...filtered];
-        }
-      }
+      filtered = [...activeConsultants];
     }
 
     return filtered;
-  }, [activeConsultants, selectedCategoryForBooking, sched.consultant, selectedConsultant]);
+  }, [activeConsultants, selectedCategoryForBooking, selectedConsultant, sched.consultant]);
 
-  // Get available time slots
-  const selectedDateISO = useMemo(() => {
-    const year = sched.date.getFullYear();
-    const month = String(sched.date.getMonth() + 1).padStart(2, "0");
-    const day = String(sched.date.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
-  }, [sched.date]);
 
+  // Slots Query
+  const selectedDateISO = formatDateToISO(sched.date);
   const { data: availableSlots = [] } = useQuery({
     queryKey: ["available-slots", "consultant", sched.consultant, selectedDateISO],
     queryFn: async () => {
       if (!sched.consultant || !selectedDateISO) return [];
       try {
-        const slots = await AppointmentAPI.getAvailableSlots(sched.consultant, selectedDateISO, 60);
-        return Array.isArray(slots) ? slots : [];
-      } catch (error) {
-        console.error("Error fetching slots:", error);
-        return [];
-      }
+        const res = await AppointmentAPI.getAvailableSlots(sched.consultant, selectedDateISO, 60);
+        return Array.isArray(res) ? res : [];
+      } catch (e) { return []; }
     },
-    enabled: !!sched.consultant && !!selectedDateISO,
+    enabled: !!sched.consultant && !!selectedDateISO
   });
 
-  const getSlotsToRender = (date: Date): string[] => {
-    const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-    if (dateStr !== selectedDateISO || !sched.consultant) return [];
-    return availableSlots || [];
+  const getSlotsToRender = (date: Date) => {
+    const dateStr = formatDateToISO(date);
+    if (dateStr !== selectedDateISO) return [];
+    return availableSlots;
   };
 
-  // Note: Appointment creation is now handled directly in finalConfirmBooking
-  // No separate mutation needed as we handle the flow manually
-
-  const handlePreBooking = () => {
-    // Validate client
-    if (!sched.client) {
-      toast.error("Please ensure you are logged in as a client");
-      return;
-    }
-
-    // Validate consultant
-    if (!sched.consultant) {
-      toast.error("Please select a consultant");
-      return;
-    }
-
-    // Validate date
-    if (!sched.date) {
-      toast.error("Please select a date for your appointment");
-      return;
-    }
-
-    // Check if date is in the past
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const selectedDate = new Date(sched.date);
-    selectedDate.setHours(0, 0, 0, 0);
-
-    if (selectedDate < today) {
-      toast.error("Cannot book appointments in the past. Please select a future date");
-      return;
-    }
-
-    // Validate time slot
-    if (!sched.time) {
-      toast.error("Please select an available time slot");
-      return;
-    }
-
-    // All validations passed
-    setShowConfirmModal(true);
-  };
-
-  // Get selected consultant details for confirmation
+  // Prepare data for Confirm Modal
   const selectedConsultantForBooking = useMemo(() => {
     if (!sched.consultant) return null;
-
-    // First try to find in activeConsultants
-    const found = activeConsultants.find((c: any) => {
-      const cId = c._id || c.id;
-      return String(cId) === String(sched.consultant);
-    });
-
-    if (found) return found;
-
-    // Fallback to selectedConsultant if it matches
-    if (selectedConsultant) {
-      const consultantId = selectedConsultant._id || selectedConsultant.id;
-      if (String(consultantId) === String(sched.consultant)) {
-        // Transform selectedConsultant to match expected format
-        return {
-          _id: consultantId,
-          id: consultantId,
-          fullName: selectedConsultant.name || selectedConsultant.fullName || `${selectedConsultant.firstName || ""} ${selectedConsultant.lastName || ""}`.trim(),
-          name: selectedConsultant.name || selectedConsultant.fullName,
-          category: selectedConsultant.category,
-          subcategory: selectedConsultant.subcategory,
-          fees: selectedConsultant.fees || 0,
-        };
-      }
+    // Find in active or filtered
+    let found = activeConsultants.find(c => (c._id || c.id) === sched.consultant);
+    if (!found && selectedConsultant && (selectedConsultant._id || selectedConsultant.id) === sched.consultant) {
+      found = selectedConsultant;
     }
-
-    return null;
+    // normalize fees
+    if (found && !found.fees) found.fees = 0;
+    return found;
   }, [sched.consultant, activeConsultants, selectedConsultant]);
 
   const consultationFee = selectedConsultantForBooking?.fees || 0;
-  const platformFee = 0; // No platform fee for now
+  const platformFee = 0;
   const totalFee = consultationFee + platformFee;
-  const [pendingAppointmentId, setPendingAppointmentId] = useState<string | null>(null);
-  const [pendingTransactionId, setPendingTransactionId] = useState<string | null>(null);
-  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
-  // Load Razorpay script
+
+  // Load Razorpay Script (Effect)
   useEffect(() => {
     if (showConfirmModal && !window.Razorpay) {
       const script = document.createElement("script");
       script.src = "https://checkout.razorpay.com/v1/checkout.js";
       script.async = true;
       document.body.appendChild(script);
-
-      script.onload = () => {
-        console.log("Razorpay script loaded");
-      };
-
       return () => {
-        if (document.body.contains(script)) {
-          document.body.removeChild(script);
-        }
+        if (document.body.contains(script)) document.body.removeChild(script);
       };
     }
   }, [showConfirmModal]);
 
-  const finalConfirmBooking = async () => {
-    if (!window.Razorpay) {
-      toast.error("Payment gateway is loading. Please wait...");
-      return;
-    }
-
-    if (isProcessingPayment) {
-      return; // Prevent multiple clicks
-    }
-
-    // Validate user is logged in as Client
-    if (!isAuthenticated || user?.role !== "Client") {
-      toast.error("Please login as a client to book an appointment");
-      navigate("/login", { state: { redirect: `/consultants`, message: "Please login to book an appointment" } });
-      return;
-    }
-
-    // Ensure client ID is set
-    if (!sched.client) {
-      const clientId = (user as any)?._id || user?.id || "";
-      if (!clientId) {
-        toast.error("Unable to identify user. Please login again.");
-        navigate("/login", { state: { redirect: `/consultants`, message: "Please login to book an appointment" } });
-        return;
-      }
-      setSched((s) => ({ ...s, client: String(clientId) }));
-    }
-
-    // Validate required fields with specific messages
-    if (!sched.consultant) {
-      toast.error("Please select a consultant");
-      setIsProcessingPayment(false);
-      return;
-    }
-
-    if (!sched.date) {
-      toast.error("Please select a date for your appointment");
-      setIsProcessingPayment(false);
-      return;
-    }
-
-    // Check if date is in the past
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const selectedDate = new Date(sched.date);
-    selectedDate.setHours(0, 0, 0, 0);
-
-    if (selectedDate < today) {
-      toast.error("Cannot book appointments in the past. Please select a future date");
-      setIsProcessingPayment(false);
-      return;
-    }
-
-    if (!sched.time) {
-      toast.error("Please select an available time slot");
-      setIsProcessingPayment(false);
-      return;
-    }
-
-    // Validate fee
-    if (!consultationFee || consultationFee <= 0) {
-      toast.error("Invalid consultation fee. Please contact support");
-      setIsProcessingPayment(false);
-      return;
-    }
-
-    setIsProcessingPayment(true);
-
-    try {
-      const consultantId = sched.consultant;
-      const selectedConsultantObj = selectedConsultantForBooking;
-
-      const category = selectedConsultantObj?.category?.title || selectedConsultantObj?.subcategory?.title || categories?.[0]?.title || "General";
-      const fee = consultationFee;
-
-      // Parse time slot
-      const slotTime = sched.time || "";
-      const [startHH, startMM] = slotTime.includes(" - ") ? slotTime.split(" - ")[0].split(":") : slotTime.split(":");
-      const endTime = slotTime.includes(" - ") ? slotTime.split(" - ")[1] : null;
-      let endHH = "00";
-      let endMM = "00";
-      if (endTime) {
-        [endHH, endMM] = endTime.split(":");
-      } else {
-        const h = parseInt(startHH);
-        let endH = h + 1;
-        endHH = String(endH).padStart(2, "0");
-        endMM = startMM;
-      }
-
-      const startAtDate = new Date(`${selectedDateISO}T${startHH}:${startMM}:00`);
-      const endAtDate = new Date(`${selectedDateISO}T${endHH}:${endMM}:00`);
-
-      // Step 1: Hold the slot
-      let holdId: string | null = null;
-      try {
-        const holdResponse = await AppointmentAPI.holdSlot({
-          consultant: consultantId,
-          client: sched.client,
-          date: selectedDateISO,
-          timeStart: startHH + ":" + startMM, // Pass time range or start/end dates
-          timeEnd: endHH + ":" + endMM,
-          amount: fee
-        });
-
-        if (holdResponse && (holdResponse.data?.holdId || holdResponse.holdId)) {
-          holdId = holdResponse.data?.holdId || holdResponse.holdId;
-        } else {
-          throw new Error("Failed to secure slot. Please try again.");
-        }
-      } catch (holdError: any) {
-        console.error("Error holding slot:", holdError);
-        toast.error(holdError?.message || "Slot is not available. Please try another time.");
-        setIsProcessingPayment(false);
-        return;
-      }
-
-      // Step 2: Create Razorpay order using holdId (no appointment created yet)
-      let orderResponse;
-      try {
-        orderResponse = await PaymentAPI.createOrder({
-          amount: fee,
-          holdId: holdId, // Pass holdId instead of appointmentId
-          consultantId: consultantId,
-          clientId: sched.client,
-        });
-      } catch (orderError: any) {
-        console.error("Error creating Razorpay order:", orderError);
-        toast.error(orderError?.response?.data?.message || "Failed to initialize payment. Please try again");
-        setIsProcessingPayment(false);
-        return;
-      }
-
-      const orderData = orderResponse?.data || orderResponse;
-      const razorpayOrderId = orderData.orderId;
-      const razorpayKey = orderData.key;
-      const transactionId = orderData.transactionId;
-
-      if (!razorpayOrderId || !razorpayKey) {
-        toast.error("Payment gateway initialization failed. Please try again");
-        setIsProcessingPayment(false);
-        return;
-      }
-
-      setPendingTransactionId(transactionId);
-
-      // Step 3: Open Razorpay checkout
-      const options = {
-        key: razorpayKey,
-        amount: orderData.amount,
-        currency: orderData.currency || "INR",
-        name: "AIOB Consultation",
-        description: `Appointment with ${selectedConsultantObj?.fullName || "Consultant"}`,
-        order_id: razorpayOrderId,
-        handler: async function (response: any) {
-          try {
-            // Step 4: Create Appointment after Payment Success
-            // We pass the holdId and the payment proof to createAppointment
-            const appointmentPayload = {
-              client: sched.client,
-              consultant: consultantId,
-              category,
-              session: sched.session,
-              startAt: startAtDate.toISOString(),
-              endAt: endAtDate.toISOString(),
-              status: "Upcoming",
-              reason: sched.reason || "",
-              notes: sched.notes || "",
-              fee: fee,
-              holdId: holdId, // Critical: confirm this hold
-              payment: {
-                razorpayResponse: {
-                  razorpay_order_id: response.razorpay_order_id,
-                  razorpay_payment_id: response.razorpay_payment_id,
-                  razorpay_signature: response.razorpay_signature
-                }
-              }
-            };
-
-            const appointmentResponse = await AppointmentAPI.create(appointmentPayload);
-
-            toast.success("Payment successful! Appointment confirmed.");
-            queryClient.invalidateQueries({ queryKey: ["appointments"] });
-            // Refresh available slots for this consultant
-            queryClient.invalidateQueries({ queryKey: ["available-slots", "consultant", sched.consultant, selectedDateISO] });
-
-            setShowBookingModal(false);
-            setShowConfirmModal(false);
-            setSelectedConsultant(null);
-            setPendingAppointmentId(null);
-            setPendingTransactionId(null);
-            setIsProcessingPayment(false);
-            setSched({
-              client: sched.client, // Keep client
-              consultant: "",
-              date: new Date(),
-              time: null,
-              session: "Video Call",
-              reason: "",
-              notes: "",
-            });
-            setSelectedCategoryForBooking("");
-          } catch (error: any) {
-            console.error("Booking confirmation error:", error);
-            toast.error(error?.response?.data?.message || "Payment successful but booking failed. Please contact support.");
-            setIsProcessingPayment(false);
-          }
-        },
-        prefill: {
-          name: user?.name || "",
-          email: user?.email || "",
-          contact: (user as any)?.mobile || "",
-        },
-        theme: {
-          color: "#0d6efd",
-        },
-        modal: {
-          ondismiss: function () {
-            toast.error("Payment cancelled");
-            setIsProcessingPayment(false);
-            // Hold will expire automatically
-          },
-        },
-      };
-
-      const razorpay = new window.Razorpay(options);
-      razorpay.on("payment.failed", function (response: any) {
-        toast.error(`Payment failed: ${response.error.description}`);
-        setIsProcessingPayment(false);
-      });
-      razorpay.open();
-    } catch (error: any) {
-      console.error("Error initiating payment:", error);
-      toast.error(error?.response?.data?.message || "Failed to initiate payment");
-      setIsProcessingPayment(false);
-    }
-  };
-
-  const handleViewProfile = (consultantId: string) => {
-    navigate(`/consultant/${consultantId}`);
-  };
-
   const handleBookNow = (consultant: any) => {
     if (!isAuthenticated || user?.role !== "Client") {
-      toast.error("Please login as a client to book an appointment");
-      navigate("/login", { state: { redirect: `/consultants`, message: "Please login to book an appointment" } });
+      toast.error("Please login as a client");
+      navigate("/login", { state: { redirect: `/consultants`, message: "Login required" } });
       return;
     }
-
-    // Set selected consultant and open modal
     setSelectedConsultant(consultant);
     setShowBookingModal(true);
   };
@@ -851,10 +429,10 @@ export default function Consultants() {
             categories={categories}
             consultants={filteredConsultants}
             isLoadingUsers={false}
-            handlePreBooking={handlePreBooking}
+            handlePreBooking={() => handlePreBooking(consultationFee)}
             isPending={isProcessingPayment}
-            isConsultant={false}
-            isClient={true}
+            isConsultant={(user as any)?.role === "Consultant"}
+            isClient={(user as any)?.role === "Client"}
             getSlotsToRender={getSlotsToRender}
             selectedCategory={selectedCategoryForBooking}
             setSelectedCategory={(catId: string) => {
@@ -879,8 +457,11 @@ export default function Consultants() {
 
           <ConfirmModal
             open={showConfirmModal}
-            onClose={() => setShowConfirmModal(false)}
-            onConfirm={finalConfirmBooking}
+            onClose={() => {
+              setShowConfirmModal(false);
+              handleExpire();
+            }}
+            onConfirm={() => confirmBooking(totalFee)}
             consultantDetails={selectedConsultantForBooking || {}}
             sched={sched}
             isPending={isProcessingPayment}
@@ -889,6 +470,8 @@ export default function Consultants() {
             consultationFee={consultationFee}
             platformFee={platformFee}
             totalFee={totalFee}
+            expiresAt={holdExpiresAt || ""}
+            onExpire={handleExpire}
           />
         </>
       )}

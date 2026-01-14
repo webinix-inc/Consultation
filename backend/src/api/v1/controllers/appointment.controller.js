@@ -11,10 +11,9 @@ const mongoose = require("mongoose");
 const crypto = require("crypto");
 const Transaction = require("../../../models/transaction.model");
 
-// Helper: parse "HH:mm" on dateISO -> Date
-function buildDateFromDateAndHHMM(dateISO, hhmm) {
-  return new Date(`${dateISO}T${hhmm}:00`);
-}
+const dateUtil = require("../../../utils/date.util");
+
+// Removed buildDateFromDateAndHHMM in favor of dateUtil.parseBookingDate
 
 // Temporary Hold Slot (locks for 5 mins)
 exports.holdSlot = async (req, res, next) => {
@@ -26,16 +25,19 @@ exports.holdSlot = async (req, res, next) => {
       throw new ApiError("Consultant and Client are required", httpStatus.BAD_REQUEST);
     }
 
-    // Determine start/end times
+    // Determine start/end times using IST util
     let start = startAt ? new Date(startAt) : null;
     let end = endAt ? new Date(endAt) : null;
 
     if (!start && date && timeStart) {
-      start = buildDateFromDateAndHHMM(date, timeStart);
+      // STRICTLY parse as IST
+      start = dateUtil.parseBookingDate(date, timeStart);
+
       if (timeEnd) {
-        end = buildDateFromDateAndHHMM(date, timeEnd);
+        end = dateUtil.parseBookingDate(date, timeEnd);
       } else {
-        end = new Date(start.getTime() + 60 * 60 * 1000); // default 60 mins
+        // default 60 mins
+        end = new Date(start.getTime() + 60 * 60 * 1000);
       }
     }
 
@@ -44,8 +46,12 @@ exports.holdSlot = async (req, res, next) => {
     }
 
     if (start < new Date()) {
-      throw new ApiError("Cannot hold slots in the past", httpStatus.BAD_REQUEST);
+      // Allow 1 min buffer for network clock skew
+      if (new Date() - start > 60000) {
+        throw new ApiError("Cannot hold slots in the past", httpStatus.BAD_REQUEST);
+      }
     }
+
     // 0. Check if Client ALREADY has a hold on this slot (Retry Payment Case)
     // If exact same consultant, client, start, end exists and is 'Hold', reuse it.
     const existingHold = await Appointment.findOne({
@@ -245,11 +251,13 @@ exports.createAppointment = async (req, res, next) => {
     let endAt = value.endAt ? new Date(value.endAt) : null;
 
     if (!startAt || !endAt) {
-      // If date + timeStart provided convert to Date
+      // If date + timeStart provided convert to Date using IST util
       if (value.date && value.timeStart) {
-        startAt = buildDateFromDateAndHHMM(value.date, value.timeStart);
+        // STRICTLY parse as IST
+        startAt = dateUtil.parseBookingDate(value.date, value.timeStart);
+
         if (value.timeEnd) {
-          endAt = buildDateFromDateAndHHMM(value.date, value.timeEnd);
+          endAt = dateUtil.parseBookingDate(value.date, value.timeEnd);
         } else {
           endAt = new Date(startAt.getTime() + 60 * 60 * 1000); // default 1 hour
         }
@@ -290,8 +298,27 @@ exports.createAppointment = async (req, res, next) => {
         throw new ApiError("Invalid booking status", httpStatus.BAD_REQUEST);
       }
 
-      // Verify hold matches request details (basic security)
-      // (Optional strict checks here)
+      // 🔴 1.1 Check if Hold Expired (Late Payment Scenario)
+      // If payment took > 5 mins, the hold is technically expired.
+      // We must check if the slot is STILL free. If yes, we allow it (Graceful Acceptance).
+      // If no (someone else booked it), we must fail (Start Refund process).
+      if (holdAppointment.expiresAt && new Date() > new Date(holdAppointment.expiresAt)) {
+        console.warn(`[Late Payment] Hold ${holdAppointment._id} expired at ${holdAppointment.expiresAt}. Checking availability...`);
+
+        const isTaken = await Appointment.hasConflict(
+          holdAppointment.consultant,
+          holdAppointment.startAt,
+          holdAppointment.endAt,
+          holdAppointment._id // Exclude self
+        );
+
+        if (isTaken) {
+          // TODO: Initiate Auto-Refund here since we possess the payment ID
+          console.error(`[Double Booking Prevented] Slot taken for expired hold ${holdAppointment._id}`);
+          throw new ApiError("Slot timeout: This slot was booked by someone else while you were paying. A refund will be initiated.", httpStatus.CONFLICT);
+        }
+        console.log(`[Late Payment] Slot still free. Resurrecting hold ${holdAppointment._id}.`);
+      }
 
       // 🔴 2. Verify Payment for Hold (If payment required)
       if (value.payment && value.payment.razorpayResponse) {
