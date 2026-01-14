@@ -10,6 +10,7 @@
 
 const Notification = require("../models/notification.model");
 const User = require("../models/user.model");
+const SocketService = require("./socket.service");
 
 class NotificationService {
     /**
@@ -33,25 +34,35 @@ class NotificationService {
             expiresAt = null,
         } = options;
 
-        return Notification.create({
-            recipient: userId,
-            recipientRole: null,
-            isGlobal: false,
-            name,
-            message,
-            type,
-            category,
-            priority,
-            actionUrl,
-            actionLabel,
-            relatedId,
-            relatedType,
-            sender,
-            senderRole,
-            avatar,
-            metadata,
-            expiresAt,
-        });
+        try {
+            const notification = await Notification.create({
+                recipient: userId,
+                recipientRole: null,
+                isGlobal: false,
+                name,
+                message,
+                type,
+                category,
+                priority,
+                actionUrl,
+                actionLabel,
+                relatedId,
+                relatedType,
+                sender,
+                senderRole,
+                avatar,
+                metadata,
+                expiresAt,
+            });
+
+            // Emit real-time event
+            SocketService.emitToUser(userId, "notification:new", notification);
+
+            return notification;
+        } catch (error) {
+            console.error("[NotificationService] notifyUser Error:", error);
+            return null;
+        }
     }
 
     /**
@@ -73,7 +84,7 @@ class NotificationService {
             expiresAt = null,
         } = options;
 
-        return Notification.create({
+        const notification = await Notification.create({
             recipient: null,
             recipientRole: role,
             isGlobal: false,
@@ -90,6 +101,11 @@ class NotificationService {
             metadata,
             expiresAt,
         });
+
+        // Emit real-time event
+        SocketService.emitToRole(role, "notification:new", notification);
+
+        return notification;
     }
 
     /**
@@ -111,7 +127,7 @@ class NotificationService {
             expiresAt = null,
         } = options;
 
-        return Notification.create({
+        const notification = await Notification.create({
             recipient: null,
             recipientRole: null,
             isGlobal: true,
@@ -128,6 +144,11 @@ class NotificationService {
             metadata,
             expiresAt,
         });
+
+        // Emit real-time event
+        SocketService.emitGlobal("notification:new", notification);
+
+        return notification;
     }
 
     // ================================
@@ -146,19 +167,34 @@ class NotificationService {
         return "";
     }
 
+    static getDate(appointment) {
+        if (appointment.date) return appointment.date;
+        if (appointment.startAt) {
+            return new Date(appointment.startAt).toLocaleDateString("en-US", {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+        }
+        return "";
+    }
+
     /**
      * Notify both client and consultant when appointment is booked
      */
     static async notifyAppointmentBooked(appointment, clientName, consultantName) {
         const promises = [];
         const timeStr = this.getTime(appointment);
+        const dateStr = this.getDate(appointment);
 
         // Notify Client
         if (appointment.client) {
+            const clientId = appointment.client._id || appointment.client;
             promises.push(
-                this.notifyUser(appointment.client, {
+                this.notifyUser(clientId, {
                     name: "Appointment Confirmed",
-                    message: `Your appointment with ${consultantName} on ${appointment.date} at ${timeStr} has been confirmed.`,
+                    message: `Your appointment with ${consultantName} on ${dateStr} at ${timeStr} has been confirmed.`,
                     type: "appointment",
                     category: "appointments",
                     priority: "high",
@@ -173,10 +209,11 @@ class NotificationService {
 
         // Notify Consultant
         if (appointment.consultant) {
+            const consultantId = appointment.consultant._id || appointment.consultant;
             promises.push(
-                this.notifyUser(appointment.consultant, {
+                this.notifyUser(consultantId, {
                     name: "New Appointment",
-                    message: `${clientName} has booked an appointment for ${appointment.date} at ${timeStr}.`,
+                    message: `${clientName} has booked an appointment for ${dateStr} at ${timeStr}.`,
                     type: "appointment",
                     category: "appointments",
                     priority: "high",
@@ -199,13 +236,15 @@ class NotificationService {
         const promises = [];
         const cancellerName = cancelledBy === "client" ? clientName : consultantName;
         const timeStr = this.getTime(appointment);
+        const dateStr = this.getDate(appointment);
 
         // Notify Client (if consultant cancelled)
         if (appointment.client && cancelledBy !== "client") {
+            const clientId = appointment.client._id || appointment.client;
             promises.push(
-                this.notifyUser(appointment.client, {
+                this.notifyUser(clientId, {
                     name: "Appointment Cancelled",
-                    message: `Your appointment with ${consultantName} on ${appointment.date} has been cancelled.`,
+                    message: `Your appointment with ${consultantName} on ${dateStr} has been cancelled.`,
                     type: "appointment",
                     category: "appointments",
                     priority: "high",
@@ -220,10 +259,11 @@ class NotificationService {
 
         // Notify Consultant (if client cancelled)
         if (appointment.consultant && cancelledBy !== "consultant") {
+            const consultantId = appointment.consultant._id || appointment.consultant;
             promises.push(
-                this.notifyUser(appointment.consultant, {
+                this.notifyUser(consultantId, {
                     name: "Appointment Cancelled",
-                    message: `${clientName} has cancelled their appointment on ${appointment.date} at ${timeStr}.`,
+                    message: `${clientName} has cancelled their appointment on ${dateStr} at ${timeStr}.`,
                     type: "appointment",
                     category: "appointments",
                     priority: "normal",
@@ -292,13 +332,15 @@ class NotificationService {
      */
     static async notifyAppointmentStatusChange(appointment, newStatus, clientName, consultantName) {
         const promises = [];
+        const dateStr = this.getDate(appointment);
 
         // Notify Client
         if (appointment.client) {
+            const clientId = appointment.client._id || appointment.client;
             promises.push(
-                this.notifyUser(appointment.client, {
+                this.notifyUser(clientId, {
                     name: `Appointment ${newStatus}`,
-                    message: `Your appointment with ${consultantName} on ${appointment.date} is now ${newStatus.toLowerCase()}.`,
+                    message: `Your appointment with ${consultantName} on ${dateStr} is now ${newStatus.toLowerCase()}.`,
                     type: "appointment",
                     category: "appointments",
                     priority: newStatus === "Completed" ? "low" : "normal",

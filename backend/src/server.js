@@ -10,6 +10,10 @@ const PORT = process.env.PORT || 5000;
 // Create HTTP server instance
 const server = http.createServer(app);
 
+// Initialize Socket.io
+const SocketService = require("./services/socket.service");
+SocketService.initialize(server);
+
 // Connect to DB and start the server
 (async () => {
   try {

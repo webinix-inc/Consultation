@@ -359,6 +359,27 @@ exports.createAppointment = async (req, res, next) => {
             method: "Razorpay",
             transactionId: transaction._id
           };
+
+          // 🔔 Trigger Payment Notifications
+          try {
+            // Ensure names are resolved
+            const clientName = client.fullName || client.name || "Client";
+            const consultantName = consultantDoc?.fullName || consultantDoc?.name || consultantDoc?.displayName || "Consultant";
+            const NotificationService = require("../../../services/notificationService");
+
+            // 1. Notify Admin (Revenue)
+            await NotificationService.notifyAdminPaymentReceived(transaction, clientName, consultantName);
+
+            // 2. Notify Client (Receipt)
+            await NotificationService.notifyPaymentSuccess(transaction, clientName);
+
+            // 3. Consultant Notification REMOVED (Platform holds funds, specific business rule)
+            // const consultantUserId = consultantUser ? consultantUser._id : (consultantDoc ? consultantDoc._id : null);
+            // await NotificationService.notifyPaymentReceived(transaction, clientName, consultantUserId);
+
+          } catch (notifErr) {
+            console.error("Payment Notification Error:", notifErr);
+          }
         }
       }
 
@@ -381,8 +402,23 @@ exports.createAppointment = async (req, res, next) => {
         const channelName = agoraService.generateChannelName(holdAppointment._id.toString());
         holdAppointment.agora = { channelName };
         await holdAppointment.save();
+
+        // 🔔 Send Real-Time Notification (Booking Confirmed)
+        const NotificationService = require("../../../services/notificationService");
+
+        // Ensure names are resolved (use existing variables from top of controller)
+        const clientName = client.fullName || client.name || "Client";
+        const consultantName = consultantDoc?.fullName || consultantDoc?.name || consultantDoc?.displayName || "Consultant";
+
+        // We must pass the updated appointment shape
+        await NotificationService.notifyAppointmentBooked(
+          holdAppointment,
+          clientName,
+          consultantName
+        );
+
       } catch (err) {
-        console.error("Agora Error:", err);
+        console.error("Post-Confirmation Error (Agora/Notify):", err);
       }
 
       return sendSuccess(res, "Appointment confirmed successfully", holdAppointment, httpStatus.CREATED);
