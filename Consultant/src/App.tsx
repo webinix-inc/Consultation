@@ -35,6 +35,8 @@ import ClientDocuments from "./pages/ClientDocuments";
 import ClientPayments from "./pages/ClientPayments";
 import Consultants from "./pages/Consultants";
 import VideoCallPage from "./pages/VideoCallPage";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 
 const queryClient = new QueryClient();
 
@@ -88,6 +90,8 @@ const App = () => {
         <Route path="/signup" element={<Signup />} />
         <Route path="/complete-profile" element={<CompleteProfile />} />
         <Route path="/account-status" element={<AccountStatus />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password/:token" element={<ResetPassword />} />
 
 
         {/* Routes with Layout */}

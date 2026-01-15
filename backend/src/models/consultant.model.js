@@ -12,6 +12,7 @@ const socialSchema = new mongoose.Schema(
   { _id: false, strict: false }
 );
 
+const crypto = require("crypto");
 const educationSchema = new mongoose.Schema(
   {
     institute: { type: String, default: "" },
@@ -109,6 +110,14 @@ const consultantSchema = new mongoose.Schema(
     // OTP Fields
     otp: { type: String },
     otpExpires: { type: Date },
+
+    // Password & Recovery
+    password: {
+      type: String,
+      select: false
+    },
+    resetPasswordToken: String,
+    resetPasswordExpire: Date,
 
     lastLogin: { type: Date },
 
@@ -251,6 +260,44 @@ consultantSchema.pre("save", async function (next) {
 
   next();
 });
+
+// Encrypt password using bcrypt
+// Encrypt password using bcrypt
+consultantSchema.pre('save', async function (next) {
+  if (!this.isModified('password')) {
+    return next();
+  }
+  try {
+    const salt = await bcrypt.genSalt(10);
+    this.password = await bcrypt.hash(this.password, salt);
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Match user entered password to hashed password in database
+consultantSchema.methods.matchPassword = async function (enteredPassword) {
+  if (!this.password) return false;
+  return await bcrypt.compare(enteredPassword, this.password);
+};
+
+// Generate and hash password token
+consultantSchema.methods.getResetPasswordToken = function () {
+  // Generate token
+  const resetToken = crypto.randomBytes(20).toString('hex');
+
+  // Hash token and set to resetPasswordToken field
+  this.resetPasswordToken = crypto
+    .createHash('sha256')
+    .update(resetToken)
+    .digest('hex');
+
+  // Set expire
+  this.resetPasswordExpire = Date.now() + 10 * 60 * 1000;
+
+  return resetToken;
+};
 
 
 // Generate JWT token

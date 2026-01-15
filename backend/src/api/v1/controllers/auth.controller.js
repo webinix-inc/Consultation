@@ -5,6 +5,7 @@ const { sendSuccess, sendError, ApiError } = require("../../../utils/response");
 const { SUCCESS, ERROR } = require("../../../constants/messages");
 const httpStatus = require("../../../constants/httpStatus");
 const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
 const { Consultant } = require("../../../models/consultant.model");
 
 
@@ -229,7 +230,197 @@ exports.verifyOtp = async (req, res, next) => {
 
 exports.login = async (req, res, next) => {
   try {
-    throw new ApiError("Password login is deprecated. Please use OTP login.", httpStatus.GONE);
+    const { email, password, mobile, otp, role: requestedRole } = req.body;
+
+    // 1. Check if login is via OTP (mobile + otp) -> Existing Logic
+    if (otp && mobile) {
+      // Reuse verifyOtp logic or call it? verifyOtp is an endpoint.
+      // It's better to guide frontend to call verifyOtp for OTP login.
+      // But if we want a unified login endpoint:
+      // For now, let's keep OTP login separate via verifyOtp endpoint as implemented before.
+      // If frontend calls login with password:
+    }
+
+    // 2. Password Login
+    if (!email || !password) {
+      throw new ApiError("Please provide an email and password", httpStatus.BAD_REQUEST);
+    }
+
+    // Check for user in all collections (or specific based on role)
+    // To support unified login, we might need to check multiple.
+
+    let user;
+    let role;
+
+    // Check Consultant
+    const Consultant = require("../../../models/consultant.model").Consultant;
+    user = await Consultant.findOne({ email: email.toLowerCase() }).select("+password");
+    if (user) {
+      role = "Consultant";
+    }
+
+    // Check Client if not found
+    if (!user) {
+      const Client = require("../../../models/client.model");
+      user = await Client.findOne({ email: email.toLowerCase() }).select("+password");
+      if (user) {
+        role = "Client";
+      }
+    }
+
+    // Check Admin/User if not found
+    if (!user) {
+      user = await User.findOne({ email: email.toLowerCase() }).select("+password");
+      if (user) {
+        role = user.role; // Admin or Employee
+      }
+    }
+
+    if (!user) {
+      throw new ApiError("Invalid credentials", httpStatus.UNAUTHORIZED);
+    }
+
+    // Verify Password
+    // Verify Password
+    if (!user.password) {
+      throw new ApiError("Password not set. Please login via OTP.", httpStatus.UNAUTHORIZED);
+    }
+
+    const isMatch = await user.matchPassword(password);
+    if (!isMatch) {
+      throw new ApiError("Invalid credentials", httpStatus.UNAUTHORIZED);
+    }
+
+    // Check Status
+    if (user.status && user.status !== 'Active') {
+      if (user.status === 'Pending') throw new ApiError("Account pending approval", httpStatus.FORBIDDEN);
+      if (user.status === 'Rejected') throw new ApiError("Account rejected", httpStatus.FORBIDDEN);
+      if (user.status === 'Blocked') throw new ApiError("Account blocked", httpStatus.FORBIDDEN);
+      throw new ApiError("Account inactive", httpStatus.FORBIDDEN);
+    }
+
+    // Update Last Login
+    user.lastLogin = new Date();
+    await user.save({ validateBeforeSave: false });
+
+    const token = user.generateAuthToken();
+
+    return sendSuccess(res, SUCCESS.LOGIN_SUCCESS, {
+      token,
+      user: {
+        id: user._id,
+        name: user.name || user.fullName,
+        email: user.email,
+        role: role,
+        mobile: user.mobile || user.phone,
+        avatar: user.avatar || user.image || user.profileImage || ""
+      }
+    });
+
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.forgotPassword = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+    const Consultant = require("../../../models/consultant.model").Consultant;
+    const Client = require("../../../models/client.model");
+
+    let user = await Consultant.findOne({ email: email.toLowerCase() });
+    if (!user) user = await Client.findOne({ email: email.toLowerCase() });
+    if (!user) user = await User.findOne({ email: email.toLowerCase() });
+
+    if (!user) {
+      throw new ApiError("There is no user with that email", httpStatus.NOT_FOUND);
+    }
+
+    // Get reset token
+    const resetToken = user.getResetPasswordToken();
+
+    await user.save({ validateBeforeSave: false });
+
+    // Create reset url
+    // Since frontend is separate, we need the frontend URL.
+    // Assuming it's in env or we construct it.
+    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173"; // Fallback dev url
+    const resetUrl = `${frontendUrl}/reset-password/${resetToken}`;
+
+    const message = `You are receiving this email because you (or someone else) has requested the reset of a password. Please make a PUT request to: \n\n ${resetUrl}`;
+
+    try {
+      await sendEmail({
+        email: user.email,
+        subject: "Password Reset Token",
+        message, // Use simple message or HTML template if available
+        html: `
+        <h1>Password Reset Request</h1>
+        <p>You requested a password reset. Please click the link below to reset your password:</p>
+        <a href="${resetUrl}" clicktracking=off>${resetUrl}</a>
+        <p>This link will expire in 10 minutes.</p>
+        `
+      });
+
+      return sendSuccess(res, "Email sent", { data: "Email sent" });
+    } catch (err) {
+      console.error(err);
+      user.resetPasswordToken = undefined;
+      user.resetPasswordExpire = undefined;
+      await user.save({ validateBeforeSave: false });
+      throw new ApiError("Email could not be sent", httpStatus.INTERNAL_SERVER_ERROR);
+    }
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.resetPassword = async (req, res, next) => {
+  try {
+    // Get hashed token
+    const resetPasswordToken = crypto
+      .createHash('sha256')
+      .update(req.params.resettoken)
+      .digest('hex');
+
+    const Consultant = require("../../../models/consultant.model").Consultant;
+    const Client = require("../../../models/client.model");
+
+    // Check all collections for the token
+    let user = await Consultant.findOne({
+      resetPasswordToken,
+      resetPasswordExpire: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      user = await Client.findOne({
+        resetPasswordToken,
+        resetPasswordExpire: { $gt: Date.now() }
+      });
+    }
+
+    if (!user) {
+      user = await User.findOne({
+        resetPasswordToken,
+        resetPasswordExpire: { $gt: Date.now() }
+      });
+    }
+
+    if (!user) {
+      throw new ApiError("Invalid token", httpStatus.BAD_REQUEST);
+    }
+
+    // Set new password
+    user.password = req.body.password;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpire = undefined;
+
+    await user.save();
+
+    const token = user.generateAuthToken();
+
+    return sendSuccess(res, "Password updated", { token });
+
   } catch (error) {
     next(error);
   }
@@ -237,7 +428,7 @@ exports.login = async (req, res, next) => {
 
 exports.register = async (req, res, next) => {
   try {
-    const { registrationToken, fullName, email, role, category, subcategory, fees } = req.body;
+    const { registrationToken, fullName, email, role, category, subcategory, fees, password } = req.body;
 
     let decoded;
     try {
@@ -279,7 +470,8 @@ exports.register = async (req, res, next) => {
         mobile: mobile,
         category: categoryName,
         status: 'Pending',
-        fees: fees || 0
+        fees: fees || 0,
+        password: password
       });
 
       // Notify Admins about new registration
@@ -327,7 +519,8 @@ exports.register = async (req, res, next) => {
         fullName,
         email: email.toLowerCase(),
         mobile: mobile,
-        status: 'Active'
+        status: 'Active',
+        password: password
       });
 
       // Notify Admins about new client registration
@@ -369,7 +562,7 @@ exports.register = async (req, res, next) => {
 
 exports.signup = async (req, res, next) => {
   try {
-    const { fullName, email, mobile, role, category, subcategory, fees } = req.body;
+    const { fullName, email, mobile, role, category, subcategory, fees, password } = req.body;
 
     // Validate role
     if (role !== 'Client' && role !== 'Consultant') {
@@ -458,7 +651,8 @@ exports.signup = async (req, res, next) => {
         category: categoryData,
         subcategory: subcategoryData,
         status: 'Pending',
-        fees: fees || 0
+        fees: fees || 0,
+        password: password
       });
 
       // Notify Admins about new consultant signup
@@ -506,7 +700,8 @@ exports.signup = async (req, res, next) => {
         email: email.toLowerCase(),
         mobile: normalizedMobile,
 
-        status: 'Active'
+        status: 'Active',
+        password: password
       });
 
       // Notify Admins about new client signup

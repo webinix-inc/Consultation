@@ -47,6 +47,20 @@ const verifyOtpSchema = Joi.object({
 
 
 
+
+const loginSchema = Joi.object({
+  email: Joi.string().email().required().messages({
+    "string.email": "Please enter a valid email address",
+    "any.required": "Email is required",
+  }),
+  password: Joi.string().required().messages({
+    "any.required": "Password is required",
+  }),
+  mobile: Joi.string().optional(),
+  otp: Joi.string().optional(),
+  role: Joi.string().optional()
+});
+
 const registerSchema = Joi.object({
   registrationToken: Joi.string().required(),
   fullName: Joi.string().min(2).max(50).required(),
@@ -61,6 +75,7 @@ const registerSchema = Joi.object({
     Joi.object()
   ).optional(),
   fees: Joi.number().min(0).optional(),
+  password: Joi.string().min(6).optional(),
 });
 
 const signupSchema = Joi.object({
@@ -88,13 +103,16 @@ const signupSchema = Joi.object({
   category: Joi.alternatives().try(Joi.string(), Joi.object()).optional(),
   subcategory: Joi.alternatives().try(Joi.string(), Joi.object()).optional(),
   fees: Joi.number().min(0).optional(),
+  password: Joi.string().min(6).optional().messages({
+    "string.min": "Password must be at least 6 characters long",
+  }),
 });
 
 module.exports = {
   updateProfileSchema,
   sendOtpSchema,
   verifyOtpSchema,
-
+  loginSchema,
   registerSchema,
   signupSchema,
 };
