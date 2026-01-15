@@ -232,8 +232,11 @@ exports.overview = async (req, res, next) => {
       .sort((a, b) => b.appointmentCount - a.appointmentCount)
       .slice(0, 5);
 
-    const recentAppointmentsRaw = await Appointment.find({})
-      .sort({ createdAt: -1 })
+    const recentAppointmentsRaw = await Appointment.find({
+      status: { $ne: "Hold" }, // Don't show holds
+      startAt: { $gte: new Date() } // Show future/upcoming
+    })
+      .sort({ startAt: 1 }) // Soonest first
       .limit(5)
       .lean();
 

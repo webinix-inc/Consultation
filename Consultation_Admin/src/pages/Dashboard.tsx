@@ -263,7 +263,7 @@ const AdminDashboard: React.FC = () => {
 
     return data.data.recentAppointments
       .filter((a: any) => a.status !== 'Hold')
-      .slice(0, 4)
+      .slice(0, 5)
       .map((appointment: any) => {
         const cat = appointment.category;
         const categoryLabel =
@@ -276,7 +276,7 @@ const AdminDashboard: React.FC = () => {
           name: appointment.client || "Unknown Client",
           consultant: appointment.consultant || "Unknown Consultant",
           category: categoryLabel,
-          date: appointment.date,
+          date: appointment.date || appointment.startAt,
           time: appointment.startAt,
           status: appointment.status,
         };
@@ -285,8 +285,25 @@ const AdminDashboard: React.FC = () => {
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return "";
-    const date = new Date(dateStr);
-    return date.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
+
+    let targetDate = new Date(dateStr);
+
+    // Handle DD/MM/YYYY format if present
+    if (dateStr.includes('/')) {
+      const [day, month, year] = dateStr.split('/').map(Number);
+      targetDate = new Date(year, month - 1, day);
+    }
+
+    if (isNaN(targetDate.getTime())) return dateStr;
+
+    const now = new Date();
+    const tomorrow = new Date(now);
+    tomorrow.setDate(now.getDate() + 1);
+
+    if (targetDate.toDateString() === now.toDateString()) return "Today";
+    if (targetDate.toDateString() === tomorrow.toDateString()) return "Tomorrow";
+
+    return targetDate.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
   };
 
   const formatTime = (timeStr: string) => {
