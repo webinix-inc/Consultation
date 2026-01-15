@@ -262,6 +262,7 @@ const AdminDashboard: React.FC = () => {
     if (!data?.data?.recentAppointments) return [];
 
     return data.data.recentAppointments
+      .filter((a: any) => a.status !== 'Hold')
       .slice(0, 4)
       .map((appointment: any) => {
         const cat = appointment.category;
@@ -373,26 +374,30 @@ const AdminDashboard: React.FC = () => {
             {appointments.map((a) => (
               <div
                 key={a.id}
-                className="flex justify-between items-center border-b last:border-none pb-2"
+                className="grid grid-cols-12 gap-4 items-center border-b last:border-none pb-2"
               >
-                <div>
+                <div className="col-span-5 sm:col-span-4">
                   <p className="font-medium text-gray-800">{a.name}</p>
                   <p className="text-sm text-gray-500">with {a.consultant}</p>
                 </div>
-                <div className="flex items-center gap-6">
-                  <span className="text-xs px-2.5 py-1 bg-gray-100 rounded-full text-gray-600 font-medium">
+
+                <div className="col-span-2 sm:col-span-3 flex justify-center">
+                  <span className="text-xs px-2.5 py-1 bg-gray-100 rounded-full text-gray-600 font-medium whitespace-nowrap">
                     {String(
                       (typeof a.category === "object"
                         ? (a.category as any)?.title || (a.category as any)?.name
                         : a.category) || "General"
                     )}
                   </span>
-                  <div className="text-right min-w-[90px]">
+                </div>
+
+                <div className="col-span-5 flex items-center justify-end gap-3 sm:gap-6">
+                  <div className="text-right hidden sm:block">
                     <div className="text-xs text-gray-500">{formatDate(a.date)}</div>
                     <div className="text-sm text-gray-800 font-semibold">{formatTime(a.time)}</div>
                   </div>
                   <span
-                    className={`text-xs font-semibold px-2.5 py-1 rounded-full ${a.status === "Completed"
+                    className={`text-xs font-semibold px-2.5 py-1 rounded-full whitespace-nowrap ${a.status === "Completed"
                       ? "bg-green-100 text-green-700"
                       : a.status === "Cancelled"
                         ? "bg-red-100 text-red-700"

@@ -228,8 +228,8 @@ function StatCard({ title, value, delta, up, icon: Icon, stroke, data }: any) {
 
 function AppointmentItem({ a }: { a: Appointment }) {
   return (
-    <div className="flex items-center justify-between py-4 px-1 border-b border-gray-100 last:border-0 hover:bg-gray-50/50 transition-colors">
-      <div className="flex items-center gap-3">
+    <div className="grid grid-cols-12 gap-4 items-center py-4 px-1 border-b border-gray-100 last:border-0 hover:bg-gray-50/50 transition-colors">
+      <div className="col-span-8 sm:col-span-5 flex items-center gap-3">
         {/* Avatar Added Back */}
         <Avatar className="h-10 w-10 border border-gray-200">
           <AvatarImage src={a.avatar} />
@@ -244,7 +244,7 @@ function AppointmentItem({ a }: { a: Appointment }) {
       </div>
 
       {/* Col 2: Category Pill - Hidden on very small screens */}
-      <div className="hidden sm:flex justify-center flex-1">
+      <div className="hidden sm:flex col-span-2 justify-center">
         {a.tag && (
           <span className="px-3 py-1 rounded-full bg-gray-100 text-gray-600 text-xs font-medium">
             {a.tag}
@@ -253,7 +253,7 @@ function AppointmentItem({ a }: { a: Appointment }) {
       </div>
 
       {/* Col 3: Date/Time & Status */}
-      <div className="flex items-center gap-3 sm:gap-6 text-right">
+      <div className="col-span-4 sm:col-span-5 flex items-center justify-end gap-3 sm:gap-6 text-right">
         <div className="hidden sm:flex flex-col items-end">
           {a.date && <span className="text-xs text-slate-500 font-medium">{a.date}</span>}
           <span className="text-sm text-slate-900 font-bold mt-0.5 whitespace-nowrap">{a.time}</span>
@@ -353,7 +353,48 @@ const ConsultantDashboard = () => {
     return { ...s, icon, stroke, data: chartData };
   });
 
-  const recentAppointments = data?.recentAppointments || [];
+  const recentAppointments = (data?.recentAppointments || [])
+    .filter((a: Appointment) => a.status !== 'Hold')
+    .slice()
+    .sort((a: Appointment, b: Appointment) => {
+      // Helper to parse "DD/MM/YYYY", ISO string, or relative words
+      const parseDate = (dStr?: string) => {
+        if (!dStr) return 0;
+        const lower = dStr.toLowerCase();
+        const now = new Date();
+        now.setHours(0, 0, 0, 0); // normalize to start of day
+
+        if (lower === 'today') {
+          return now.getTime();
+        }
+        if (lower === 'tomorrow') {
+          return new Date(now.setDate(now.getDate() + 1)).getTime();
+        }
+
+        if (dStr.includes('/')) {
+          const [day, month, year] = dStr.split('/').map(Number);
+          return new Date(year, month - 1, day).getTime();
+        }
+        return new Date(dStr).getTime();
+      };
+
+      const dateA = parseDate(a.date);
+      const dateB = parseDate(b.date);
+
+      if (dateA !== dateB) return dateA - dateB;
+
+      // Tie-breaker: Time
+      const parseTime = (tStr: string) => {
+        if (!tStr) return 0;
+        const [time, period] = tStr.split(' ');
+        let [hours, minutes] = time.split(':').map(Number);
+        if (period === 'PM' && hours !== 12) hours += 12;
+        if (period === 'AM' && hours === 12) hours = 0;
+        return hours * 60 + minutes;
+      };
+
+      return parseTime(a.time) - parseTime(b.time);
+    });
 
   if (isLoading) return <div className="p-4">Loading dashboard...</div>;
 
@@ -562,7 +603,46 @@ const ClientDashboard = () => {
     return { ...s, icon, stroke, data: chartData };
   });
 
-  const recentAppointments = data?.recentAppointments || [];
+  const recentAppointments = (data?.recentAppointments || []).slice().sort((a: Appointment, b: Appointment) => {
+    // Helper to parse "DD/MM/YYYY", ISO string, or relative words
+    const parseDate = (dStr?: string) => {
+      if (!dStr) return 0;
+      const lower = dStr.toLowerCase();
+      const now = new Date();
+      now.setHours(0, 0, 0, 0); // normalize to start of day
+
+      if (lower === 'today') {
+        return now.getTime();
+      }
+      if (lower === 'tomorrow') {
+        return new Date(now.setDate(now.getDate() + 1)).getTime();
+      }
+
+      if (dStr.includes('/')) {
+        const [day, month, year] = dStr.split('/').map(Number);
+        return new Date(year, month - 1, day).getTime();
+      }
+      return new Date(dStr).getTime();
+    };
+
+    const dateA = parseDate(a.date);
+    const dateB = parseDate(b.date);
+
+    if (dateA !== dateB) return dateA - dateB;
+
+    // Tie-breaker: Time
+    // Assuming time format "HH:mm AM/PM" or "HH:mm"
+    const parseTime = (tStr: string) => {
+      if (!tStr) return 0;
+      const [time, period] = tStr.split(' ');
+      let [hours, minutes] = time.split(':').map(Number);
+      if (period === 'PM' && hours !== 12) hours += 12;
+      if (period === 'AM' && hours === 12) hours = 0;
+      return hours * 60 + minutes;
+    };
+
+    return parseTime(a.time) - parseTime(b.time);
+  });
 
   const years = [];
   const currentYear = new Date().getFullYear();
