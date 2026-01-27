@@ -38,7 +38,11 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Bell, Calendar } from "lucide-react";
 import { NotificationsTab, AvailabilityTab } from "@/pages/Settings";
 import TransactionAPI from "@/api/transaction.api";
+import { useAuth } from "@/hooks/useAuth";
+import { formatCurrency, getCurrencyCode } from "@/utils/currencyUtils";
+import { formatPhoneForDisplay, splitPhoneForDisplay } from "@/utils/validationUtils";
 import UploadAPI from "@/api/upload.api";
+import { PhoneDisplay } from "@/components/ui/PhoneDisplay";
 
 type Edu = { institute: string; qualification: string; year: string };
 type Exp = { company: string; years: string; year: string };
@@ -1252,16 +1256,7 @@ export default function Profile() {
                   disabled={disabled || Boolean(consultantId)}
                   className={consultantId ? "bg-gray-50" : ""}
                 />
-                <LabeledInput
-                  id="phone"
-                  label="Phone Number"
-                  value={form.phone}
-                  onChange={(value) =>
-                    setForm((prev) => ({ ...prev, phone: value }))
-                  }
-                  disabled={true}
-                  className="bg-gray-50"
-                />
+                <PhoneDisplay phone={form.phone} />
                 <LabeledInput
                   id="alternatePhone"
                   label="Alternate Phone"
@@ -1273,7 +1268,7 @@ export default function Profile() {
                 />
                 <LabeledInput
                   id="fees"
-                  label="Consultation Fee"
+                  label={`Consultation Fee (${formatCurrency(0, getCurrencyCode(form.country)).replace(/[0-9.,\s]/g, '')})`}
                   type="number"
                   value={form.fees}
                   onChange={(value) =>
@@ -1438,20 +1433,14 @@ export default function Profile() {
                   <Label className="text-xs text-muted-foreground mb-1 block">
                     State
                   </Label>
-                  <Autocomplete
+                  <Input
                     value={form.state}
-                    onValueChange={(value) => {
-                      setForm((prev) => ({
-                        ...prev,
-                        state: value
-                      }));
-                    }}
-                    options={states}
-                    placeholder="Select state"
+                    onChange={(e) =>
+                      setForm((prev) => ({ ...prev, state: e.target.value }))
+                    }
+                    placeholder="Enter state"
                     disabled={disabled}
-                    allowCustom={false}
-                    searchPlaceholder="Search states..."
-                    emptyMessage="No states found."
+                    className="h-9"
                   />
                 </div>
                 <div>

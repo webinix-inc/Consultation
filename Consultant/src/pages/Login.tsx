@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
 import { Edit2 } from "lucide-react";
+import PhoneInput from 'react-phone-input-2';
+import 'react-phone-input-2/lib/style.css';
+import { validatePhone, formatPhoneForBackend } from "@/utils/validationUtils";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
@@ -12,6 +15,8 @@ import Logo from "@/assets/images/logo.png";
 const Login = () => {
   const [activeTab, setActiveTab] = useState<'otp' | 'password'>('otp');
   const [step, setStep] = useState<'mobile' | 'otp'>('mobile');
+  const [selectedCountry, setSelectedCountry] = useState('in');
+  const [role, setRole] = useState<'Client' | 'Consultant'>('Client');
 
   // Mobile/OTP State
   const [mobile, setMobile] = useState("");
@@ -53,13 +58,12 @@ const Login = () => {
   }, [step, timer]);
 
   const handleSendOtp = async () => {
-    // Normalize mobile number: strip all non-digit characters
-    const normalizedMobile = mobile.replace(/\D/g, '');
-
-    if (!normalizedMobile || normalizedMobile.length < 10) {
+    if (!mobile || !validatePhone(mobile)) {
       toast.error("Please enter a valid mobile number");
       return;
     }
+
+    const normalizedMobile = formatPhoneForBackend(mobile, selectedCountry);
 
     setLoading(true);
     try {
@@ -85,18 +89,18 @@ const Login = () => {
       return;
     }
 
-    // Normalize mobile number: strip all non-digit characters
-    const normalizedMobile = mobile.replace(/\D/g, '');
+    const normalizedMobile = formatPhoneForBackend(mobile, selectedCountry);
 
     setLoading(true);
     try {
-      const response = await AuthAPI.verifyOtp({ mobile: normalizedMobile, otp });
+      const response = await AuthAPI.verifyOtp({ mobile: normalizedMobile, otp, role });
       const { token, user, isNewUser, registrationToken } = response.data.data;
 
       if (isNewUser) {
         // User doesn't exist - redirect to signup with mobile number pre-filled
         toast.info("Account not found. Redirecting to sign up...");
-        navigate(`/signup?mobile=${encodeURIComponent(normalizedMobile)}`);
+        // Pass the raw mobile (with country code) to signup so it can pre-fill correctly
+        navigate(`/signup?mobile=${encodeURIComponent(mobile)}`);
         return;
       } else {
         handleLoginSuccess(token, user);
@@ -116,7 +120,7 @@ const Login = () => {
 
     setLoading(true);
     try {
-      const response = await AuthAPI.login({ email, password });
+      const response = await AuthAPI.login({ email, password, role });
       const { token, user } = response.data.data;
       handleLoginSuccess(token, user);
     } catch (error: any) {
@@ -173,6 +177,24 @@ const Login = () => {
           </p>
         </div>
 
+        {/* Role Toggle */}
+        <div className="flex gap-2 mb-6 bg-gray-100 p-1 rounded-xl">
+          <button
+            onClick={() => setRole('Client')}
+            className={`flex-1 py-2 rounded-lg text-sm font-medium transition ${role === 'Client' ? 'bg-white shadow text-[#007ACC]' : 'text-gray-500 hover:text-gray-700'
+              }`}
+          >
+            I am a Client
+          </button>
+          <button
+            onClick={() => setRole('Consultant')}
+            className={`flex-1 py-2 rounded-lg text-sm font-medium transition ${role === 'Consultant' ? 'bg-white shadow text-[#007ACC]' : 'text-gray-500 hover:text-gray-700'
+              }`}
+          >
+            I am a Consultant
+          </button>
+        </div>
+
         {/* Login Method Tabs */}
         <div className="flex gap-2 mb-6 bg-gray-100 p-1 rounded-xl">
           <button
@@ -196,20 +218,20 @@ const Login = () => {
             // OTP Login Form
             step === 'mobile' ? (
               <>
-                <div className="flex items-center gap-2">
-                  <span className="px-3 py-3 bg-gray-100 border border-gray-300 rounded-l-xl text-gray-700 font-medium">+91</span>
-                  <input
-                    className="flex-1 px-4 py-3 rounded-r-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#2E7FC4] text-gray-700 placeholder-gray-400"
-                    value={mobile}
-                    onChange={(e) => {
-                      const value = e.target.value.replace(/\D/g, '');
-                      setMobile(value);
-                    }}
-                    placeholder="Mobile Number"
-                    type="tel"
-                    maxLength={10}
-                  />
-                </div>
+                <PhoneInput
+                  country={'in'}
+                  value={mobile}
+                  onChange={(phone, country: any) => {
+                    setMobile(phone);
+                    setSelectedCountry(country.countryCode);
+                  }}
+                  enableSearch={true}
+                  containerClass="!w-full"
+                  inputClass="!w-full !h-[50px] !pl-[48px] !text-base !rounded-xl !border-gray-300 focus:!border-[#2E7FC4] !bg-white"
+                  buttonClass="!bg-gray-100 !rounded-l-xl !border-gray-300 !border-r-0 hover:!bg-gray-200"
+                  dropdownClass="!shadow-lg !rounded-lg"
+                  searchClass="!p-2"
+                />
                 <button
                   onClick={handleSendOtp}
                   disabled={loading}
@@ -226,7 +248,7 @@ const Login = () => {
                       Mobile Number
                     </span>
                     <span className="text-sm font-bold text-gray-700">
-                      +91 {mobile}
+                      +{mobile}
                     </span>
                   </div>
                   <button
@@ -329,7 +351,7 @@ const Login = () => {
           © {new Date().getFullYear()} AIOB. All rights reserved.
         </div>
       </div>
-    </div>
+    </div >
   );
 };
 

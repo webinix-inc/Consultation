@@ -1,4 +1,5 @@
 const Joi = require("joi");
+const { phoneSchema } = require("./common.validator");
 
 // Update profile validation schema
 const updateProfileSchema = Joi.object({
@@ -11,23 +12,15 @@ const updateProfileSchema = Joi.object({
 });
 
 const sendOtpSchema = Joi.object({
-  mobile: Joi.string()
-    .pattern(/^[0-9]{10,15}$/)
-    .required()
-    .messages({
-      "string.pattern.base": "Mobile number must be 10-15 digits",
-      "any.required": "Mobile number is required",
-    }),
+  mobile: phoneSchema.required().messages({
+    "any.required": "Mobile number is required",
+  }),
 });
 
 const verifyOtpSchema = Joi.object({
-  mobile: Joi.string()
-    .pattern(/^[0-9]{10,15}$/)
-    .required()
-    .messages({
-      "string.pattern.base": "Mobile number must be 10-15 digits",
-      "any.required": "Mobile number is required",
-    }),
+  mobile: phoneSchema.required().messages({
+    "any.required": "Mobile number is required",
+  }),
   otp: Joi.string()
     .length(6)
     .pattern(/^[0-9]+$/)
@@ -75,6 +68,7 @@ const registerSchema = Joi.object({
     Joi.object()
   ).optional(),
   fees: Joi.number().min(0).optional(),
+  currency: Joi.string().length(3).uppercase().optional(),
   password: Joi.string().min(6).optional(),
 });
 
@@ -88,13 +82,9 @@ const signupSchema = Joi.object({
     "string.email": "Please enter a valid email address",
     "any.required": "Email is required",
   }),
-  mobile: Joi.string()
-    .pattern(/^[0-9]{10,15}$/)
-    .required()
-    .messages({
-      "string.pattern.base": "Mobile number must be 10-15 digits",
-      "any.required": "Mobile number is required",
-    }),
+  mobile: phoneSchema.required().messages({
+    "any.required": "Mobile number is required",
+  }),
 
   role: Joi.string().valid("Client", "Consultant").required().messages({
     "any.only": "Role must be either Client or Consultant",
@@ -103,6 +93,7 @@ const signupSchema = Joi.object({
   category: Joi.alternatives().try(Joi.string(), Joi.object()).optional(),
   subcategory: Joi.alternatives().try(Joi.string(), Joi.object()).optional(),
   fees: Joi.number().min(0).optional(),
+  currency: Joi.string().length(3).uppercase().optional(),
   password: Joi.string().min(6).optional().messages({
     "string.min": "Password must be at least 6 characters long",
   }),

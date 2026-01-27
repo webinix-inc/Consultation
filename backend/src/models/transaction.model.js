@@ -23,7 +23,7 @@ const transactionSchema = new mongoose.Schema(
         },
         currency: {
             type: String,
-            default: "INR",
+            // default: "INR", // Removed default to support international transactions
         },
         type: {
             type: String,
@@ -64,6 +64,9 @@ const transactionSchema = new mongoose.Schema(
         netAmount: {
             type: Number,
             default: 0,
+        },
+        invoiceUrl: {
+            type: String,
         },
     },
     {

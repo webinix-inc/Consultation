@@ -24,6 +24,7 @@ import { useQuery } from "@tanstack/react-query";
 import TransactionAPI from "@/api/transaction.api";
 import { cn } from "@/lib/utils";
 import { TRANSACTION_STATUS_ARRAY } from "@/constants/appConstants";
+import { getSymbolFromCurrency } from "@/utils/currencyUtils";
 
 /* --------------------------------------
    Types & Utils
@@ -54,7 +55,9 @@ export type PaymentItem = {
     method: string;
     txn: string;
     invoice: string;
+    invoiceUrl?: string;
     price: number;
+    currency: string;
     session: string;
 };
 
@@ -172,12 +175,35 @@ function PaymentRow({
             </div>
 
             <div className="min-w-[220px] flex flex-col items-end gap-2">
-                <div className="font-semibold">₹{p.price}</div>
+                <div className="font-semibold">{getSymbolFromCurrency(p.currency)}{p.price}</div>
                 <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" className="gap-1">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1"
+                        disabled={!p.invoiceUrl}
+                        onClick={() => {
+                            if (p.invoiceUrl) {
+                                const link = document.createElement('a');
+                                link.href = p.invoiceUrl;
+                                link.setAttribute('download', 'Invoice.pdf'); // Backend filename takes precedence
+                                document.body.appendChild(link);
+                                link.click();
+                                document.body.removeChild(link);
+                            }
+                        }}
+                    >
                         <Download className="h-4 w-4" /> Invoice
                     </Button>
-                    <Button variant="outline" size="sm" className="gap-1">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1"
+                        disabled={!p.invoiceUrl}
+                        onClick={() => {
+                            if (p.invoiceUrl) window.open(`${p.invoiceUrl}&view=inline`, '_blank');
+                        }}
+                    >
                         <Receipt className="h-4 w-4" /> Receipt
                     </Button>
                 </div>
@@ -236,7 +262,9 @@ export default function ClientPayments() {
         method: t.paymentMethod,
         txn: t.transactionId || "N/A",
         invoice: t.metadata?.invoiceId || "INV-" + t._id.substring(18),
+        invoiceUrl: t.invoiceUrl,
         price: t.amount || 0,
+        currency: t.currency || "INR",
         session: t.appointment?.session || "Video Call",
     })), [transactions]);
 
@@ -359,7 +387,7 @@ export default function ClientPayments() {
                             </div>
                             <div>
                                 <div className="text-xs text-muted-foreground">Amount</div>
-                                <div className="text-xl font-semibold">₹{open.price}</div>
+                                <div className="text-xl font-semibold">{getSymbolFromCurrency(open.currency)}{open.price}</div>
                             </div>
                             <div>
                                 <div className="text-xs text-muted-foreground">Payment Method</div>
@@ -385,10 +413,33 @@ export default function ClientPayments() {
 
                         <div className="pt-2 border-t flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                                <Button variant="outline" className="gap-2" size="sm">
+                                <Button
+                                    variant="outline"
+                                    className="gap-2"
+                                    size="sm"
+                                    disabled={!open.invoiceUrl}
+                                    onClick={() => {
+                                        if (open.invoiceUrl) {
+                                            const link = document.createElement('a');
+                                            link.href = open.invoiceUrl;
+                                            link.setAttribute('download', 'Invoice.pdf');
+                                            document.body.appendChild(link);
+                                            link.click();
+                                            document.body.removeChild(link);
+                                        }
+                                    }}
+                                >
                                     <Download className="h-4 w-4" /> Invoice
                                 </Button>
-                                <Button variant="outline" className="gap-2" size="sm">
+                                <Button
+                                    variant="outline"
+                                    className="gap-2"
+                                    size="sm"
+                                    disabled={!open.invoiceUrl}
+                                    onClick={() => {
+                                        if (open.invoiceUrl) window.open(`${open.invoiceUrl}&view=inline`, '_blank');
+                                    }}
+                                >
                                     <Receipt className="h-4 w-4" /> Receipt
                                 </Button>
                             </div>

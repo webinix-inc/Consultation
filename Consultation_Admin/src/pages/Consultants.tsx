@@ -16,7 +16,10 @@ import {
   LockOpen,
   Check,
   X,
+  Filter,
 } from "lucide-react";
+import { PhoneDisplay } from "@/components/ui/PhoneDisplay";
+import { formatCurrency, getCurrencyCode } from "@/utils/currencyUtils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import UserAPI from "@/api/user.api";
 import CategoryAPI from "@/api/category.api";
@@ -79,6 +82,7 @@ interface User {
   yearsOfExperience?: number;
   city?: string;
   state?: string;
+  country?: string;
   clientsCount?: number;
   profileImage?: string;
   fees?: number;
@@ -104,20 +108,35 @@ interface ConsultantModel {
   category?: string;
   subcategory?: string;
   fees?: number;
+  country?: string;
 }
 
 /* ============================
    Small utilities
    ============================ */
-const initialConsultantForm = {
+interface ConsultantFormState {
+  fullName: string;
+  email: string;
+  mobile: string;
+  category: string;
+  subcategory: string;
+  clientsCount: number;
+  image: string;
+  fees: string | number;
+  country: string;
+}
+
+const initialConsultantForm: ConsultantFormState = {
   fullName: "",
   email: "",
   mobile: "",
 
   category: "",
   subcategory: "",
+  clientsCount: 0,
   image: "",
   fees: "",
+  country: "",
 };
 
 const generateUserId = () => {
@@ -352,9 +371,11 @@ const ConsultantCard: React.FC<{
   return (
     <motion.div
       key={id}
-      className="bg-white border rounded-xl p-5 shadow-sm hover:shadow-md transition-all duration-200 relative"
+      className="group bg-white border border-slate-100 rounded-2xl p-5 shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:shadow-[0_12px_24px_rgba(0,0,0,0.08)] hover:-translate-y-1 transition-all duration-300 relative overflow-hidden"
       layout
     >
+      {/* Decorative top gradient line */}
+      <div className={`absolute top-0 left-0 right-0 h-1 ${currentConfig.bg.replace("bg-", "bg-Gradient-to-r from-transparent via-")?.replace("50", "400") || "bg-blue-500"} opacity-50`} />
       {/* Top Row: Category, Status & Actions */}
       <div className="flex justify-between items-start mb-4">
         <div className="flex flex-col">
@@ -407,36 +428,40 @@ const ConsultantCard: React.FC<{
       </div>
 
       {/* Stats Row */}
-      <div className="grid grid-cols-2 gap-4 border-t border-b border-gray-100 py-4 mb-5">
-        <div className="text-center border-r border-gray-100">
-          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
-            Experience / Fee
+      {/* Stats Row */}
+      <div className="grid grid-cols-2 gap-3 mb-6">
+        <div className="flex flex-col items-center justify-center p-3 rounded-xl bg-slate-50 border border-slate-100 group-hover:bg-blue-50/30 group-hover:border-blue-100/50 transition-colors">
+          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
+            Experience
           </p>
-          <p className="text-sm font-bold text-gray-800">
-            {yearsOfExperience}+ Yrs <span className="text-gray-400">|</span> ₹{fees}
-          </p>
+          <div className="text-sm font-bold text-slate-700 mt-0.5">
+            {yearsOfExperience}+ Yrs
+          </div>
         </div>
-        <div className="text-center">
-          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+        <div className="flex flex-col items-center justify-center p-3 rounded-xl bg-slate-50 border border-slate-100 group-hover:bg-blue-50/30 group-hover:border-blue-100/50 transition-colors">
+          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
             Clients
           </p>
-          <p className="text-sm font-bold text-gray-800">{clientCount}</p>
+          <div className="text-sm font-bold text-slate-700 mt-0.5">{clientCount}</div>
         </div>
       </div>
 
       {/* Contact Info */}
-      <div className="space-y-2.5 mb-6">
-        <div className="flex items-center gap-3 text-sm text-gray-600">
-          <Mail size={15} className="text-gray-400 shrink-0" />
-          <span className="truncate">{email}</span>
+      <div className="space-y-3 mb-6 px-1">
+        <div className="flex items-center gap-3 text-sm text-slate-600 group-hover:text-slate-900 transition-colors">
+          <div className="h-8 w-8 rounded-full bg-slate-50 grid place-items-center shrink-0">
+            <Mail size={14} className="text-slate-400" />
+          </div>
+          <span className="truncate font-medium text-xs">{email}</span>
         </div>
-        <div className="flex items-center gap-3 text-sm text-gray-600">
-          <Phone size={15} className="text-gray-400 shrink-0" />
-          <span>{mobile}</span>
+        <div className="flex items-center gap-2">
+          <PhoneDisplay phone={mobile} label="" variant="card" />
         </div>
-        <div className="flex items-center gap-3 text-sm text-gray-600">
-          <MapPin size={15} className="text-gray-400 shrink-0" />
-          <span className="truncate">{location}</span>
+        <div className="flex items-center gap-3 text-sm text-slate-600 group-hover:text-slate-900 transition-colors">
+          <div className="h-8 w-8 rounded-full bg-slate-50 grid place-items-center shrink-0">
+            <MapPin size={14} className="text-slate-400" />
+          </div>
+          <span className="truncate font-medium text-xs">{location}</span>
         </div>
       </div>
 
@@ -616,6 +641,7 @@ const ConsultationManagement: React.FC = () => {
           subcategory: c.subcategory || null,
           profileImage: c.image || "",
           fees: c.fees || 0,
+          country: c.country || "IN",
         } as User;
       });
   }, [consultantsQuery.data]);
@@ -644,6 +670,7 @@ const ConsultationManagement: React.FC = () => {
           subcategory: c.subcategory || null,
           profileImage: c.image || "",
           fees: c.fees || 0,
+          country: c.country || "IN",
         } as User;
       });
   }, [consultantsQuery.data]);
@@ -1132,13 +1159,8 @@ const ConsultationManagement: React.FC = () => {
 
               if (form.category) userPayload.category = form.category;
               if (form.subcategory) userPayload.subcategory = form.subcategory;
-
-
-
-
-              if (form.category) userPayload.category = form.category;
-              if (form.subcategory) userPayload.subcategory = form.subcategory;
               if (form.fees) userPayload.fees = form.fees;
+              if (form.country) userPayload.country = form.country;
 
               createConsultant(userPayload);
             }}
@@ -1212,7 +1234,7 @@ const ConsultationManagement: React.FC = () => {
             <div className="w-full">
               <input
                 className="w-full border rounded-md p-2 text-sm bg-gray-50"
-                placeholder="Consultation Fee (₹)"
+                placeholder={`Consultation Fee (${formatCurrency(0, getCurrencyCode(form.country || 'IN')).replace(/[0-9.,\s]/g, '')})`}
                 value={form.fees}
                 onChange={(e) => {
                   const val = e.target.value.replace(/[^0-9]/g, '');

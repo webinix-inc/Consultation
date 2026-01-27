@@ -2,8 +2,7 @@ import axios from "axios";
 
 // Create instance
 const axiosInstance = axios.create({
-  baseURL: "https://consultation-kywq.onrender.com/api/v1",     // ✅ Netlify proxy
-  // baseURL: "http://localhost:5002/api/v1",
+  baseURL: `${import.meta.env.VITE_BACKEND_URL || "http://localhost:5002"}/api/v1`,
   headers: {
     "Content-Type": "application/json",
   },

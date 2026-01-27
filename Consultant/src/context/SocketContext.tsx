@@ -40,8 +40,7 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
 
         // Initialize Socket
         // Use localhost:5002 as verified or relative path if proxied
-        const socketUrl = "https://consultation-kywq.onrender.com";
-        // const socketUrl = "http://localhost:5002";
+        const socketUrl = import.meta.env.VITE_BACKEND_URL || "http://localhost:5002";
 
         const socketInstance = io(socketUrl, {
             auth: {

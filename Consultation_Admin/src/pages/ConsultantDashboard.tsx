@@ -17,6 +17,7 @@ import {
   Upload,
   ArrowLeft,
 } from "lucide-react";
+import { PhoneDisplay } from "@/components/ui/PhoneDisplay";
 import {
   Card,
   CardContent,
@@ -46,6 +47,7 @@ import { Autocomplete } from "@/components/ui/autocomplete";
 import { INDIAN_STATES } from "@/constants/indianStates";
 import { NotificationsTab, AvailabilityTab } from "@/components/ConsultantSettingsTabs";
 import TransactionAPI from "@/api/transaction.api";
+import { formatCurrency } from "@/utils/currencyUtils";
 import {
   Dialog,
   DialogContent,
@@ -1115,7 +1117,8 @@ const ConsultantDashboard = () => {
                             disabled={true}
                             className={consultantId ? "bg-gray-50" : ""}
                           />
-                          <LabeledInput
+                          <PhoneDisplay phone={form.phone} label="Phone Number" />
+                          {/* <LabeledInput
                             id="phone"
                             label="Phone Number"
                             value={form.phone}
@@ -1124,7 +1127,7 @@ const ConsultantDashboard = () => {
                             }
                             disabled={true}
                             className="bg-gray-50"
-                          />
+                          /> */}
                           <LabeledInput
                             id="alternatePhone"
                             label="Alternate Phone"
@@ -1674,7 +1677,7 @@ const ConsultantDashboard = () => {
                           </CardTitle>
                         </CardHeader>
                         <CardContent>
-                          <div className="text-2xl font-bold">₹{paymentStats.totalEarnings}</div>
+                          <div className="text-2xl font-bold">{formatCurrency(paymentStats.totalEarnings)}</div>
                         </CardContent>
                       </Card>
                       <Card>
@@ -1684,7 +1687,7 @@ const ConsultantDashboard = () => {
                           </CardTitle>
                         </CardHeader>
                         <CardContent>
-                          <div className="text-2xl font-bold">₹{paymentStats.totalPaidOut}</div>
+                          <div className="text-2xl font-bold">{formatCurrency(paymentStats.totalPaidOut)}</div>
                         </CardContent>
                       </Card>
                       <Card>
@@ -1777,7 +1780,7 @@ const ConsultantDashboard = () => {
                                       {t.type}
                                     </span>
                                   </td>
-                                  <td className="p-4 align-middle font-medium">₹{t.amount}</td>
+                                  <td className="p-4 align-middle font-medium">{formatCurrency(t.amount)}</td>
                                   <td className="p-4 align-middle">{t.status}</td>
                                   <td className="p-4 align-middle">
                                     <div className="flex flex-col">

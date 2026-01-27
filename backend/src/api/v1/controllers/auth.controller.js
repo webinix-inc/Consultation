@@ -45,8 +45,8 @@ exports.sendOtp = async (req, res, next) => {
   try {
     let { mobile } = req.body;
 
-    // Normalize mobile number: strip all non-digit characters
-    mobile = mobile.replace(/\D/g, '');
+    // Mobile number should be in E.164 format (e.g. +1234567890) from frontend
+    // mobile = mobile.replace(/\D/g, '');
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
@@ -69,8 +69,8 @@ exports.verifyOtp = async (req, res, next) => {
   try {
     let { mobile, otp, role: requestedRole } = req.body;
 
-    // Normalize mobile number: strip all non-digit characters
-    mobile = mobile.replace(/\D/g, '');
+    // Mobile number should be in E.164 format
+    // mobile = mobile.replace(/\D/g, '');
 
     console.log(`🔍 Verifying OTP - Mobile: ${mobile}, OTP: ${otp}, Requested Role: ${requestedRole || 'Any'}`);
 
@@ -439,8 +439,8 @@ exports.register = async (req, res, next) => {
 
     let { mobile } = decoded;
 
-    // Normalize mobile number: strip all non-digit characters
-    mobile = mobile.replace(/\D/g, '');
+    // Mobile number should be in E.164 format
+    // mobile = mobile.replace(/\D/g, '');
 
     if (role === 'Consultant') {
       // Check if consultant already exists
@@ -471,6 +471,8 @@ exports.register = async (req, res, next) => {
         category: categoryName,
         status: 'Pending',
         fees: fees || 0,
+        fees: fees || 0,
+        currency: req.body.currency, // Removed default INR
         password: password
       });
 
@@ -569,8 +571,9 @@ exports.signup = async (req, res, next) => {
       throw new ApiError("Role must be either Client or Consultant", httpStatus.BAD_REQUEST);
     }
 
-    // Normalize mobile number: strip all non-digit characters
-    const normalizedMobile = mobile.replace(/\D/g, '');
+    // Mobile number should be in E.164 format
+    // const normalizedMobile = mobile.replace(/\D/g, '');
+    const normalizedMobile = mobile;
 
     if (role === 'Consultant') {
       // Check if consultant already exists
@@ -652,6 +655,8 @@ exports.signup = async (req, res, next) => {
         subcategory: subcategoryData,
         status: 'Pending',
         fees: fees || 0,
+        fees: fees || 0,
+        currency: req.body.currency, // Removed default INR
         password: password
       });
 

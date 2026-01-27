@@ -150,6 +150,7 @@ const consultantSchema = new mongoose.Schema(
     },
     regNo: { type: String, default: "" },
     fees: { type: Number, default: 0 },
+    currency: { type: String }, // Currency support - no default to force explicit setting or allow dynamic
     gender: { type: String, default: "" },
     yearsOfExperience: { type: Number, min: 0, default: 0 },
     bioTitle: { type: String, trim: true, default: "" },
@@ -369,8 +370,8 @@ const createConsultantSchema = Joi.object({
   displayName: Joi.string().allow("").max(120).optional(),
 
   email: Joi.string().email().required(),
-  phone: Joi.string().min(6).max(30).required(),
-  mobile: Joi.string().min(6).max(30).optional(), // Optional, will sync with phone
+  phone: Joi.string().min(6).max(20).required(),
+  mobile: Joi.string().min(6).max(20).optional(), // Optional, will sync with phone
   alternatePhone: Joi.string().allow("").max(30).optional(),
   category: Joi.alternatives().try(
     Joi.object({

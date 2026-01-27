@@ -108,6 +108,8 @@ export default function Consultants() {
       fullName: u.fullName || u.name || `${u.firstName || ""} ${u.lastName || ""}`.trim() || "Unknown",
       _id: u._id || u.id,
       id: u._id || u.id,
+      country: u.country || "IN", // Explicitly propagate country
+      currency: u.currency || "", // Explicitly propagate currency
     }));
   }, [activeConsultantsData, isAuthenticated, user?.role]);
 

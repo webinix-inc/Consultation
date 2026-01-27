@@ -26,9 +26,12 @@ import {
     FileText,
     Calendar
 } from "lucide-react";
+import { PhoneDisplay } from "@/components/ui/PhoneDisplay";
 import { useQuery } from "@tanstack/react-query";
 import AppointmentAPI from "@/api/appointment.api";
 import ClientAPI from "@/api/client.api";
+import UploadAPI from "@/api/upload.api";
+import { formatCurrency, getCurrencyCode } from "@/utils/currencyUtils";
 
 /* --------------------------------------
    Helper Components
@@ -125,7 +128,15 @@ function ProfileTab({ profile }: { profile: any }) {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <Labeled label="Full Name" icon={User} value={profile.fullName || profile.name || ""} />
                     <Labeled label="Email Address" icon={Mail} value={profile.email || ""} />
-                    <Labeled label="Phone Number" icon={Phone} value={profile.mobile || profile.phone || "N/A"} />
+                    {/* <Labeled label="Phone Number" icon={Phone} value={profile.mobile || profile.phone || "N/A"} /> */}
+                    <div className="flex items-start gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors">
+                        <div className="mt-1 h-8 w-8 rounded-full bg-primary/10 grid place-items-center text-primary shrink-0">
+                            <Phone size={16} />
+                        </div>
+                        <div>
+                            <PhoneDisplay phone={profile.mobile || profile.phone || "N/A"} label="Phone Number" />
+                        </div>
+                    </div>
                     <Labeled
                         label="Date of Birth"
                         icon={CalendarDays}
@@ -201,7 +212,7 @@ function AppointmentDetailsModal({
                         {/* Date & Time */}
                         <div className="space-y-1">
                             <div className="text-sm font-semibold text-gray-900">Date & Time</div>
-                            <div className="text-sm text-gray-500">₹ {appointment.price || 0} / session</div>
+                            <div className="text-sm text-gray-500">{formatCurrency(appointment.price || 0, appointment.currency || getCurrencyCode(appointment.consultant?.country || 'IN'))} / session</div>
                             <div className="text-sm text-gray-700">
                                 {formattedDate} {formattedTime} ({appointment.duration || 60} min) {appointment.session || "Video Call"}
                             </div>
@@ -306,7 +317,7 @@ function PaymentDetailsModal({
                         </div>
                         <div>
                             <div className="text-xs text-gray-500 mb-1">Amount</div>
-                            <div className="font-bold text-lg text-gray-900">₹{appointment.fee || appointment.price || 0}</div>
+                            <div className="font-bold text-lg text-gray-900">{formatCurrency(appointment.fee || appointment.price || 0, appointment.currency || getCurrencyCode(appointment.consultant?.country || 'IN'))}</div>
                         </div>
                         <div>
                             <div className="text-xs text-gray-500 mb-1">Payment Method</div>
@@ -435,7 +446,7 @@ function BookingsTab({ clientId }: { clientId: string }) {
 
                                     {/* Right Side */}
                                     <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-center w-full sm:w-auto gap-2 sm:pl-4 sm:border-l border-gray-100 min-w-[120px]">
-                                        <div className="text-xl font-bold text-gray-900">₹{appt.fee || appt.price || 500}</div>
+                                        <div className="text-xl font-bold text-gray-900">{formatCurrency(appt.fee || appt.price || 500, appt.currency || getCurrencyCode(appt.consultant?.country || 'IN'))}</div>
 
                                         <div className="mt-2 text-right">
                                             <Button
@@ -565,7 +576,7 @@ function PaymentsTab({ clientId }: { clientId: string }) {
 
                                     {/* Right Side */}
                                     <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-center w-full sm:w-auto gap-2 sm:pl-4 sm:border-l border-gray-100 min-w-[100px]">
-                                        <div className="text-xl font-bold text-gray-900">₹{appt.fee || appt.price || 500}</div>
+                                        <div className="text-xl font-bold text-gray-900">{formatCurrency(appt.fee || appt.price || 500, appt.currency || getCurrencyCode(appt.consultant?.country || 'IN'))}</div>
 
                                         <Button
                                             variant="ghost"

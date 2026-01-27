@@ -74,6 +74,7 @@ const appointmentSchema = new mongoose.Schema(
       status: { type: String, default: "Pending" },
       method: { type: String, default: "System" },
       transactionId: { type: mongoose.Schema.Types.ObjectId, ref: "Transaction" },
+      invoiceUrl: { type: String },
     },
 
     clientSnapshot: {

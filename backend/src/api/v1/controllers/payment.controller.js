@@ -15,7 +15,7 @@ const razorpay = new Razorpay({
  */
 exports.createOrder = async (req, res, next) => {
   try {
-    const { amount, appointmentId, holdId, consultantId, clientId } = req.body;
+    const { amount, appointmentId, holdId, consultantId, clientId, currency: reqCurrency } = req.body;
     const user = req.user;
 
     if (!amount || amount <= 0) {
@@ -26,8 +26,34 @@ exports.createOrder = async (req, res, next) => {
       throw new ApiError("Appointment ID or Hold ID is required", httpStatus.BAD_REQUEST);
     }
 
-    // Convert amount to paise (Razorpay uses smallest currency unit)
-    const amountInPaise = Math.round(amount * 100);
+    // Determine Currency
+    let currency = reqCurrency || "INR";
+    let platformFee = 0;
+    let netAmount = amount;
+
+    if (consultantId) {
+      try {
+        const { Consultant } = require("../../../models/consultant.model");
+        const consultantDoc = await Consultant.findById(consultantId);
+
+        // If currency not provided in request, try to use consultant's currency
+        if (!reqCurrency && consultantDoc && consultantDoc.currency) {
+          currency = consultantDoc.currency;
+        }
+
+        if (consultantDoc && consultantDoc.commission && consultantDoc.commission.platformPercent > 0) {
+          const percent = consultantDoc.commission.platformPercent;
+          platformFee = Math.round((amount * percent) / 100);
+          netAmount = amount - platformFee;
+        }
+      } catch (err) {
+        console.error("Error fetching consultant for currency/commission:", err);
+      }
+    }
+
+    // Convert amount to smallest currency unit (paise/cents)
+    // Razorpay supports most currencies with 100 subdivision
+    const amountInSmallestUnit = Math.round(amount * 100);
 
     // Generate receipt
     let receiptPrefix = "APPT";
@@ -45,8 +71,8 @@ exports.createOrder = async (req, res, next) => {
 
     // Create Razorpay order
     const options = {
-      amount: amountInPaise,
-      currency: "INR",
+      amount: amountInSmallestUnit,
+      currency: currency,
       receipt: receipt,
       notes: {
         appointmentId: appointmentId || "",
@@ -72,30 +98,13 @@ exports.createOrder = async (req, res, next) => {
       });
     }
 
-    // Calculate Commission
-    let platformFee = 0;
-    let netAmount = amount;
-
-    if (consultantId) {
-      try {
-        const { Consultant } = require("../../../models/consultant.model");
-        const consultantDoc = await Consultant.findById(consultantId);
-        if (consultantDoc && consultantDoc.commission && consultantDoc.commission.platformPercent > 0) {
-          const percent = consultantDoc.commission.platformPercent;
-          platformFee = Math.round((amount * percent) / 100);
-          netAmount = amount - platformFee;
-        }
-      } catch (err) {
-        console.error("Error calculating commission:", err);
-      }
-    }
-
     if (transaction) {
       // Update existing transaction with new order details
       transaction.transactionId = order.id;
       transaction.amount = amount;
       transaction.platformFee = platformFee;
       transaction.netAmount = netAmount;
+      transaction.currency = currency; // Update currency
       transaction.metadata = {
         ...transaction.metadata,
         razorpayOrderId: order.id,
@@ -111,7 +120,7 @@ exports.createOrder = async (req, res, next) => {
         amount: amount,
         platformFee: platformFee,
         netAmount: netAmount,
-        currency: "INR",
+        currency: currency,
         type: "Payment",
         status: "Pending",
         paymentMethod: "Razorpay",

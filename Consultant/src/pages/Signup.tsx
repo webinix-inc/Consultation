@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
+import PhoneInput from 'react-phone-input-2';
+import 'react-phone-input-2/lib/style.css';
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { useDispatch } from "react-redux";
@@ -10,6 +12,8 @@ import CategoryAPI from "@/api/category.api";
 import SubcategoryAPI from "@/api/subcategory.api";
 import { useQuery } from "@tanstack/react-query";
 import Logo from "@/assets/images/logo.png";
+import { getCurrencySymbol, getCurrencyCode } from "@/utils/currencyUtils";
+import { validatePhone, formatPhoneForBackend } from "@/utils/validationUtils";
 
 const Signup = () => {
   const [searchParams] = useSearchParams();
@@ -18,6 +22,7 @@ const Signup = () => {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [mobile, setMobile] = useState(searchParams.get("mobile")?.replace(/\D/g, "") || "");
+  const [selectedCountry, setSelectedCountry] = useState("in");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [fees, setFees] = useState("");
@@ -73,7 +78,7 @@ const Signup = () => {
       return;
     }
 
-    if (mobile.length < 10) {
+    if (!validatePhone(mobile)) {
       toast.error("Please enter a valid mobile number");
       return;
     }
@@ -118,15 +123,18 @@ const Signup = () => {
 
       // subcategory state holds the title already (from the select value below)
 
+      const normalizedMobile = formatPhoneForBackend(mobile, selectedCountry);
+
       const payload: any = {
         fullName,
         email,
-        mobile,
+        mobile: normalizedMobile,
         password,
         role: userRole,
         category: userRole === 'Consultant' ? categoryTitle : undefined,
         subcategory: userRole === 'Consultant' ? subcategory : undefined,
         fees: userRole === 'Consultant' ? Number(fees) : undefined,
+        currency: userRole === 'Consultant' ? getCurrencyCode(selectedCountry) : undefined,
       };
 
       const response = await AuthAPI.signup(payload);
@@ -240,11 +248,10 @@ const Signup = () => {
             </>
           )}
 
-          {/* Fee Field for Consultant */}
           {userRole === 'Consultant' && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Consultation Fee (₹)
+                Consultation Fee ({getCurrencySymbol(selectedCountry)})
               </label>
               <input
                 className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#2E7FC4] text-gray-700 placeholder-gray-400"
@@ -290,17 +297,20 @@ const Signup = () => {
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Mobile Number
             </label>
-            <div className="flex items-center gap-2">
-              <span className="px-3 py-3 bg-gray-100 border border-gray-300 rounded-l-xl text-gray-700 font-medium">+91</span>
-              <input
-                className="flex-1 px-4 py-3 rounded-r-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#2E7FC4] text-gray-700 placeholder-gray-400"
-                value={mobile}
-                onChange={(e) => setMobile(e.target.value.replace(/\D/g, ""))}
-                placeholder="1234567890"
-                type="tel"
-                maxLength={10}
-              />
-            </div>
+            <PhoneInput
+              country={'in'}
+              value={mobile}
+              onChange={(phone, country: any) => {
+                setMobile(phone);
+                setSelectedCountry(country.countryCode);
+              }}
+              enableSearch={true}
+              containerClass="!w-full"
+              inputClass="!w-full !h-[50px] !pl-[48px] !text-base !rounded-xl !border-gray-300 focus:!border-[#2E7FC4] !bg-white"
+              buttonClass="!bg-gray-100 !rounded-l-xl !border-gray-300 !border-r-0 hover:!bg-gray-200"
+              dropdownClass="!shadow-lg !rounded-lg"
+              searchClass="!p-2"
+            />
           </div>
 
           <div>

@@ -42,6 +42,7 @@ import DocumentAPI from "@/api/document.api";
 import UploadAPI from "@/api/upload.api";
 import { toast } from "react-hot-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { formatCurrency } from "@/utils/currencyUtils";
 import { UPCOMING_STATUSES, PAST_STATUSES } from "@/constants/appConstants";
 
 /* --------------------------------------
@@ -209,7 +210,7 @@ function StatCards({ stats }: { stats: any }) {
               +12%
             </Badge> */}
                     </div>
-                    <div className="mt-1 text-2xl font-semibold">₹{stats.totalSpent || 0}</div>
+                    <div className="mt-1 text-2xl font-semibold">{formatCurrency(stats.totalSpent || 0)}</div>
                     <div className="text-pink-500 mt-2">
                         <Spark />
                     </div>
@@ -703,10 +704,10 @@ function BookingsTab({ appointments, profile }: { appointments: any[], profile: 
                         {/* Details Grid */}
                         <div className="space-y-6">
                             {/* Date & Time */}
-                            <div>
-                                <div className="font-semibold mb-1">Date & Time</div>
-                                <div className="text-muted-foreground text-sm">₹ {open.price || 0} / session</div>
-                                <div className="text-muted-foreground text-sm mt-1">
+                            <div className="space-y-1">
+                                <div className="text-sm font-semibold text-gray-900">Date & Time</div>
+                                <div className="text-muted-foreground text-sm">{formatCurrency(open.price || 0)} / session</div>
+                                <div className="text-gray-700 text-sm mt-1">
                                     {open.dateLine}
                                 </div>
                             </div>
@@ -1087,6 +1088,7 @@ export type PaymentItem = {
     method: string;
     txn: string;
     invoice: string;
+    invoiceUrl?: string;
     price: number;
     session: string;
 };
@@ -1156,12 +1158,35 @@ function PaymentRow({
             </div>
 
             <div className="min-w-[220px] flex flex-col items-end gap-2">
-                <div className="font-semibold">₹{p.price}</div>
+                <div className="font-semibold">{formatCurrency(p.price)}</div>
                 <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" className="gap-1">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1"
+                        disabled={!p.invoiceUrl}
+                        onClick={() => {
+                            if (p.invoiceUrl) {
+                                const link = document.createElement('a');
+                                link.href = p.invoiceUrl;
+                                link.setAttribute('download', 'Invoice.pdf');
+                                document.body.appendChild(link);
+                                link.click();
+                                document.body.removeChild(link);
+                            }
+                        }}
+                    >
                         <Download className="h-4 w-4" /> Invoice
                     </Button>
-                    <Button variant="outline" size="sm" className="gap-1">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1"
+                        disabled={!p.invoiceUrl}
+                        onClick={() => {
+                            if (p.invoiceUrl) window.open(`${p.invoiceUrl}&view=inline`, '_blank');
+                        }}
+                    >
                         <Receipt className="h-4 w-4" /> Receipt
                     </Button>
                 </div>
@@ -1209,6 +1234,7 @@ function PaymentsTab({ transactions }: { transactions: any[] }) {
         method: t.paymentMethod,
         txn: t.transactionId || "N/A",
         invoice: t.metadata?.invoiceId || "INV-" + t._id.substring(18),
+        invoiceUrl: t.invoiceUrl,
         price: t.amount || 0,
         session: t.appointment?.session || "Video Call",
     }));
@@ -1307,8 +1333,8 @@ function PaymentsTab({ transactions }: { transactions: any[] }) {
                                 </div>
                             </div>
                             <div>
-                                <div className="text-xs text-muted-foreground">Amount</div>
-                                <div className="text-xl font-semibold">₹{open.price}</div>
+                                <div className="text-xs text-gray-500 mb-1">Amount</div>
+                                <div className="text-xl font-semibold">{formatCurrency(open.price)}</div>
                             </div>
                             <div>
                                 <div className="text-xs text-muted-foreground">Payment Method</div>
@@ -1334,10 +1360,33 @@ function PaymentsTab({ transactions }: { transactions: any[] }) {
 
                         <div className="pt-2 border-t flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                                <Button variant="outline" className="gap-2" size="sm">
+                                <Button
+                                    variant="outline"
+                                    className="gap-2"
+                                    size="sm"
+                                    disabled={!open.invoiceUrl}
+                                    onClick={() => {
+                                        if (open.invoiceUrl) {
+                                            const link = document.createElement('a');
+                                            link.href = open.invoiceUrl;
+                                            link.setAttribute('download', 'Invoice.pdf');
+                                            document.body.appendChild(link);
+                                            link.click();
+                                            document.body.removeChild(link);
+                                        }
+                                    }}
+                                >
                                     <Download className="h-4 w-4" /> Download Invoice
                                 </Button>
-                                <Button variant="outline" className="gap-2" size="sm">
+                                <Button
+                                    variant="outline"
+                                    className="gap-2"
+                                    size="sm"
+                                    disabled={!open.invoiceUrl}
+                                    onClick={() => {
+                                        if (open.invoiceUrl) window.open(`${open.invoiceUrl}&view=inline`, '_blank');
+                                    }}
+                                >
                                     <Receipt className="h-4 w-4" /> Download Receipt
                                 </Button>
                             </div>

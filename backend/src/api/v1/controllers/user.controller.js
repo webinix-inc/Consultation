@@ -7,7 +7,7 @@ const httpStatus = require("../../../constants/httpStatus");
 exports.getUsers = async (req, res, next) => {
   try {
     const users = await User.find()
-      
+
       .populate('category subcategory')
       .sort({ createdAt: -1 });
 
@@ -21,7 +21,7 @@ exports.getUsers = async (req, res, next) => {
 exports.getProfile = async (req, res, next) => {
   try {
     const user = await User.findById(req.user.id)
-      
+
       .populate("category subcategory");
 
     if (!user) {
@@ -42,7 +42,7 @@ exports.getActiveConsultants = async (req, res, next) => {
       status: "Active",
       verificationStatus: "Approved"
     })
-      
+
       .populate('category subcategory')
       .sort({ createdAt: -1 })
       .lean();
@@ -51,11 +51,13 @@ exports.getActiveConsultants = async (req, res, next) => {
     const Consultant = require("../../../models/consultant.model").Consultant;
 
     const enhancedUsers = await Promise.all(users.map(async (user) => {
-      const consultantProfile = await Consultant.findOne({ email: user.email }).select('fees commission').lean();
+      const consultantProfile = await Consultant.findOne({ email: user.email }).select('fees commission country currency').lean();
       return {
         ...user,
         fees: consultantProfile?.fees || 0,
         commission: consultantProfile?.commission || {},
+        country: consultantProfile?.country || "IN",
+        currency: consultantProfile?.currency || "",
         consultantProfileId: consultantProfile?._id
       };
     }));
@@ -173,7 +175,7 @@ exports.updateUser = async (req, res, next) => {
       updateData,
       { new: true, runValidators: true }
     )
-     
+
       .populate('category subcategory');
 
     if (!updatedUser) {

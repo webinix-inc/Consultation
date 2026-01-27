@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/select";
 import { Pencil, Trash2, Check, Clipboard, Ban, CheckCircle, Upload } from "lucide-react";
 import UploadAPI from "@/api/upload.api";
+import { PhoneDisplay } from "@/components/ui/PhoneDisplay";
 
 import {
   Dialog,
@@ -822,7 +823,9 @@ const UserManagement = () => {
                     {user.email.length > 20 ? "..." : ""}
                   </span>
                 </td>
-                <td className="p-3">{user.mobile}</td>
+                <td className="p-3">
+                  <PhoneDisplay phone={user.mobile} label="" />
+                </td>
                 <td className="p-3">
                   <span
                     className={`px-2 py-1 rounded-xl text-xs font-medium ${getRoleClass(

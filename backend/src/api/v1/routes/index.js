@@ -19,6 +19,7 @@ const fileUploadRoutes = require("./fileUpload.routes");
 const documentRoutes = require("./document.routes");
 const agoraRoutes = require("./agora.routes");
 const locationRoutes = require("./location.routes");
+const storageRoutes = require("./storage.routes");
 
 router.use("/auth", authRoutes);
 router.use("/users", userRoutes);
@@ -38,5 +39,6 @@ router.use("/upload", fileUploadRoutes);
 router.use("/documents", documentRoutes);
 router.use("/agora", agoraRoutes);
 router.use("/locations", locationRoutes);
+router.use("/storage", storageRoutes);
 
 module.exports = router;

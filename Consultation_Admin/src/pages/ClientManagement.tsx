@@ -43,6 +43,7 @@ import { toast } from "react-hot-toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import ClientProfileView from "./ClientProfileView";
+import { PhoneDisplay } from "@/components/ui/PhoneDisplay";
 
 const getRoleClass = (role: string) => {
     switch (role) {
@@ -208,7 +209,9 @@ const ClientManagement = () => {
                                                 {user.email?.slice(0, 20)}{user.email.length > 20 ? "..." : ""}
                                             </span>
                                         </td>
-                                        <td className="p-3">{user.mobile}</td>
+                                        <td className="p-3">
+                                            <PhoneDisplay phone={user.mobile} label="" />
+                                        </td>
                                         <td className="p-3"><span className="px-2 py-1 rounded-xl text-xs font-medium bg-green-100 text-green-600">Client</span></td>
                                         <td className="p-3">{user.createdAt ? new Date(user.createdAt).toLocaleDateString() : "N/A"}</td>
                                         <td className="p-3">

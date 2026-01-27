@@ -49,6 +49,8 @@ import SubcategoryAPI from "@/api/subcategory.api";
 import ConsultantAPI from "@/api/consultant.api";
 import ClientConsultantAPI from "@/api/clientConsultant.api";
 import { useAuth } from "@/hooks/useAuth";
+import { PhoneDisplay } from "@/components/ui/PhoneDisplay";
+import { splitPhoneForDisplay } from "@/utils/validationUtils";
 
 // ------------------------------
 // Types
@@ -255,12 +257,7 @@ function EditClientDialog({ client, onUpdate }: { client: Client | null; onUpdat
               />
             </div>
             <div>
-              <Label className="text-xs text-muted-foreground mb-1 block">Phone</Label>
-              <Input
-                value={form.mobile || ""}
-                onChange={(e) => setForm({ ...form, mobile: e.target.value })}
-                placeholder="Enter phone number"
-              />
+              <PhoneDisplay phone={form.mobile || ""} label="Phone" />
             </div>
             <div>
               <Label className="text-xs text-muted-foreground mb-1 block">Category</Label>

@@ -2,6 +2,7 @@ import React from "react";
 import { X, Calendar, Clock, Video, CreditCard } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { BookingTimer } from "./BookingTimer";
+import { formatCurrency, getCurrencyCode } from "@/utils/currencyUtils";
 
 const fade = {
     hidden: { opacity: 0, scale: 0.95 },
@@ -123,17 +124,17 @@ export function ConfirmModal({
                     <div className="px-6 py-4 bg-gray-50 border-t space-y-2">
                         <div className="flex justify-between text-sm">
                             <span className="text-gray-600">Consultation Fee</span>
-                            <span className="font-medium text-gray-900">₹{consultationFee.toLocaleString("en-IN")}</span>
+                            <span className="font-medium text-gray-900">{formatCurrency(consultationFee, consultantDetails?.currency || getCurrencyCode(consultantDetails?.country || 'IN'))}</span>
                         </div>
                         {platformFee > 0 && (
                             <div className="flex justify-between text-sm">
                                 <span className="text-gray-600">Platform Fee</span>
-                                <span className="font-medium text-gray-900">₹{platformFee.toLocaleString("en-IN")}</span>
+                                <span className="font-medium text-gray-900">{formatCurrency(platformFee, consultantDetails?.currency || getCurrencyCode(consultantDetails?.country || 'IN'))}</span>
                             </div>
                         )}
                         <div className="flex justify-between text-base font-semibold pt-2 border-t">
                             <span className="text-gray-900">Total Amount</span>
-                            <span className="text-blue-600">₹{totalFee.toLocaleString("en-IN")}</span>
+                            <span className="text-blue-600">{formatCurrency(totalFee, consultantDetails?.currency || getCurrencyCode(consultantDetails?.country || 'IN'))}</span>
                         </div>
                     </div>
 

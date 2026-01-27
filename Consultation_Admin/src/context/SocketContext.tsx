@@ -36,8 +36,7 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
         }
 
         // Initialize Socket
-        const socketUrl = "https://consultation-kywq.onrender.com";
-        // const socketUrl = "http://localhost:5002";
+        const socketUrl = import.meta.env.VITE_BACKEND_URL || "http://localhost:5002";
 
         const socketInstance = io(socketUrl, {
             auth: {

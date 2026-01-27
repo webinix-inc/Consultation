@@ -321,6 +321,7 @@ exports.createAppointment = async (req, res, next) => {
       }
 
       // 🔴 2. Verify Payment for Hold (If payment required)
+      let transaction = null;
       if (value.payment && value.payment.razorpayResponse) {
         const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = value.payment.razorpayResponse;
 
@@ -336,7 +337,7 @@ exports.createAppointment = async (req, res, next) => {
         }
 
         // Update Transaction to Success
-        const transaction = await Transaction.findOne({
+        transaction = await Transaction.findOne({
           "metadata.razorpayOrderId": razorpay_order_id
         });
 
@@ -350,6 +351,34 @@ exports.createAppointment = async (req, res, next) => {
             razorpaySignature: razorpay_signature,
             verifiedAt: new Date(),
           };
+
+          try {
+            const invoiceService = require("../../../services/invoice.service");
+            // Ensure we have valid consultant details for the invoice
+            const invoiceConsultantRaw = consultantDoc || consultantUser;
+            // Normalize consultant for invoice (similar to snapshot logic)
+            const invoiceConsultant = {
+              name: invoiceConsultantRaw?.fullName || invoiceConsultantRaw?.name || "Consultant",
+              email: invoiceConsultantRaw?.email,
+              mobile: invoiceConsultantRaw?.mobile || invoiceConsultantRaw?.phone
+            };
+
+            console.log("INVOICE GENERATION START");
+            console.log("Invoice Consultant:", invoiceConsultant);
+            console.log("Transaction ID:", transaction._id);
+
+            const invoiceUrl = await invoiceService.generateInvoice(transaction, holdAppointment, client, invoiceConsultant);
+            console.log("✅ Invoice generated at:", invoiceUrl);
+
+            // Explicitly set it and check
+            transaction.invoiceUrl = invoiceUrl;
+            console.log("Transaction Object invoiceUrl Set:", transaction.invoiceUrl);
+
+          } catch (invErr) {
+            console.error("❌ Failed to generate invoice:", invErr);
+            // Non-blocking: proceed even if invoice generation fails
+          }
+
           await transaction.save();
 
           // Prepare payment object for appointment
@@ -357,8 +386,10 @@ exports.createAppointment = async (req, res, next) => {
             amount: transaction.amount,
             status: "Success",
             method: "Razorpay",
-            transactionId: transaction._id
+            transactionId: transaction._id,
+            invoiceUrl: transaction.invoiceUrl
           };
+          console.log("Saving appointment with payment invoiceUrl:", holdAppointment.payment.invoiceUrl);
 
           // 🔔 Trigger Payment Notifications
           try {
@@ -421,7 +452,14 @@ exports.createAppointment = async (req, res, next) => {
         console.error("Post-Confirmation Error (Agora/Notify):", err);
       }
 
-      return sendSuccess(res, "Appointment confirmed successfully", holdAppointment, httpStatus.CREATED);
+      // IMPORTANT: Explicitly ensure invoiceUrl is in the response, bypassing any schema strictness
+      const finalResponse = holdAppointment.toObject();
+      if (holdAppointment.payment && transaction && transaction.invoiceUrl) {
+        finalResponse.payment.invoiceUrl = transaction.invoiceUrl;
+        console.log("Force-attached invoiceUrl to response:", transaction.invoiceUrl);
+      }
+
+      return sendSuccess(res, "Appointment confirmed successfully", finalResponse, httpStatus.CREATED);
 
     } else {
       // Legacy/Direct path: Check conflict as usual
@@ -535,12 +573,31 @@ exports.createAppointment = async (req, res, next) => {
         consultantSnapshot: consultantSnapshot,
       });
 
+      // Generate Invoice if success
+      if ((value.payment.status || "Pending") === "Success") {
+        try {
+          const invoiceService = require("../../../services/invoice.service");
+          const invoiceConsultantRaw = consultantDoc || consultantUser;
+          const invoiceConsultant = {
+            name: invoiceConsultantRaw?.fullName || invoiceConsultantRaw?.name || "Consultant",
+            email: invoiceConsultantRaw?.email,
+            mobile: invoiceConsultantRaw?.mobile || invoiceConsultantRaw?.phone
+          };
+          const invoiceUrl = await invoiceService.generateInvoice(transaction, appointment, client, invoiceConsultant);
+          transaction.invoiceUrl = invoiceUrl;
+          await transaction.save();
+        } catch (invErr) {
+          console.error("Failed to generate invoice for direct booking:", invErr);
+        }
+      }
+
       // Link Transaction to Appointment
       appointment.payment = {
         amount: transaction.amount,
         status: transaction.status,
         transactionId: transaction._id,
         method: transaction.paymentMethod,
+        invoiceUrl: transaction.invoiceUrl
       };
       await appointment.save();
     }
