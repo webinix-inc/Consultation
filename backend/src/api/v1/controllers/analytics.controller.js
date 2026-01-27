@@ -592,7 +592,7 @@ exports.consultantStats = async (req, res, next) => {
 
     // Resolve Consultant Profile ID
     const ConsultantModel = require("../../../models/consultant.model").Consultant;
-    const consultantProfile = await ConsultantModel.findOne({ user: userId }).populate("category");
+    const consultantProfile = await ConsultantModel.findOne({ user: userId });
 
     const consultantIds = [userId];
     if (consultantProfile) {
@@ -791,16 +791,36 @@ exports.consultantStats = async (req, res, next) => {
         clientName = clientDoc.fullName;
         clientAvatar = clientDoc.avatar || clientDoc.profileImage || clientAvatar;
       }
-      let displayCategory = "General";
-      if (appt.consultantSnapshot?.category) {
-        const snapCat = appt.consultantSnapshot.category;
-        displayCategory = typeof snapCat === 'object' ? (snapCat.name || snapCat.title) : snapCat;
-      } else if (consultantProfile?.category) {
-        const pCat = consultantProfile.category;
-        displayCategory = typeof pCat === 'object' ? (pCat.name || pCat.title) : pCat;
+      // Helper to extract non-General category
+      const resolveCategoryName = (cat) => {
+        if (!cat) return null;
+        let name = typeof cat === 'object' ? (cat.name || cat.title) : cat;
+        return (name && name !== "General") ? name : null;
+      };
+
+      let displayCategory = resolveCategoryName(appt.category);
+
+      if (!displayCategory && appt.consultantSnapshot?.category) {
+        displayCategory = resolveCategoryName(appt.consultantSnapshot.category);
       }
 
-      let consultantName = "Consultant";
+      if (!displayCategory && consultantProfile?.category) {
+        displayCategory = resolveCategoryName(consultantProfile.category);
+      }
+
+      // Fallback: Check User model if profile failed
+      if (!displayCategory) {
+        // This assumes userId is available or we can derive it. 
+        // userId is the consultant's user ID if this is consultant stats.
+        const userDoc = await User.findById(userId).populate("category").select("category");
+        if (userDoc && userDoc.category) {
+          displayCategory = resolveCategoryName(userDoc.category);
+        }
+      }
+
+      displayCategory = displayCategory || "General";
+
+      let consultantName = "You";
       if (consultantProfile) {
         consultantName = consultantProfile.name || consultantProfile.fullName;
       } else {
@@ -1179,17 +1199,35 @@ exports.clientStats = async (req, res, next) => {
         }
       }
 
-      let displayCategory = "General";
-      if (cDoc && cDoc.category) {
-        if (typeof cDoc.category === 'object') {
-          displayCategory = cDoc.category.name || cDoc.category.title || "General";
-        } else {
-          displayCategory = cDoc.category;
+      // Helper to extract non-General category
+      const resolveCategoryName = (cat) => {
+        if (!cat) return null;
+        let name = typeof cat === 'object' ? (cat.name || cat.title) : cat;
+        return (name && name !== "General") ? name : null;
+      };
+
+      let displayCategory = resolveCategoryName(appt.category);
+
+      if (!displayCategory) {
+        if (cDoc && cDoc.category) {
+          if (mongoose.Types.ObjectId.isValid(cDoc.category)) {
+            // It's likely a reference that needs population if not already done
+            // But cDoc is already fetched. If we missed populate, we might have ID only.
+            const populatedDoc = await User.findById(cDoc._id).populate("category").select("category");
+            if (populatedDoc && populatedDoc.category) {
+              displayCategory = resolveCategoryName(populatedDoc.category);
+            }
+          } else {
+            displayCategory = resolveCategoryName(cDoc.category);
+          }
         }
-      } else if (appt.consultantSnapshot && appt.consultantSnapshot.category) {
-        const snapCat = appt.consultantSnapshot.category;
-        displayCategory = typeof snapCat === 'object' ? (snapCat.name || snapCat.title) : snapCat;
       }
+
+      if (!displayCategory && appt.consultantSnapshot?.category) {
+        displayCategory = resolveCategoryName(appt.consultantSnapshot.category);
+      }
+
+      displayCategory = displayCategory || "General";
 
       if (cAvatar.includes("via.placeholder")) {
         cAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(cName)}&background=random`;

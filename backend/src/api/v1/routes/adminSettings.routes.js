@@ -11,6 +11,13 @@ const {
 const { validate } = require("../../../middlewares/validate.middleware.js");
 const { authenticateToken, authorizeRoles } = require("../../../middlewares/auth.middleware.js");
 
+// Public route to get settings (e.g. for Terms/Privacy)
+// Placed before authentication middleware
+router.get(
+  "/public",
+  controller.getPublicSettings
+);
+
 // Apply authentication middleware to all routes
 router.use(authenticateToken);
 router.use(authorizeRoles("Admin"));
@@ -63,6 +70,13 @@ router.put(
   "/:adminId/notifications",
   validate(adminSettingsIdSchema, "params"),
   controller.updateNotificationSettings
+);
+
+// Update security settings
+router.put(
+  "/:adminId/security",
+  validate(adminSettingsIdSchema, "params"),
+  controller.updateSecuritySettings
 );
 
 

@@ -307,8 +307,8 @@ appointmentSchema.statics.getAvailableSlots = async function (id, dateISO /* "YY
     }
 
     // 2. Check if slot is in the past (Use IST-aware check)
-    // 15 minute buffer
-    if (dateUtil.isPastIST(slotStartUTC, 15)) {
+    // 5 minute buffer (Reduced from 15 to allow near-term bookings)
+    if (dateUtil.isPastIST(slotStartUTC, 5)) {
       isFree = false;
     }
 

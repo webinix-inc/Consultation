@@ -44,6 +44,12 @@ const adminSettingsSchema = new mongoose.Schema(
       payment: { type: Boolean, default: true },
       marketing: { type: Boolean, default: false },
       system: { type: Boolean, default: true },
+    },
+
+    // Security Settings
+    security: {
+      termsAndConditions: { type: String, default: "" },
+      privacyPolicy: { type: String, default: "" },
     }
   },
   {

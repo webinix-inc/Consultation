@@ -38,6 +38,9 @@ import VideoCallPage from "./pages/VideoCallPage";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 
+import TermsOfService from "./pages/TermsOfService";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+
 const queryClient = new QueryClient();
 
 // Role-based route protection wrapper
@@ -92,6 +95,8 @@ const App = () => {
         <Route path="/account-status" element={<AccountStatus />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password/:token" element={<ResetPassword />} />
+        <Route path="/terms-and-conditions" element={<TermsOfService />} />
+        <Route path="/privacy-policy" element={<PrivacyPolicy />} />
 
 
         {/* Routes with Layout */}

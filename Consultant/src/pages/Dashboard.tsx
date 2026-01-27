@@ -244,9 +244,12 @@ function AppointmentItem({ a }: { a: Appointment }) {
       </div>
 
       {/* Col 2: Category Pill - Hidden on very small screens */}
-      <div className="hidden sm:flex col-span-2 justify-center">
+      <div className="hidden sm:flex col-span-2 justify-center px-2">
         {a.tag && (
-          <span className="px-3 py-1 rounded-full bg-gray-100 text-gray-600 text-xs font-medium">
+          <span
+            title={a.tag}
+            className="px-3 py-1 rounded-full bg-gray-100 text-gray-600 text-xs font-medium truncate max-w-full text-center"
+          >
             {a.tag}
           </span>
         )}

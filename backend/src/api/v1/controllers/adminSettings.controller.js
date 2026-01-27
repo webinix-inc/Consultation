@@ -3,6 +3,23 @@ const { sendSuccess, sendError } = require("../../../utils/response.js");
 const bcrypt = require("bcryptjs");
 const User = require("../../../models/user.model");
 
+// Get Public Settings (No Auth required)
+exports.getPublicSettings = async (req, res, next) => {
+  try {
+    // Assuming single-tenant or primary admin settings. 
+    // We fetch the first available settings document or you could filter by specific criteria.
+    const settings = await AdminSettings.findOne().select("security platform general");
+
+    if (!settings) {
+      return sendError(res, "Settings not found", 404);
+    }
+
+    return sendSuccess(res, "Public settings retrieved successfully", settings);
+  } catch (err) {
+    next(err);
+  }
+};
+
 // Get Admin Settings
 exports.getSettings = async (req, res, next) => {
   try {
@@ -138,6 +155,33 @@ exports.updateNotificationSettings = async (req, res, next) => {
     await settings.save();
 
     return sendSuccess(res, "Notification settings updated successfully", settings.notifications);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Update Security Settings
+exports.updateSecuritySettings = async (req, res, next) => {
+  try {
+    const { adminId } = req.params;
+
+    let settings = await AdminSettings.findOne({ admin: adminId });
+
+    if (!settings) {
+      return sendError(res, "Admin settings not found", 404);
+    }
+
+    // Explicitly update fields to correctly handle Mongoose nested objects
+    if (req.body.termsAndConditions !== undefined) {
+      settings.security.termsAndConditions = req.body.termsAndConditions;
+    }
+    if (req.body.privacyPolicy !== undefined) {
+      settings.security.privacyPolicy = req.body.privacyPolicy;
+    }
+
+    await settings.save();
+
+    return sendSuccess(res, "Security settings updated successfully", settings.security);
   } catch (err) {
     next(err);
   }

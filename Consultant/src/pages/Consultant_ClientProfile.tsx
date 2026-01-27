@@ -627,22 +627,23 @@ function BookingsTab({ appointments, profile }: { appointments: any[], profile: 
                         <BookingRow key={b._id} b={{
                             id: b._id,
                             price: b.payment?.amount,
-                            doctor: b.consultantSnapshot?.name || "NA",
+                            doctor: b.consultantSnapshot?.name || b.consultant?.fullName || b.consultant?.name || "NA",
                             tags: [
                                 (typeof b.consultantSnapshot?.category === 'object' ? b.consultantSnapshot.category.name : b.consultantSnapshot?.category) ||
-                                (typeof b.category === 'object' ? b.category.name : b.category) || "General",
+                                (typeof b.category === 'object' ? b.category.name : b.category) ||
+                                (typeof b.consultant?.category === 'object' ? b.consultant.category : b.consultant?.category) || "General",
                                 b.status || "Pending"
                             ],
-                            title: `${b.consultantSnapshot?.subcategory || "General"} • ${b.reason || "Consultation"}`,
+                            title: `${b.consultantSnapshot?.subcategory || b.consultant?.subcategory || "General"} • ${b.reason || "Consultation"}`,
                             category: typeof b.category === 'object' ? b.category.name : b.category,
-                            subcategory: b.consultantSnapshot?.subcategory,
+                            subcategory: b.consultantSnapshot?.subcategory || b.consultant?.subcategory,
                             status: b.status,
                             serviceType: b.session,
-                            dateLine: formatDateLine(b.date, b.timeStart, b.timeEnd, b.session || "Video Call"),
+                            dateLine: b.date ? formatDateLine(b.date, b.timeStart, b.timeEnd, b.session || "Video Call") : (b.startAt ? new Date(b.startAt).toLocaleString() : "Date not set"),
                             notes: b.notes || "NA",
-                            rawDate: b.date,
-                            rawTimeStart: b.timeStart,
-                            rawTimeEnd: b.timeEnd
+                            rawDate: b.date || (b.startAt ? new Date(b.startAt).toISOString().split('T')[0] : ""),
+                            rawTimeStart: b.timeStart || (b.startAt ? new Date(b.startAt).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }) : ""),
+                            rawTimeEnd: b.timeEnd || (b.endAt ? new Date(b.endAt).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }) : "")
                         }} onOpen={setOpen} onCancel={() => setCancelId(b._id)} onReschedule={(item) => setRescheduleItem(item)} />
                     )) : <div className="text-sm text-muted-foreground">No upcoming appointments.</div>}
                 </CardContent>
@@ -660,15 +661,20 @@ function BookingsTab({ appointments, profile }: { appointments: any[], profile: 
                         <BookingRow key={b._id} b={{
                             id: b._id,
                             price: b.fee,
-                            doctor: b.consultantSnapshot?.name || "NA",
-                            tags: [b.category || "General", b.status || "NA"],
+                            doctor: b.consultantSnapshot?.name || b.consultant?.fullName || b.consultant?.name || "NA",
+                            tags: [
+                                (typeof b.consultantSnapshot?.category === 'object' ? b.consultantSnapshot.category.name : b.consultantSnapshot?.category) ||
+                                (typeof b.category === 'object' ? b.category.name : b.category) ||
+                                (typeof b.consultant?.category === 'object' ? b.consultant.category : b.consultant?.category) || "General",
+                                b.status || "NA"
+                            ],
 
-                            title: `${b.consultantSnapshot?.subcategory || "General"} • ${b.reason || "Consultation"}`,
+                            title: `${b.consultantSnapshot?.subcategory || b.consultant?.subcategory || "General"} • ${b.reason || "Consultation"}`,
                             category: b.category,
-                            subcategory: b.consultantSnapshot?.subcategory,
+                            subcategory: b.consultantSnapshot?.subcategory || b.consultant?.subcategory,
                             status: b.status,
                             serviceType: b.session,
-                            dateLine: formatDateLine(b.date, b.timeStart, b.timeEnd, b.session || "Video Call"),
+                            dateLine: b.date ? formatDateLine(b.date, b.timeStart, b.timeEnd, b.session || "Video Call") : (b.startAt ? new Date(b.startAt).toLocaleString() : "Date not set"),
                             notes: b.notes
                         }} past onOpen={setOpen} onViewNotes={setNotesItem} />
                     )) : <div className="text-sm text-muted-foreground">No past appointments.</div>}
