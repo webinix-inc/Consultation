@@ -390,7 +390,7 @@ class NotificationService {
             type: "payment",
             category: "payments",
             priority: "normal",
-            actionUrl: `/dashboard`,
+            actionUrl: transaction.invoiceUrl ? `${transaction.invoiceUrl}&view=inline` : `/dashboard`,
             actionLabel: "View Receipt",
             relatedId: transaction._id,
             relatedType: "payment",

@@ -215,7 +215,11 @@ const NotificationsPage: React.FC = () => {
       markRead(notification._id);
     }
     if (notification.actionUrl) {
-      navigate(notification.actionUrl);
+      if (notification.actionUrl.startsWith("http")) {
+        window.open(notification.actionUrl, "_blank");
+      } else {
+        navigate(notification.actionUrl);
+      }
     }
   };
 

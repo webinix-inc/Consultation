@@ -44,6 +44,8 @@ const proxyDownload = async (req, res) => {
         // Ensure safe characters in filename (basic sanitization)
         filename = filename.replace(/[^a-zA-Z0-9.\-_]/g, "_");
 
+        // Default to attachment (download) for buttons elsewhere.
+        // Use ?view=inline to open in browser (e.g. from notifications).
         const disposition = req.query.view === 'inline' ? 'inline' : 'attachment';
         res.setHeader('Content-Disposition', `${disposition}; filename="${filename}"`);
         res.setHeader('Content-Type', 'application/pdf'); // Assuming PDF for now, or could detect.
