@@ -5,6 +5,71 @@ const Category = require("../../../models/category.model");
 const Transaction = require("../../../models/transaction.model");
 const { sendSuccess } = require("../../../utils/response");
 
+/** Build CSV string from analytics overview data */
+function buildOverviewCsv(data) {
+  const rows = [];
+  const rb = data.revenueBreakdown || {};
+  rows.push("Section,Metric,Value");
+  rows.push(`Cards,Total Consultants,${data.cards?.totalConsultants ?? ""}`);
+  rows.push(`Cards,Total Appointments,${data.cards?.totalAppointments ?? ""}`);
+  rows.push(`Cards,Active Clients,${data.cards?.activeClients ?? ""}`);
+  rows.push(`Cards,Monthly Revenue,${data.cards?.monthlyRevenue ?? ""}`);
+  rows.push(`Revenue,Monthly GMV,${rb.monthlyGmv ?? ""}`);
+  rows.push(`Revenue,Platform Revenue,${rb.monthlyPlatformRevenue ?? ""}`);
+  rows.push(`Revenue,Consultant Payouts,${rb.monthlyConsultantPayouts ?? ""}`);
+  rows.push(`Revenue,Transactions,${rb.monthlyTransactions ?? ""}`);
+  rows.push(`Revenue,Monthly GMV Growth,${rb.monthlyGmvGrowth ?? ""}`);
+  rows.push(`Revenue,Yearly GMV,${rb.yearlyGmv ?? ""}`);
+  rows.push(`Revenue,YoY Growth,${rb.yoyGrowth ?? ""}`);
+  const ps = data.payoutSummary || {};
+  rows.push(`Payout,Total Consultant Earnings,${ps.totalEarnings ?? ""}`);
+  rows.push(`Payout,Total Paid Out,${ps.totalPaidOut ?? ""}`);
+  rows.push(`Payout,Remaining Balance,${ps.remainingBalance ?? ""}`);
+  rows.push("");
+  rows.push("Monthly Trends,Month,GMV,Appointments");
+  (data.monthlyTrends || []).forEach((m) => {
+    rows.push(`Trend,${m.name},${m.gmv ?? m.revenue ?? 0},${m.appt ?? 0}`);
+  });
+  rows.push("");
+  rows.push("Category Performance,Category,Revenue,Sessions,Growth");
+  (data.categoryPerformance || []).forEach((c) => {
+    rows.push(`Category,${c.name},${c.revenue ?? 0},${c.sessions ?? 0},${c.growth ?? ""}`);
+  });
+  rows.push("");
+  rows.push("Top Consultants,Rank,Name,Category,Rating,Sessions,Revenue");
+  (data.topConsultants || []).forEach((c) => {
+    rows.push(`Consultant,${c.rank},${(c.name || "").replace(/,/g, " ")},${(c.category || "").replace(/,/g, " ")},${c.rating ?? ""},${c.sessions ?? 0},${c.revenue ?? 0}`);
+  });
+  return rows.join("\n");
+}
+
+/** Build CSV string from consultant stats data */
+function buildConsultantStatsCsv(data) {
+  const rows = [];
+  rows.push("Section,Metric,Value");
+  (data.stats || []).forEach((s) => {
+    rows.push(`Stats,${(s.title || "").replace(/,/g, " ")},${s.value ?? ""}`);
+  });
+  const perf = data.performance || {};
+  rows.push(`Performance,Session Completion,${perf.sessionCompletion ?? ""}%`);
+  rows.push(`Performance,Avg Rating,${perf.avgRating ?? ""}`);
+  rows.push(`Performance,Response Time,${perf.responseTime ?? ""} hrs`);
+  rows.push(`Performance,Rebooking Rate,${perf.rebookingRate ?? ""}%`);
+  const m = data.metrics || {};
+  rows.push(`Metrics,Monthly Revenue,${m.monthlyRevenue ?? ""}`);
+  rows.push(`Metrics,Total Sessions,${m.totalSessions ?? ""}`);
+  const ps = data.payoutSummary || {};
+  rows.push(`Payout,Total Earnings,${ps.totalEarnings ?? ""}`);
+  rows.push(`Payout,Total Paid Out,${ps.totalPaidOut ?? ""}`);
+  rows.push(`Payout,Remaining Balance,${ps.remainingBalance ?? ""}`);
+  rows.push("");
+  rows.push("Monthly Revenue Trends,Month,Revenue");
+  (data.monthlyRevenueTrends || []).forEach((t) => {
+    rows.push(`Trend,${t.name},${t.revenue ?? 0}`);
+  });
+  return rows.join("\n");
+}
+
 exports.overview = async (req, res, next) => {
   try {
     const viewType = req.query.viewType || "monthly"; // "monthly" | "yearly"
@@ -56,6 +121,28 @@ exports.overview = async (req, res, next) => {
     const endOfLastYear = new Date(queryYear - 1, 11, 31, 23, 59, 59, 999);
 
     const Client = require("../../../models/client.model");
+
+    // Payout summary (all-time: total consultant earnings vs paid out, remaining balance)
+    const [payoutEarnings, payoutPaidOut] = await Promise.all([
+      Transaction.aggregate([
+        { $match: { type: "Payment", status: "Success" } },
+        { $lookup: { from: "appointments", localField: "appointment", foreignField: "_id", as: "appt" } },
+        { $unwind: { path: "$appt", preserveNullAndEmptyArrays: true } },
+        { $match: { $or: [{ "appt.status": "Completed" }, { appt: null }] } },
+        { $group: { _id: null, total: { $sum: "$netAmount" } } }
+      ]),
+      Transaction.aggregate([
+        { $match: { type: "Payout", status: "Success" } },
+        { $group: { _id: null, total: { $sum: "$amount" } } }
+      ])
+    ]);
+    const totalConsultantEarnings = payoutEarnings[0]?.total ?? 0;
+    const totalPaidOut = payoutPaidOut[0]?.total ?? 0;
+    const payoutSummary = {
+      totalEarnings: totalConsultantEarnings,
+      totalPaidOut,
+      remainingBalance: totalConsultantEarnings - totalPaidOut
+    };
 
     // Main stats - optimized with Promise.all
     const [
@@ -528,23 +615,20 @@ exports.overview = async (req, res, next) => {
       };
     });
 
-    return sendSuccess(res, "Analytics overview", {
+    const payload = {
       cards: {
         totalConsultants,
         totalAppointments,
         activeClients,
         monthlyRevenue: currentStats.platformRevenue,  // Backward compatibility
       },
-      // Enhanced revenue breakdown
       revenueBreakdown: {
-        // This month
         monthlyGmv: currentStats.gmv,
         monthlyPlatformRevenue: currentStats.platformRevenue,
         monthlyConsultantPayouts: currentStats.consultantPayouts,
         monthlyTransactions: currentStats.transactionCount,
         monthlyGmvGrowth,
         monthlyPlatformGrowth,
-        // Year to date
         yearlyGmv: yearStats.gmv,
         yearlyPlatformRevenue: yearStats.platformRevenue,
         yearlyConsultantPayouts: yearStats.consultantPayouts,
@@ -556,7 +640,18 @@ exports.overview = async (req, res, next) => {
       categoryPerformance,
       topConsultants,
       activityTrend,
-    });
+      payoutSummary,
+    };
+
+    if (req.query.format === "csv") {
+      const csv = buildOverviewCsv(payload);
+      const filename = `analytics-overview-${queryYear}-${String(queryMonth + 1).padStart(2, "0")}.csv`;
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      return res.send(csv);
+    }
+
+    return sendSuccess(res, "Analytics overview", payload);
   } catch (err) {
     next(err);
   }
@@ -602,6 +697,40 @@ exports.consultantStats = async (req, res, next) => {
     // Cast IDs to ObjectId for Aggregation
     const mongoose = require("mongoose");
     const consultantObjectIds = consultantIds.map(id => new mongoose.Types.ObjectId(id));
+
+    // Payout summary for this consultant (all-time)
+    const [consultantEarnings, consultantPayouts] = await Promise.all([
+      Transaction.aggregate([
+        {
+          $match: {
+            consultant: { $in: consultantObjectIds },
+            type: "Payment",
+            status: "Success"
+          }
+        },
+        { $lookup: { from: "appointments", localField: "appointment", foreignField: "_id", as: "appt" } },
+        { $unwind: { path: "$appt", preserveNullAndEmptyArrays: true } },
+        { $match: { $or: [{ "appt.status": "Completed" }, { appt: null }] } },
+        { $group: { _id: null, total: { $sum: "$netAmount" } } }
+      ]),
+      Transaction.aggregate([
+        {
+          $match: {
+            consultant: { $in: consultantObjectIds },
+            type: "Payout",
+            status: "Success"
+          }
+        },
+        { $group: { _id: null, total: { $sum: "$amount" } } }
+      ])
+    ]);
+    const consultantTotalEarnings = consultantEarnings[0]?.total ?? 0;
+    const consultantTotalPaidOut = consultantPayouts[0]?.total ?? 0;
+    const consultantPayoutSummary = {
+      totalEarnings: consultantTotalEarnings,
+      totalPaidOut: consultantTotalPaidOut,
+      remainingBalance: consultantTotalEarnings - consultantTotalPaidOut
+    };
 
     // 1. Total Appointments (Filtered by Period)
     const totalAppointments = await Appointment.countDocuments({
@@ -923,7 +1052,7 @@ exports.consultantStats = async (req, res, next) => {
     // Calculate deltas (optional - simplified for now, or could use prev period)
     const revenueDeltaStr = "+0%"; // Simplified for this iteration
 
-    return sendSuccess(res, "Consultant stats fetched", {
+    const payload = {
       stats: [
         { id: "total", title: "Completed Appointments", value: String(totalAppointments), delta: "+0%", up: true },
         { id: "today", title: "Today Appointments", value: String(todayAppointments), delta: "+0%", up: true },
@@ -943,7 +1072,7 @@ exports.consultantStats = async (req, res, next) => {
       performance: {
         sessionCompletion: sessionCompletionRate,
         avgRating: parseFloat(avgRating.toFixed(1)),
-        responseTime, // in hours
+        responseTime,
         rebookingRate
       },
       metrics: {
@@ -951,8 +1080,19 @@ exports.consultantStats = async (req, res, next) => {
         monthlyRevenueDelta: revenueDeltaStr,
         totalSessions: totalAppointments,
         totalSessionsDelta: sessionsDeltaStr
-      }
-    });
+      },
+      payoutSummary: consultantPayoutSummary
+    };
+
+    if (req.query.format === "csv") {
+      const csv = buildConsultantStatsCsv(payload);
+      const filename = `consultant-analytics-${queryYear}-${String(queryMonth + 1).padStart(2, "0")}.csv`;
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      return res.send(csv);
+    }
+
+    return sendSuccess(res, "Consultant stats fetched", payload);
   } catch (err) {
     console.error("❌ [Analytics] Error fetching consultant stats:", err);
     next(err);

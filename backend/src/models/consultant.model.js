@@ -132,6 +132,13 @@ const consultantSchema = new mongoose.Schema(
       description: { type: String, default: "" },
       imageUrl: { type: String, default: "" },
     },
+    // Multiple categories (additive - category/subcategory remain for primary)
+    categories: [{
+      categoryId: { type: mongoose.Schema.Types.ObjectId, ref: "Category" },
+      categoryName: { type: String, default: "" },
+      subcategoryId: { type: mongoose.Schema.Types.ObjectId, ref: "SubCategory" },
+      subcategoryName: { type: String, default: "" },
+    }],
     tags: {
       type: [String],
       default: [],
@@ -226,6 +233,12 @@ const consultantSchema = new mongoose.Schema(
       enum: ["Approved", "Active", "Pending", "Rejected", "Blocked", "Inactive"],
       default: "Pending",
     },
+
+    // GDPR Consent
+    termsAcceptedAt: { type: Date, default: null },
+    privacyAcceptedAt: { type: Date, default: null },
+    marketingConsent: { type: Boolean, default: false },
+    dataProcessingConsent: { type: Boolean, default: true },
   },
   {
     timestamps: true,

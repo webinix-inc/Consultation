@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import { useState, useMemo, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -25,6 +25,7 @@ import TransactionAPI from "@/api/transaction.api";
 import { cn } from "@/lib/utils";
 import { TRANSACTION_STATUS_ARRAY } from "@/constants/appConstants";
 import { getSymbolFromCurrency } from "@/utils/currencyUtils";
+import { toast } from "react-hot-toast";
 
 /* --------------------------------------
    Types & Utils
@@ -42,6 +43,43 @@ function getInitials(name: string) {
     const parts = name.trim().split(" ");
     if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+/** Download invoice via fetch+blob (works for cross-origin URLs; <a download> is ignored for cross-origin) */
+async function downloadInvoice(invoiceUrl: string, fallbackFilename = "Invoice.pdf") {
+    try {
+        const headers: Record<string, string> = {};
+        const token = localStorage.getItem("token");
+        if (token) headers.Authorization = `Bearer ${token}`;
+
+        const response = await fetch(invoiceUrl, { headers });
+        if (!response.ok) throw new Error(`Download failed: ${response.status}`);
+
+        const blob = await response.blob();
+        let filename = fallbackFilename;
+        const disposition = response.headers.get("Content-Disposition");
+        if (disposition?.includes("filename=")) {
+            const match = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);
+            if (match?.[1]) filename = match[1].replace(/['"]/g, "");
+        }
+
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+        toast.success("Invoice downloaded");
+    } catch (e: unknown) {
+        console.error("Invoice download failed:", e);
+        toast.error("Download failed. Opening in new tab...");
+        const token = localStorage.getItem("token");
+        const sep = invoiceUrl.includes('?') ? '&' : '?';
+        const urlWithToken = token ? `${invoiceUrl}${sep}token=${token}` : invoiceUrl;
+        window.open(urlWithToken, "_blank");
+    }
 }
 
 export type PaymentItem = {
@@ -86,7 +124,7 @@ function Modal({
 }: {
     open: boolean;
     onClose: () => void;
-    children: React.ReactNode;
+    children: ReactNode;
     title: string;
     subtitle?: string;
 }) {
@@ -182,16 +220,7 @@ function PaymentRow({
                         size="sm"
                         className="gap-1"
                         disabled={!p.invoiceUrl}
-                        onClick={() => {
-                            if (p.invoiceUrl) {
-                                const link = document.createElement('a');
-                                link.href = p.invoiceUrl;
-                                link.setAttribute('download', 'Invoice.pdf'); // Backend filename takes precedence
-                                document.body.appendChild(link);
-                                link.click();
-                                document.body.removeChild(link);
-                            }
-                        }}
+                        onClick={() => p.invoiceUrl && downloadInvoice(p.invoiceUrl)}
                     >
                         <Download className="h-4 w-4" /> Invoice
                     </Button>
@@ -201,7 +230,13 @@ function PaymentRow({
                         className="gap-1"
                         disabled={!p.invoiceUrl}
                         onClick={() => {
-                            if (p.invoiceUrl) window.open(`${p.invoiceUrl}&view=inline`, '_blank');
+                            if (p.invoiceUrl) {
+                                const token = localStorage.getItem("token");
+                                const sep = p.invoiceUrl.includes('?') ? '&' : '?';
+                                const urlWithToken = token ? `${p.invoiceUrl}${sep}token=${token}` : p.invoiceUrl;
+                                const finalSep = urlWithToken.includes('?') ? '&' : '?';
+                                window.open(`${urlWithToken}${finalSep}view=inline`, '_blank');
+                            }
                         }}
                     >
                         <Receipt className="h-4 w-4" /> Receipt
@@ -262,7 +297,7 @@ export default function ClientPayments() {
         method: t.paymentMethod,
         txn: t.transactionId || "N/A",
         invoice: t.metadata?.invoiceId || "INV-" + t._id.substring(18),
-        invoiceUrl: t.invoiceUrl,
+        invoiceUrl: t.invoiceUrl || t.appointment?.payment?.invoiceUrl,
         price: t.amount || 0,
         currency: t.currency || "INR",
         session: t.appointment?.session || "Video Call",
@@ -418,16 +453,7 @@ export default function ClientPayments() {
                                     className="gap-2"
                                     size="sm"
                                     disabled={!open.invoiceUrl}
-                                    onClick={() => {
-                                        if (open.invoiceUrl) {
-                                            const link = document.createElement('a');
-                                            link.href = open.invoiceUrl;
-                                            link.setAttribute('download', 'Invoice.pdf');
-                                            document.body.appendChild(link);
-                                            link.click();
-                                            document.body.removeChild(link);
-                                        }
-                                    }}
+                                    onClick={() => open.invoiceUrl && downloadInvoice(open.invoiceUrl)}
                                 >
                                     <Download className="h-4 w-4" /> Invoice
                                 </Button>
@@ -437,7 +463,13 @@ export default function ClientPayments() {
                                     size="sm"
                                     disabled={!open.invoiceUrl}
                                     onClick={() => {
-                                        if (open.invoiceUrl) window.open(`${open.invoiceUrl}&view=inline`, '_blank');
+                                        if (open.invoiceUrl) {
+                                            const token = localStorage.getItem("token");
+                                            const sep = open.invoiceUrl.includes('?') ? '&' : '?';
+                                            const urlWithToken = token ? `${open.invoiceUrl}${sep}token=${token}` : open.invoiceUrl;
+                                            const finalSep = urlWithToken.includes('?') ? '&' : '?';
+                                            window.open(`${urlWithToken}${finalSep}view=inline`, '_blank');
+                                        }
                                     }}
                                 >
                                     <Receipt className="h-4 w-4" /> Receipt

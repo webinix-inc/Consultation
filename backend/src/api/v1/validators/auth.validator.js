@@ -67,6 +67,14 @@ const registerSchema = Joi.object({
     Joi.string(),
     Joi.object()
   ).optional(),
+  categories: Joi.array().items(
+    Joi.object({
+      categoryId: Joi.string().optional(),
+      categoryName: Joi.string().allow("").optional(),
+      subcategoryId: Joi.string().allow("").optional(),
+      subcategoryName: Joi.string().allow("").optional(),
+    })
+  ).optional(),
   fees: Joi.number().min(0).optional(),
   currency: Joi.string().length(3).uppercase().optional(),
   password: Joi.string().min(6).optional(),
@@ -92,6 +100,14 @@ const signupSchema = Joi.object({
   }),
   category: Joi.alternatives().try(Joi.string(), Joi.object()).optional(),
   subcategory: Joi.alternatives().try(Joi.string(), Joi.object()).optional(),
+  categories: Joi.array().items(
+    Joi.object({
+      categoryId: Joi.string().optional(),
+      categoryName: Joi.string().allow("").optional(),
+      subcategoryId: Joi.string().allow("").optional(),
+      subcategoryName: Joi.string().allow("").optional(),
+    })
+  ).optional(),
   fees: Joi.number().min(0).optional(),
   currency: Joi.string().length(3).uppercase().optional(),
   password: Joi.string().min(6).optional().messages({
@@ -99,8 +115,59 @@ const signupSchema = Joi.object({
   }),
 });
 
+const forgotPasswordSchema = Joi.object({
+  email: Joi.string().email().required().messages({
+    "string.email": "Please enter a valid email address",
+    "any.required": "Email is required",
+  }),
+  role: Joi.string().valid("Client", "Consultant", "Admin", "Employee").optional(),
+});
+
+const resetPasswordSchema = Joi.object({
+  password: Joi.string()
+    .min(8)
+    .pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/)
+    .required()
+    .messages({
+      "string.min": "Password must be at least 8 characters long",
+      "string.pattern.base": "Password must contain at least one uppercase letter, one lowercase letter, and one number",
+      "any.required": "Password is required",
+    }),
+});
+
+// Bootstrap: create first admin (only when no admins exist)
+const createAdminSchema = Joi.object({
+  fullName: Joi.string().min(2).max(50).trim().required().messages({
+    "string.min": "Full name must be at least 2 characters long",
+    "any.required": "Full name is required",
+  }),
+  email: Joi.string().email().lowercase().required().messages({
+    "string.email": "Please enter a valid email address",
+    "any.required": "Email is required",
+  }),
+  password: Joi.string()
+    .min(8)
+    .pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/)
+    .required()
+    .messages({
+      "string.min": "Password must be at least 8 characters long",
+      "string.pattern.base": "Password must contain at least one uppercase, one lowercase, and one number",
+      "any.required": "Password is required",
+    }),
+  mobile: Joi.string()
+    .pattern(/^[0-9]{10,15}$/)
+    .required()
+    .messages({
+      "string.pattern.base": "Mobile must be 10-15 digits",
+      "any.required": "Mobile is required",
+    }),
+});
+
 module.exports = {
+  createAdminSchema,
   updateProfileSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
   sendOtpSchema,
   verifyOtpSchema,
   loginSchema,

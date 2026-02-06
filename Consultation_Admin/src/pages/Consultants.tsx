@@ -154,19 +154,19 @@ function useConsultants() {
 
   const usersQuery = useQuery({
     queryKey: ["users"],
-    queryFn: UserAPI.getAllUsers,
+    queryFn: () => UserAPI.getAllUsers(),
     select: (res: any) => res?.data ?? res ?? [],
   });
 
   const consultantsQuery = useQuery({
     queryKey: ["consultants"],
-    queryFn: ConsultantAPI.getAllConsultants,
+    queryFn: () => ConsultantAPI.getAllConsultants(),
     select: (res: any) => res?.data ?? res ?? [],
   });
 
   const categoriesQuery = useQuery({
     queryKey: ["categories"],
-    queryFn: CategoryAPI.getAll,
+    queryFn: () => CategoryAPI.getAll(),
     select: (res: any) => res?.data ?? res ?? [],
   });
 
@@ -271,11 +271,29 @@ function useConsultants() {
     },
   });
 
+  const consultantIds = useMemo((): string[] => {
+    const raw = (consultantsQuery.data?.data ?? consultantsQuery.data ?? []) as any[];
+    const ids = raw.map((c) => c._id || c.id).filter(Boolean) as string[];
+    return [...new Set(ids)];
+  }, [consultantsQuery.data]);
+
+  const batchClientCountsQuery = useQuery({
+    queryKey: ["batch-client-counts", consultantIds],
+    queryFn: async () => {
+      const res = await ClientConsultantAPI.getBatchClientCounts(consultantIds);
+      return (res?.data ?? res) || {};
+    },
+    enabled: consultantIds.length > 0,
+  });
+
+  const clientCountsMap = (batchClientCountsQuery.data as Record<string, number>) ?? {};
+
   return {
     usersQuery,
     consultantsQuery,
     categoriesQuery,
     subcategoriesQuery,
+    clientCountsMap,
     createConsultantMutation,
     deleteUserMutation,
     updateUserMutation,
@@ -304,7 +322,8 @@ const ConsultantCard: React.FC<{
   onStatusUpdate: (id: ID, newStatus: string) => void;
   isUpdating?: boolean;
   fromView?: "main" | "pending";
-}> = ({ user, onDelete, onStatusUpdate, isUpdating = false, fromView = "main" }) => {
+  clientCount?: number;
+}> = ({ user, onDelete, onStatusUpdate, isUpdating = false, fromView = "main", clientCount: clientCountProp }) => {
   const id = user._id || user.id || "";
   const displayName = user.fullName || "Consultant";
   const email = user.email || "—";
@@ -331,16 +350,15 @@ const ConsultantCard: React.FC<{
 
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
 
-  // Fetch linked clients count for the stats row
   const { data: linkedClientsData } = useQuery({
     queryKey: ["consultant-clients", id],
     queryFn: () => ClientConsultantAPI.getConsultantClients(id),
-    enabled: !!id,
+    enabled: !!id && clientCountProp === undefined,
   });
   const rawClients = linkedClientsData?.data || linkedClientsData;
-  const clientCount = Array.isArray(rawClients)
-    ? rawClients.length
-    : rawClients?.data?.length || 0;
+  const clientCount =
+    clientCountProp ??
+    (Array.isArray(rawClients) ? rawClients.length : rawClients?.data?.length || 0);
 
   const navigate = useNavigate();
 
@@ -588,6 +606,7 @@ const ConsultationManagement: React.FC = () => {
     consultantsQuery,
     categoriesQuery,
     subcategoriesQuery,
+    clientCountsMap,
     createConsultantMutation,
     deleteUserMutation,
     updateUserMutation,
@@ -1051,6 +1070,7 @@ const ConsultationManagement: React.FC = () => {
                 <motion.div key={user._id || user.id} variants={fadeUp}>
                   <ConsultantCard
                     user={user}
+                    clientCount={clientCountsMap[user._id || user.id || ""]}
                     onDelete={(id) => {
                       if (
                         window.confirm(
@@ -1091,6 +1111,7 @@ const ConsultationManagement: React.FC = () => {
                 <motion.div key={user._id || user.id} variants={fadeUp}>
                   <ConsultantCard
                     user={user}
+                    clientCount={clientCountsMap[user._id || user.id || ""]}
                     onDelete={(id) => {
                       if (
                         window.confirm(

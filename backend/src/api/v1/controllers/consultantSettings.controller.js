@@ -1,6 +1,7 @@
 // controllers/consultantSettings.controller.js
 const ConsultantSettings = require("../../../models/consultantSettings.model");
 const { sendSuccess, sendError } = require("../../../utils/response.js");
+const SocketService = require("../../../services/socket.service");
 const bcrypt = require("bcryptjs");
 const { Consultant } = require("../../../models/consultant.model");
 const mongoose = require("mongoose");
@@ -405,6 +406,10 @@ exports.updateAvailabilitySettings = async (req, res, next) => {
     settings.availability = finalAvailability;
     settings.markModified('availability');
     await settings.save();
+
+    // Emit realtime event so clients can invalidate slot queries
+    const effectiveConsultantId = (consultantDoc?._id || consultantId)?.toString();
+    SocketService.emitGlobal("availability:updated", { consultantId: effectiveConsultantId, targetUserId: targetUserId?.toString() });
 
     const normalized = normalizeSettingsForFrontend(settings);
 

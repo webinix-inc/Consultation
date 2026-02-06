@@ -247,23 +247,30 @@ appointmentSchema.statics.getAvailableSlots = async function (id, dateISO /* "YY
     return dateUtil.parseBookingDate(dateISO, timeStr);
   };
 
-  if (settings && settings.availability && settings.availability.workingHours) {
-    // Need to get the day of week for dateISO (parsed as IST)
-    const dateObj = dateUtil.parseBookingDate(dateISO, "12:00"); // midday IST
-    const dayOfWeek = dateUtil.formatToIST(dateObj, "EEEE").toLowerCase(); // e.g. "thursday"
+  let settingsFoundForDay = false;
+  // Calculate day of week upfront for both settings check and fallback logic
+  const dateObj = dateUtil.parseBookingDate(dateISO, "12:00"); // midday IST
+  const dayOfWeek = dateUtil.formatToIST(dateObj, "EEEE").toLowerCase(); // e.g. "thursday"
 
+  if (settings && settings.availability && settings.availability.workingHours) {
     const daySettings = settings.availability.workingHours[dayOfWeek];
 
-    if (daySettings && daySettings.enabled && daySettings.generatedSlots && daySettings.generatedSlots.length > 0) {
-      candidateSlots = daySettings.generatedSlots.map(slotStr => {
-        const [startStr, endStr] = slotStr.split(" - ");
-        return { startStr, endStr };
-      });
+    if (daySettings) {
+      settingsFoundForDay = true;
+      if (daySettings.enabled && daySettings.generatedSlots && daySettings.generatedSlots.length > 0) {
+        candidateSlots = daySettings.generatedSlots.map(slotStr => {
+          const [startStr, endStr] = slotStr.split(" - ");
+          return { startStr, endStr };
+        });
+      }
     }
   }
 
-  // Fallback: Generate 09:00 to 17:00 IST slots if no settings found
-  if (candidateSlots.length === 0) {
+  // Fallback: Generate 09:00 to 17:00 IST slots ONLY if no settings found for this day
+  // AND the day is NOT a weekend (Saturday/Sunday)
+  const isWeekend = dayOfWeek === "saturday" || dayOfWeek === "sunday";
+
+  if (candidateSlots.length === 0 && !settingsFoundForDay && !isWeekend) {
     for (let h = startHour; h < endHour; h++) {
       const startStr = `${String(h).padStart(2, "0")}:00`;
       const endStr = `${String(h + 1).padStart(2, "0")}:00`;

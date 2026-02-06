@@ -17,16 +17,17 @@ axiosInstance.interceptors.request.use((config) => {
   return config;
 });
 
-// (Optional) 🧯 Handle global errors
+// Handle 401: clear session and redirect to login
 axiosInstance.interceptors.response.use(
   (response) => response,
   (error) => {
-    // If token is expired or unauthorized
     if (error.response?.status === 401) {
-      console.warn("🚫 Unauthorized! Logging out...");
-      // Temporarily disable redirect for testing
-      // localStorage.clear();
-      // window.location.href = "/"; // Redirect to login page
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      // Avoid redirect loop if already on login
+      if (!window.location.pathname.startsWith("/login") && !window.location.pathname.startsWith("/signup")) {
+        window.location.href = "/login";
+      }
     }
     return Promise.reject(error);
   }

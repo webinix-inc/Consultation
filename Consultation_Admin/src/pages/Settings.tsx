@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { Bell, User, Save, AlertCircle, Shield, Eye, X } from "lucide-react";
+import { Bell, User, Save, AlertCircle, Shield, Eye, X, Download, Trash2, Loader2, Database } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { toast } from "react-hot-toast";
 
 // API service
 import axiosInstance from "@/api/axiosInstance";
+import UserAPI from "@/api/user.api";
 
 interface AdminSettings {
   profile: {
@@ -39,9 +41,127 @@ interface AdminSettings {
 
 }
 
+/* --------------------------------------
+   Privacy & Data Tab (GDPR)
+-------------------------------------- */
+function PrivacyDataTab() {
+  const [exporting, setExporting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleteError, setDeleteError] = useState("");
+
+  const handleExport = async () => {
+    setExporting(true);
+    setDeleteError("");
+    try {
+      const data = await UserAPI.exportMyData();
+      const blob = new Blob([JSON.stringify(data?.data ?? data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `my-data-export-${Date.now()}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Data exported successfully");
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Export failed");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deletePassword.trim()) {
+      setDeleteError("Password is required");
+      return;
+    }
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      await UserAPI.deleteMyAccount(deletePassword);
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      window.location.href = "/";
+    } catch (err: any) {
+      setDeleteError(err.response?.data?.message || "Failed to delete account");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <div className="bg-white border rounded-xl p-6 shadow-sm space-y-6">
+      <div>
+        <h3 className="font-semibold text-gray-800 mb-1">Export Your Data</h3>
+        <p className="text-sm text-gray-500 mb-3">
+          Download a copy of your personal data (profile, admin settings, notifications) in JSON format. GDPR Right to Access.
+        </p>
+        <button
+          onClick={handleExport}
+          disabled={exporting}
+          className="flex items-center gap-2 px-4 py-2 text-sm font-medium border border-gray-300 rounded-md hover:bg-gray-50 transition disabled:opacity-50"
+        >
+          {exporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+          {exporting ? "Exporting..." : "Export My Data"}
+        </button>
+      </div>
+
+      <div className="border-t pt-6">
+        <h3 className="font-semibold text-red-600 mb-1">Delete Account</h3>
+        <p className="text-sm text-gray-500 mb-3">
+          Permanently delete your account and all associated data. This cannot be undone. GDPR Right to Erasure.
+        </p>
+        <button
+          onClick={() => setShowDeleteModal(true)}
+          className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-red-600 text-white rounded-md hover:bg-red-700 transition"
+        >
+          <Trash2 size={16} />
+          Delete My Account
+        </button>
+      </div>
+
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 space-y-4">
+            <h3 className="font-semibold text-red-600">Confirm Account Deletion</h3>
+            <p className="text-sm text-gray-500">
+              This will permanently delete your account and all data. Enter your password to confirm.
+            </p>
+            <input
+              type="password"
+              placeholder="Your password"
+              value={deletePassword}
+              onChange={(e) => { setDeletePassword(e.target.value); setDeleteError(""); }}
+              className="w-full border rounded-md p-2 mt-2 text-sm"
+            />
+            {deleteError && <p className="text-sm text-red-600">{deleteError}</p>}
+            <div className="flex gap-2 justify-end pt-2">
+              <button
+                onClick={() => { setShowDeleteModal(false); setDeletePassword(""); setDeleteError(""); }}
+                disabled={deleting}
+                className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteConfirm}
+                disabled={deleting}
+                className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50"
+              >
+                {deleting ? "Deleting..." : "Delete Permanently"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const SettingsPage = () => {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<"general" | "notifications" | "security">("general");
+  const [activeTab, setActiveTab] = useState<"general" | "notifications" | "security" | "privacy">("general");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [previewContent, setPreviewContent] = useState<{ title: string; content: string } | null>(null);
@@ -375,7 +495,9 @@ const SettingsPage = () => {
       case "security":
         updateSecuritySettings();
         break;
-
+      case "privacy":
+        // Privacy tab has its own actions (export/delete)
+        break;
     }
   };
 
@@ -430,7 +552,7 @@ const SettingsPage = () => {
           { key: "general", label: "General", icon: <User size={15} /> },
           { key: "notifications", label: "Notifications", icon: <Bell size={15} /> },
           { key: "security", label: "Security", icon: <Shield size={15} /> },
-
+          { key: "privacy", label: "Privacy & Data", icon: <Database size={15} /> },
         ].map((tab) => (
           <button
             key={tab.key}
@@ -786,6 +908,11 @@ const SettingsPage = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* === Privacy & Data Tab (GDPR) === */}
+      {activeTab === "privacy" && (
+        <PrivacyDataTab />
       )}
 
       {/* === Preview Modal === */}

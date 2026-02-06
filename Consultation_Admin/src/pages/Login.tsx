@@ -5,14 +5,17 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { useDispatch } from "react-redux";
-import { loginSuccess } from "@/features/auth/authSlice";
+import { loginSuccess, logout as logoutAction } from "@/features/auth/authSlice";
 import type { AppDispatch } from "@/app/store";
 import AuthAPI from "@/api/auth.api";
 
 const Login = () => {
+  const [activeTab, setActiveTab] = useState<"otp" | "password">("otp");
   const [step, setStep] = useState(1); // 1: Mobile, 2: OTP
   const [mobile, setMobile] = useState("");
   const [otp, setOtp] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [timer, setTimer] = useState(30);
 
@@ -22,16 +25,14 @@ const Login = () => {
 
   // ✅ Redirect logged in users away from login page
   useEffect(() => {
-    if (isAuthenticated) {
-      if (user.role !== 'Admin') {
-        localStorage.removeItem('token');
-        window.location.href = '/login';
+    if (isAuthenticated && user) {
+      if (user.role !== "Admin" && user.role !== "Employee") {
+        dispatch(logoutAction());
         return;
       }
-
       navigate("/dashboard");
     }
-  }, [isAuthenticated, navigate, user]);
+  }, [isAuthenticated, navigate, user, dispatch]);
 
   // Timer countdown logic
   useEffect(() => {
@@ -53,13 +54,45 @@ const Login = () => {
     setLoading(true);
     try {
       const response = await AuthAPI.sendOtp({ mobile });
-      const { otp } = response.data.data;
+      const { otp } = response.data?.data || {};
 
-      toast.success(`OTP sent successfully. Code: ${otp}`);
+      // OTP only returned in dev when ALLOW_OTP_IN_RESPONSE=true; in production user receives via SMS
+      toast.success(otp ? `OTP sent. Code: ${otp}` : "OTP sent to your mobile number");
       setStep(2);
       setTimer(30); // Reset timer on successful send
     } catch (error: any) {
       const message = error?.response?.data?.message || "Failed to send OTP";
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePasswordLogin = async () => {
+    if (!email?.trim()) {
+      toast.error("Please enter your email");
+      return;
+    }
+    if (!password) {
+      toast.error("Please enter your password");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await AuthAPI.login({ email: email.trim(), password, role: "Admin" });
+      const { token, user } = response.data.data;
+
+      if (user.role !== "Admin" && user.role !== "Employee") {
+        toast.error("Access denied. Only administrators can log in to this portal.");
+        setLoading(false);
+        return;
+      }
+
+      dispatch(loginSuccess({ token, user }));
+      navigate("/dashboard");
+    } catch (error: any) {
+      const message = error?.response?.data?.message || "Invalid email or password";
       toast.error(message);
     } finally {
       setLoading(false);
@@ -74,7 +107,7 @@ const Login = () => {
 
     setLoading(true);
     try {
-      const response = await AuthAPI.verifyOtp({ mobile, otp, role: 'Admin' });
+      const response = await AuthAPI.verifyOtp({ mobile, otp, role: "Admin" });
       const { token, user, isNewUser } = response.data.data;
 
       // Check if this is a new user (not registered yet)
@@ -96,8 +129,7 @@ const Login = () => {
       // Dispatch to Redux
       dispatch(loginSuccess({ token, user }));
 
-      // Force navigation
-      window.location.href = "/dashboard";
+      navigate("/dashboard");
     } catch (error: any) {
       const message = error?.response?.data?.message || "Invalid OTP";
       toast.error(message);
@@ -119,12 +151,58 @@ const Login = () => {
             AIOB
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            {step === 1 ? "Admin Portal - Enter your mobile number" : "Enter the OTP sent to your mobile"}
+            Admin Portal - Sign in to continue
           </p>
         </div>
 
+        {/* Login Method Tabs */}
+        <div className="flex gap-2 mb-6 bg-gray-100 p-1 rounded-xl">
+          <button
+            onClick={() => setActiveTab("otp")}
+            className={`flex-1 py-2 rounded-lg text-sm font-medium transition ${
+              activeTab === "otp" ? "bg-white shadow text-[#2E7FC4]" : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            Login via OTP
+          </button>
+          <button
+            onClick={() => setActiveTab("password")}
+            className={`flex-1 py-2 rounded-lg text-sm font-medium transition ${
+              activeTab === "password" ? "bg-white shadow text-[#2E7FC4]" : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            Email & Password
+          </button>
+        </div>
+
         <div className="space-y-5">
-          {step === 1 ? (
+          {activeTab === "password" ? (
+            <>
+              <input
+                className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#2E7FC4] text-gray-700 placeholder-gray-400"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Email Address"
+                type="email"
+              />
+              <input
+                className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#2E7FC4] text-gray-700 placeholder-gray-400"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Password"
+                type="password"
+                onKeyDown={(e) => e.key === "Enter" && handlePasswordLogin()}
+              />
+              <button
+                onClick={handlePasswordLogin}
+                disabled={loading}
+                className="w-full py-3 bg-[#2E7FC4] hover:bg-[#2567a5] text-white rounded-xl font-semibold shadow-md transition disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {loading ? "Logging in..." : "Login"}
+                {!loading && <ArrowRight size={18} />}
+              </button>
+            </>
+          ) : step === 1 ? (
             <>
               <div className="relative">
                 <span className="absolute left-4 top-1/2 transform -translate-y-1/4 text-gray-500 font-medium">

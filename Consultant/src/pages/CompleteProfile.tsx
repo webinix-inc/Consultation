@@ -7,7 +7,9 @@ import type { AppDispatch } from "@/app/store";
 import AuthAPI from "@/api/auth.api";
 import CategoryAPI from "@/api/category.api";
 import Logo from "@/assets/images/logo.png";
-import ConsultantAPI from "@/api/consultant.api";
+import { Plus, Trash2 } from "lucide-react";
+
+type CategoryItem = { categoryId: string; categoryName: string; subcategoryId: string; subcategoryName: string };
 
 const CompleteProfile = () => {
     const location = useLocation();
@@ -17,12 +19,10 @@ const CompleteProfile = () => {
     const [fullName, setFullName] = useState("");
     const [email, setEmail] = useState("");
     const [role, setRole] = useState<'Consultant' | 'Client'>('Client');
-    const [category, setCategory] = useState("");
-    const [subcategory, setSubcategory] = useState("");
     const [loading, setLoading] = useState(false);
 
     const [categories, setCategories] = useState<any[]>([]);
-    const [subcategories, setSubcategories] = useState<any[]>([]);
+    const [selectedCategories, setSelectedCategories] = useState<CategoryItem[]>([{ categoryId: "", categoryName: "", subcategoryId: "", subcategoryName: "" }]);
     const [loadingCategories, setLoadingCategories] = useState(false);
 
     const { registrationToken, mobile } = location.state || {};
@@ -34,29 +34,13 @@ const CompleteProfile = () => {
         }
     }, [registrationToken, mobile, navigate]);
 
-    // Fetch categories when role is Consultant
     useEffect(() => {
         if (role === 'Consultant') {
             fetchCategories();
         } else {
-            setCategory("");
-            setSubcategory("");
-            setCategories([]);
-            setSubcategories([]);
+            setSelectedCategories([{ categoryId: "", categoryName: "", subcategoryId: "", subcategoryName: "" }]);
         }
     }, [role]);
-
-    // Update subcategories when category changes
-    useEffect(() => {
-        if (category) {
-            const selectedCategory = categories.find(cat => cat._id === category);
-            setSubcategories(selectedCategory?.subcategories || []);
-            setSubcategory(""); // Reset subcategory selection
-        } else {
-            setSubcategory("");
-            setSubcategories([]);
-        }
-    }, [category, categories]);
 
     const fetchCategories = async () => {
         setLoadingCategories(true);
@@ -71,27 +55,69 @@ const CompleteProfile = () => {
         }
     };
 
+    const getSubcategoriesForCategory = (categoryId: string) => {
+        const cat = categories.find(c => c._id === categoryId);
+        return cat?.subcategories || [];
+    };
+
+    const addCategoryRow = () => {
+        setSelectedCategories(prev => [...prev, { categoryId: "", categoryName: "", subcategoryId: "", subcategoryName: "" }]);
+    };
+
+    const removeCategoryRow = (index: number) => {
+        if (selectedCategories.length <= 1) return;
+        setSelectedCategories(prev => prev.filter((_, i) => i !== index));
+    };
+
+    const updateCategoryRow = (index: number, field: keyof CategoryItem, value: string) => {
+        setSelectedCategories(prev => {
+            const next = [...prev];
+            next[index] = { ...next[index], [field]: value };
+            if (field === "categoryId") {
+                const cat = categories.find(c => c._id === value);
+                next[index].categoryName = cat?.title || "";
+                next[index].subcategoryId = "";
+                next[index].subcategoryName = "";
+            } else if (field === "subcategoryId") {
+                const cat = categories.find(c => c._id === next[index].categoryId);
+                const sub = cat?.subcategories?.find((s: any) => s._id === value);
+                next[index].subcategoryName = sub?.name || sub?.title || "";
+            }
+            return next;
+        });
+    };
+
     const handleRegister = async () => {
         if (!fullName || !email || !role) {
             toast.error("Please fill in all fields");
             return;
         }
 
-        if (role === 'Consultant' && (!category || !subcategory)) {
-            toast.error("Please select category and subcategory");
+        const valid = selectedCategories.filter(c => c.categoryId && c.subcategoryId);
+        if (role === 'Consultant' && valid.length === 0) {
+            toast.error("Please select at least one category and subcategory");
             return;
         }
 
         setLoading(true);
         try {
-            const response = await AuthAPI.register({
+            const payload: any = {
                 registrationToken,
                 fullName,
                 email,
                 role,
-                category: role === 'Consultant' ? category : undefined,
-                subcategory: role === 'Consultant' ? subcategory : undefined,
-            });
+            };
+            if (role === 'Consultant' && valid.length > 0) {
+                payload.categories = valid.map(c => ({
+                    categoryId: c.categoryId,
+                    categoryName: c.categoryName,
+                    subcategoryId: c.subcategoryId,
+                    subcategoryName: c.subcategoryName,
+                }));
+                payload.category = valid[0].categoryId;
+                payload.subcategory = valid[0].subcategoryId;
+            }
+            const response = await AuthAPI.register(payload);
 
             const { token, user } = response.data.data;
 
@@ -185,43 +211,56 @@ const CompleteProfile = () => {
                         </div>
                     </div>
 
-                    {/* Show Category and Subcategory only for Consultants */}
+                    {/* Multiple categories for Consultants */}
                     {role === 'Consultant' && (
-                        <>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-                                <select
-                                    className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#2E7FC4] text-gray-700"
-                                    value={category}
-                                    onChange={(e) => setCategory(e.target.value)}
-                                    disabled={loadingCategories}
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                                <label className="block text-sm font-medium text-gray-700">Categories</label>
+                                <button
+                                    type="button"
+                                    onClick={addCategoryRow}
+                                    className="text-sm text-[#2E7FC4] hover:underline flex items-center gap-1"
                                 >
-                                    <option value="">Select Category</option>
-                                    {categories.map((cat) => (
-                                        <option key={cat._id} value={cat._id}>
-                                            {cat.title}
-                                        </option>
-                                    ))}
-                                </select>
+                                    <Plus size={14} /> Add category
+                                </button>
                             </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Subcategory</label>
-                                <select
-                                    className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#2E7FC4] text-gray-700"
-                                    value={subcategory}
-                                    onChange={(e) => setSubcategory(e.target.value)}
-                                    disabled={!category}
-                                >
-                                    <option value="">Select Subcategory</option>
-                                    {subcategories.map((subcat) => (
-                                        <option key={subcat._id} value={subcat._id}>
-                                            {subcat.name || subcat.title}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                        </>
+                            {selectedCategories.map((item, index) => (
+                                <div key={index} className="flex gap-2 items-end">
+                                    <div className="flex-1 grid grid-cols-2 gap-2">
+                                        <select
+                                            className="px-3 py-2 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#2E7FC4] text-gray-700 text-sm"
+                                            value={item.categoryId}
+                                            onChange={(e) => updateCategoryRow(index, "categoryId", e.target.value)}
+                                            disabled={loadingCategories}
+                                        >
+                                            <option value="">Category</option>
+                                            {categories.map((cat) => (
+                                                <option key={cat._id} value={cat._id}>{cat.title}</option>
+                                            ))}
+                                        </select>
+                                        <select
+                                            className="px-3 py-2 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#2E7FC4] text-gray-700 text-sm"
+                                            value={item.subcategoryId}
+                                            onChange={(e) => updateCategoryRow(index, "subcategoryId", e.target.value)}
+                                            disabled={!item.categoryId}
+                                        >
+                                            <option value="">Subcategory</option>
+                                            {getSubcategoriesForCategory(item.categoryId).map((sub: any) => (
+                                                <option key={sub._id} value={sub._id}>{sub.name || sub.title}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => removeCategoryRow(index)}
+                                        disabled={selectedCategories.length <= 1}
+                                        className="p-2 text-red-500 hover:bg-red-50 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"
+                                    >
+                                        <Trash2 size={18} />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
                     )}
 
                     <button

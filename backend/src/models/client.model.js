@@ -60,6 +60,12 @@ const clientSchema = new mongoose.Schema(
             enum: ["Active", "Inactive", "Blocked", "Pending"],
             default: "Active",
         },
+
+        // GDPR Consent
+        termsAcceptedAt: { type: Date, default: null },
+        privacyAcceptedAt: { type: Date, default: null },
+        marketingConsent: { type: Boolean, default: false },
+        dataProcessingConsent: { type: Boolean, default: true },
     },
     {
         timestamps: true,

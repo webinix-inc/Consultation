@@ -16,6 +16,8 @@ import {
   Upload,
   Loader2,
   Trash2,
+  Shield,
+  Download,
 } from "lucide-react";
 import { useDispatch } from "react-redux";
 import { updateUser } from "@/features/auth/authSlice";
@@ -388,6 +390,113 @@ function ProfileTab({ profile }: { profile: any }) {
 }
 
 /* --------------------------------------
+   Privacy & Data Section (GDPR)
+-------------------------------------- */
+function PrivacyDataSection() {
+  const [exporting, setExporting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleteError, setDeleteError] = useState("");
+
+  const handleExport = async () => {
+    setExporting(true);
+    setDeleteError("");
+    try {
+      const data = await ClientAPI.exportMyData();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `my-data-export-${Date.now()}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Data exported successfully");
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Export failed");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deletePassword.trim()) {
+      setDeleteError("Password is required");
+      return;
+    }
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      await ClientAPI.deleteMyAccount(deletePassword);
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      window.location.href = "/login";
+    } catch (err: any) {
+      setDeleteError(err.response?.data?.message || "Failed to delete account");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <div className="flex items-center gap-2">
+          <Shield className="h-5 w-5 text-muted-foreground" />
+          <h2 className="text-base font-semibold">Privacy & Data</h2>
+        </div>
+        <p className="text-xs text-muted-foreground mt-1">
+          Export your data or permanently delete your account. GDPR rights.
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div>
+          <p className="text-sm text-muted-foreground mb-2">Download a copy of your personal data (profile, appointments, documents, transactions).</p>
+          <Button variant="outline" size="sm" onClick={handleExport} disabled={exporting} className="gap-2">
+            {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            {exporting ? "Exporting..." : "Export My Data"}
+          </Button>
+        </div>
+        <div className="border-t pt-4">
+          <p className="text-sm text-muted-foreground mb-2">Permanently delete your account and all data. This cannot be undone.</p>
+          <Button variant="destructive" size="sm" onClick={() => setShowDeleteModal(true)} className="gap-2">
+            <Trash2 className="h-4 w-4" />
+            Delete My Account
+          </Button>
+        </div>
+      </CardContent>
+
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 space-y-4">
+            <h3 className="font-semibold text-red-600">Confirm Account Deletion</h3>
+            <p className="text-sm text-muted-foreground">
+              This will permanently delete your account and all data. Enter your password to confirm.
+            </p>
+            <Input
+              type="password"
+              placeholder="Your password"
+              value={deletePassword}
+              onChange={(e) => { setDeletePassword(e.target.value); setDeleteError(""); }}
+              className="mt-2"
+            />
+            {deleteError && <p className="text-sm text-red-600">{deleteError}</p>}
+            <div className="flex gap-2 justify-end pt-2">
+              <Button variant="outline" onClick={() => { setShowDeleteModal(false); setDeletePassword(""); setDeleteError(""); }} disabled={deleting}>
+                Cancel
+              </Button>
+              <Button variant="destructive" onClick={handleDeleteConfirm} disabled={deleting}>
+                {deleting ? "Deleting..." : "Delete Permanently"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+/* --------------------------------------
    Main Page with persistent heading + header + tabs
 -------------------------------------- */
 export default function ClientProfile() {
@@ -446,6 +555,7 @@ export default function ClientProfile() {
 
       <div className="space-y-4">
         <ProfileTab profile={profile} />
+        <PrivacyDataSection />
       </div>
     </div>
   );

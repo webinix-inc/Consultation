@@ -1,5 +1,8 @@
 const Client = require("../../../models/client.model");
 const User = require("../../../models/user.model");
+const Appointment = require("../../../models/appointment.model");
+const { Document } = require("../../../models/document.model");
+const Transaction = require("../../../models/transaction.model");
 const { sendSuccess, sendError, ApiError } = require("../../../utils/response");
 const { SUCCESS, ERROR } = require("../../../constants/messages");
 const httpStatus = require("../../../constants/httpStatus");
@@ -186,13 +189,17 @@ exports.getAllClients = async (req, res, next) => {
         const { search, page = 1, limit = 10, status } = req.query;
         const query = {};
 
-        // Search functionality
+        // Search functionality (escape regex to prevent ReDoS)
         if (search) {
-            query.$or = [
-                { fullName: { $regex: search, $options: "i" } },
-                { email: { $regex: search, $options: "i" } },
-                { mobile: { $regex: search, $options: "i" } },
-            ];
+            const { escapeRegex } = require("../../../utils/string.util");
+            const escaped = escapeRegex(search.slice(0, 100)); // Limit length
+            if (escaped) {
+                query.$or = [
+                    { fullName: { $regex: escaped, $options: "i" } },
+                    { email: { $regex: escaped, $options: "i" } },
+                    { mobile: { $regex: escaped, $options: "i" } },
+                ];
+            }
         }
 
         // Status filter
@@ -230,9 +237,8 @@ exports.getAllClients = async (req, res, next) => {
 exports.updateClient = async (req, res, next) => {
     try {
         const { id } = req.params;
+        // updateData is validated by updateClientSchema - only allowlisted fields (no password, otp, etc.)
         const updateData = req.body;
-
-        console.log(`[updateClient] Admin updating client ${id}`, updateData);
 
         const client = await Client.findByIdAndUpdate(
             id,
@@ -245,6 +251,137 @@ exports.updateClient = async (req, res, next) => {
         }
 
         return sendSuccess(res, "Client updated successfully", client);
+    } catch (error) {
+        next(error);
+    }
+};
+
+/**
+ * GDPR Art. 15 - Right to Access: Export all personal data
+ * GET /api/v1/clients/profile/export
+ */
+exports.exportMyData = async (req, res, next) => {
+    try {
+        const clientId = req.user.id;
+        let client = await Client.findById(clientId);
+        if (!client) client = await Client.findOne({ user: clientId });
+        if (!client) throw new ApiError(ERROR.USER_NOT_FOUND || "Client not found", httpStatus.NOT_FOUND);
+
+        const [appointments, documents, transactions] = await Promise.all([
+            Appointment.find({ client: { $in: [clientId, client._id] } })
+                .select("date startAt endAt status session fee reason notes clientSnapshot consultantSnapshot")
+                .lean(),
+            Document.find({ client: { $in: [clientId, client._id] }, status: { $ne: "Deleted" } })
+                .select("title type appointment createdAt description status")
+                .lean(),
+            Transaction.find({ user: { $in: [clientId, client._id] } })
+                .select("amount currency type status createdAt userSnapshot consultantSnapshot")
+                .lean(),
+        ]);
+
+        const exportData = {
+            exportedAt: new Date().toISOString(),
+            profile: {
+                fullName: client.fullName,
+                email: client.email,
+                mobile: client.mobile,
+                dob: client.dob,
+                address: client.address,
+                city: client.city,
+                state: client.state,
+                country: client.country,
+                pincode: client.pincode,
+                emergencyContact: client.emergencyContact,
+                createdAt: client.createdAt,
+            },
+            appointments,
+            documents,
+            transactions,
+        };
+
+        res.setHeader("Content-Disposition", `attachment; filename="my-data-export-${Date.now()}.json"`);
+        res.setHeader("Content-Type", "application/json");
+        return res.status(200).json(exportData);
+    } catch (error) {
+        next(error);
+    }
+};
+
+/**
+ * GDPR Art. 17 - Right to Erasure: Self-service account deletion
+ * DELETE /api/v1/clients/profile
+ * Requires password confirmation in body
+ */
+exports.deleteMyAccount = async (req, res, next) => {
+    try {
+        const clientId = req.user.id;
+        const { password } = req.body || {};
+
+        let client = await Client.findById(clientId).select("+password");
+        if (!client) client = await Client.findOne({ user: clientId }).select("+password");
+        if (!client) throw new ApiError(ERROR.USER_NOT_FOUND || "Client not found", httpStatus.NOT_FOUND);
+
+        if (client.password) {
+            if (!password) throw new ApiError("Password is required to delete your account", httpStatus.BAD_REQUEST);
+            const isMatch = await client.matchPassword(password);
+            if (!isMatch) throw new ApiError("Invalid password", httpStatus.UNAUTHORIZED);
+        }
+
+        const cId = client._id.toString();
+        const ids = [clientId, cId];
+
+        const documents = await Document.find({ client: { $in: ids } }).select("fileKey");
+        for (const doc of documents) {
+            try {
+                if (doc.fileKey) await deleteFile(doc.fileKey);
+            } catch (e) { /* ignore S3 errors */ }
+        }
+
+        await Promise.all([
+            Document.deleteMany({ client: { $in: ids } }),
+            Transaction.deleteMany({ user: { $in: ids } }),
+            Appointment.deleteMany({ client: { $in: ids } }),
+        ]);
+
+        const Notification = require("../../../models/notification.model");
+        await Notification.deleteMany({ recipient: { $in: ids } });
+
+        const ClientConsultant = require("../../../models/clientConsultant.model");
+        await ClientConsultant.deleteMany({ client: { $in: ids } });
+
+        await Client.findByIdAndDelete(client._id);
+
+        return sendSuccess(res, "Your account and all associated data have been permanently deleted.");
+    } catch (error) {
+        next(error);
+    }
+};
+
+/**
+ * GDPR - Update consent preferences
+ * PATCH /api/v1/clients/profile/consent
+ */
+exports.updateConsent = async (req, res, next) => {
+    try {
+        const clientId = req.user.id;
+        const { marketingConsent, dataProcessingConsent } = req.body || {};
+
+        const update = {};
+        if (typeof marketingConsent === "boolean") update.marketingConsent = marketingConsent;
+        if (typeof dataProcessingConsent === "boolean") update.dataProcessingConsent = dataProcessingConsent;
+
+        if (Object.keys(update).length === 0) {
+            throw new ApiError("No valid consent fields to update", httpStatus.BAD_REQUEST);
+        }
+
+        let client = await Client.findByIdAndUpdate(clientId, { $set: update }, { new: true });
+        if (!client) client = await Client.findOneAndUpdate({ user: clientId }, { $set: update }, { new: true });
+        if (!client) throw new ApiError(ERROR.USER_NOT_FOUND, httpStatus.NOT_FOUND);
+
+        return sendSuccess(res, "Consent preferences updated", {
+            marketingConsent: client.marketingConsent,
+            dataProcessingConsent: client.dataProcessingConsent,
+        });
     } catch (error) {
         next(error);
     }

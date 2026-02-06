@@ -17,7 +17,7 @@ const ConsultationCategories: React.FC = () => {
   const queryClient = useQueryClient();
   const { data, isLoading, isError } = useQuery({
     queryKey: ["categories"],
-    queryFn: CategoryAPI.getAll,
+    queryFn: () => CategoryAPI.getAll(),
     refetchOnWindowFocus: true,
   });
 

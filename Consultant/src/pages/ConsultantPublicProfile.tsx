@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Mail, Phone, MapPin, Briefcase, Star, Clock, Globe, Linkedin, Twitter, Facebook, Instagram, ArrowLeft, Award, Users, CalendarCheck, ThumbsUp, Hash, User } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
+import { getCountryDisplayName } from "@/constants/countries";
 
 const ConsultantPublicProfile = () => {
     const { id } = useParams<{ id: string }>();
@@ -82,11 +83,17 @@ const ConsultantPublicProfile = () => {
                             <Separator className="my-4" />
 
                             <div className="w-full space-y-4 text-sm text-left px-2">
-                                {(consultant.city || consultant.state || consultant.address) && (
+                                {(consultant.city || consultant.state || consultant.address || consultant.country) && (
                                     <div className="flex items-start gap-3 text-slate-600">
                                         <MapPin className="h-4 w-4 shrink-0 text-slate-400 mt-0.5" />
                                         <span>
-                                            {[consultant.address, consultant.city, consultant.state, consultant.pincode, consultant.country]
+                                            {[
+                                                consultant.address,
+                                                consultant.city,
+                                                consultant.state,
+                                                consultant.pincode,
+                                                consultant.country ? getCountryDisplayName(consultant.country) : "",
+                                            ]
                                                 .filter(Boolean)
                                                 .join(", ")}
                                         </span>

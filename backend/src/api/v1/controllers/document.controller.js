@@ -17,16 +17,19 @@ exports.getAll = async (req, res, next) => {
     // Build filter
     const filter = { status: { $ne: "Deleted" } };
 
-    // Role-based filtering
+    // Role-based filtering - prevent IDOR: Clients/Consultants cannot override with query params
     if (userRole === "Client") {
       filter.client = userId;
+      // Client cannot filter by client/consultant - only see their own documents
     } else if (userRole === "Consultant") {
       filter.consultant = userId;
+      if (client) filter.client = client; // Consultant can filter by their client
+    } else if (userRole === "Admin" || userRole === "Employee") {
+      if (client) filter.client = client;
+      if (consultant) filter.consultant = consultant;
     }
 
-    // Additional filters
-    if (client) filter.client = client;
-    if (consultant) filter.consultant = consultant;
+    // Safe filters (no IDOR risk)
     if (appointment) filter.appointment = appointment;
     if (type) filter.type = type;
     if (status) filter.status = status;

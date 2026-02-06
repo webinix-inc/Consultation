@@ -11,6 +11,7 @@ const AnalyticsDashboard: React.FC = () => {
   const [viewType, setViewType] = React.useState<"monthly" | "yearly">("monthly");
   const [selectedDate, setSelectedDate] = React.useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
   const [selectedYear, setSelectedYear] = React.useState(new Date().getFullYear());
+  const [exporting, setExporting] = React.useState(false);
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["consultant-analytics", viewType, selectedDate, selectedYear],
@@ -25,6 +26,7 @@ const AnalyticsDashboard: React.FC = () => {
   });
 
   const statsData = data || {};
+  const payoutSummary = statsData.payoutSummary || {};
 
   // Map API data to UI requirements
   const months = statsData.monthlyRevenueTrends || [];
@@ -110,6 +112,37 @@ const AnalyticsDashboard: React.FC = () => {
           >
             <RefreshCw size={16} />
           </button>
+          <button
+            onClick={async () => {
+              setExporting(true);
+              try {
+                const [year, month] = selectedDate.split("-").map(Number);
+                const res = await DashboardAPI.getConsultantStatsExport({
+                  viewType,
+                  month: viewType === "monthly" ? month : undefined,
+                  year: viewType === "monthly" ? year : selectedYear,
+                });
+                const blob = res.data;
+                const url = window.URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = `consultant-analytics-${viewType === "monthly" ? selectedDate : selectedYear}.csv`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(url);
+              } catch (e) {
+                console.error("Export failed", e);
+              } finally {
+                setExporting(false);
+              }
+            }}
+            disabled={exporting}
+            className="p-2 border rounded-md hover:bg-gray-100 transition flex items-center gap-2 disabled:opacity-50"
+          >
+            <Download size={16} />
+            {exporting ? "Exporting..." : "Export CSV"}
+          </button>
         </div>
       </div>
 
@@ -142,6 +175,25 @@ const AnalyticsDashboard: React.FC = () => {
           </div>
         </motion.div>
       </div>
+
+      {/* Payout & Balance Card */}
+      <motion.div variants={fadeUp} initial="hidden" animate="show" className="bg-white rounded-xl border shadow-sm p-4">
+        <h4 className="font-semibold text-gray-800 mb-3">Payout & Balance</h4>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="border rounded-lg p-3">
+            <p className="text-xs text-gray-500">Total Earnings</p>
+            <p className="text-lg font-bold text-gray-900">{new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(payoutSummary.totalEarnings || 0)}</p>
+          </div>
+          <div className="border rounded-lg p-3">
+            <p className="text-xs text-gray-500">Total Paid Out</p>
+            <p className="text-lg font-bold text-gray-900">{new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(payoutSummary.totalPaidOut || 0)}</p>
+          </div>
+          <div className="border rounded-lg p-3 bg-amber-50">
+            <p className="text-xs text-gray-500">Remaining Balance</p>
+            <p className="text-lg font-bold text-amber-700">{new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(payoutSummary.remainingBalance || 0)}</p>
+          </div>
+        </div>
+      </motion.div>
 
       {/* Badge + Export */}
       <div className="flex items-center justify-between">

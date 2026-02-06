@@ -11,7 +11,9 @@ const createDocumentSchema = Joi.object({
   consultant: Joi.string().pattern(objectIdPattern).optional(),
   appointment: Joi.string().pattern(objectIdPattern).allow(null, "").optional(),
   description: Joi.string().max(500).allow("").optional(),
-  fileUrl: Joi.string().uri().required(),
+  fileUrl: Joi.string().min(10).pattern(/^https?:\/\//).required().messages({
+    "string.pattern.base": "fileUrl must be a valid http or https URL",
+  }),
   fileKey: Joi.string().required(),
   fileName: Joi.string().optional(),
   originalFileName: Joi.string().optional(),

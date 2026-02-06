@@ -155,7 +155,7 @@ function EditClientDialog({ client, onUpdate }: { client: Client | null; onUpdat
   // Fetch categories
   const { data: categoriesData } = useQuery({
     queryKey: ["categories"],
-    queryFn: CategoryAPI.getAll,
+    queryFn: () => CategoryAPI.getAll(),
   });
 
   // Fetch subcategories when category is selected
@@ -505,7 +505,7 @@ export default function ClientManagement() {
   });
 
   // fetch categories/subcategories for title lookups
-  const { data: categoriesData } = useQuery({ queryKey: ["categories"], queryFn: CategoryAPI.getAll });
+  const { data: categoriesData } = useQuery({ queryKey: ["categories"], queryFn: () => CategoryAPI.getAll() });
   const { data: subcategoriesData } = useQuery({
     queryKey: ["subcategories"],
     queryFn: () => SubcategoryAPI.getAll(),

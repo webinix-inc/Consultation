@@ -2,6 +2,10 @@ const { Consultant } = require("../../../models/consultant.model");
 const Category = require("../../../models/category.model");
 const SubCategory = require("../../../models/subcategory.model");
 const ClientConsultant = require("../../../models/clientConsultant.model");
+const Appointment = require("../../../models/appointment.model");
+const { Document } = require("../../../models/document.model");
+const Transaction = require("../../../models/transaction.model");
+const ConsultantSettings = require("../../../models/consultantSettings.model");
 const { sendSuccess, ApiError } = require("../../../utils/response");
 const httpStatus = require("../../../constants/httpStatus");
 const bcrypt = require("bcryptjs");
@@ -13,7 +17,11 @@ exports.list = async (req, res, next) => {
     const filter = {};
     if (category) filter["category.name"] = category;
     if (status) filter.status = status;
-    if (q) filter.name = { $regex: q, $options: "i" };
+    if (q) {
+      const { escapeRegex } = require("../../../utils/string.util");
+      const escaped = escapeRegex(String(q).slice(0, 100));
+      if (escaped) filter.name = { $regex: escaped, $options: "i" };
+    }
 
     // Find all consultants
     let consultants = await Consultant.find(filter).sort({ createdAt: -1 });
@@ -81,11 +89,16 @@ exports.create = async (req, res, next) => {
     console.log("🛠️ [Consultant Create] Initial Category:", req.body.category, "Type:", typeof req.body.category);
 
     // Check if consultant already exists (by email or mobile/phone)
+    const phoneVal = consultantData.phone || consultantData.mobile;
+    const digits = (phoneVal || '').replace(/\D/g, '');
+    const phoneVariants = [phoneVal, digits];
+    if (digits.length === 10) phoneVariants.push('+91' + digits, '91' + digits);
+    if (digits.length === 12 && digits.startsWith('91')) phoneVariants.push(digits.slice(2));
+    const phoneOr = phoneVariants.filter(Boolean).flatMap((v) => [{ phone: v }, { mobile: v }]);
     const existingConsultant = await Consultant.findOne({
       $or: [
         { email: consultantData.email?.toLowerCase() },
-        { phone: consultantData.phone || consultantData.mobile },
-        { mobile: consultantData.mobile || consultantData.phone }
+        ...phoneOr
       ]
     });
 
@@ -107,6 +120,17 @@ exports.create = async (req, res, next) => {
     }
     if (consultantData.mobile && !consultantData.phone) {
       consultantData.phone = consultantData.mobile;
+    }
+
+    // Normalize to E.164 for OTP login compatibility (Admin may enter "9876543210", login uses "+919876543210")
+    const raw = (consultantData.phone || consultantData.mobile || '').replace(/\D/g, '');
+    const currentVal = (consultantData.phone || consultantData.mobile || '').trim();
+    if (raw.length === 10 && !raw.startsWith('91')) {
+      consultantData.phone = '+91' + raw;
+      consultantData.mobile = consultantData.phone;
+    } else if (raw.length === 12 && raw.startsWith('91') && !currentVal.startsWith('+')) {
+      consultantData.phone = '+' + raw;
+      consultantData.mobile = consultantData.phone;
     }
 
     // Set name from fullName if provided
@@ -187,8 +211,8 @@ exports.create = async (req, res, next) => {
     const consultant = await Consultant.create(consultantData);
     console.log("🛠️ [Consultant Create] Created successfully:", consultant._id);
 
-    // Return consultant data with generated password if applicable
     const consultantResponse = consultant.toObject();
+    delete consultantResponse.password; // Never expose password (even hashed) in API response
 
     return sendSuccess(res, "Consultant created", consultantResponse, httpStatus.CREATED);
   } catch (error) {
@@ -385,6 +409,140 @@ exports.unblock = async (req, res, next) => {
       throw new ApiError("Consultant not found", httpStatus.NOT_FOUND);
     }
     return sendSuccess(res, "Consultant unblocked", updated);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * GDPR Art. 15 - Right to Access: Export all personal data
+ * GET /api/v1/consultants/me/export
+ */
+exports.exportMyData = async (req, res, next) => {
+  try {
+    const consultantId = req.user.id;
+    let consultant = await Consultant.findById(consultantId);
+    if (!consultant) consultant = await Consultant.findOne({ user: consultantId });
+    if (!consultant) throw new ApiError("Consultant not found", httpStatus.NOT_FOUND);
+
+    const ids = [consultantId, consultant._id.toString(), consultant.user].filter(Boolean);
+
+    const [appointments, documents, transactions, settings] = await Promise.all([
+      Appointment.find({ consultant: { $in: ids } })
+        .select("date startAt endAt status session fee reason notes clientSnapshot consultantSnapshot")
+        .lean(),
+      Document.find({ consultant: { $in: ids }, status: { $ne: "Deleted" } })
+        .select("title type appointment createdAt description status")
+        .lean(),
+      Transaction.find({ consultant: { $in: ids } })
+        .select("amount currency type status createdAt userSnapshot consultantSnapshot")
+        .lean(),
+      ConsultantSettings.findOne({ consultant: { $in: ids } }).lean(),
+    ]);
+
+    const profile = consultant.toObject();
+    delete profile.password;
+    delete profile.otp;
+    delete profile.otpExpires;
+    delete profile.resetPasswordToken;
+    delete profile.resetPasswordExpire;
+
+    const exportData = {
+      exportedAt: new Date().toISOString(),
+      profile,
+      appointments,
+      documents,
+      transactions,
+      settings: settings || null,
+    };
+
+    res.setHeader("Content-Disposition", `attachment; filename="my-data-export-${Date.now()}.json"`);
+    res.setHeader("Content-Type", "application/json");
+    return res.status(200).json(exportData);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * GDPR Art. 17 - Right to Erasure: Self-service account deletion
+ * DELETE /api/v1/consultants/me
+ */
+exports.deleteMyAccount = async (req, res, next) => {
+  try {
+    const consultantId = req.user.id;
+    const { password } = req.body || {};
+
+    let consultant = await Consultant.findById(consultantId).select("+password");
+    if (!consultant) consultant = await Consultant.findOne({ user: consultantId }).select("+password");
+    if (!consultant) throw new ApiError("Consultant not found", httpStatus.NOT_FOUND);
+
+    if (consultant.password) {
+      if (!password) throw new ApiError("Password is required to delete your account", httpStatus.BAD_REQUEST);
+      const isMatch = await consultant.matchPassword(password);
+      if (!isMatch) throw new ApiError("Invalid password", httpStatus.UNAUTHORIZED);
+    }
+
+    const ids = [consultantId, consultant._id.toString(), consultant.user].filter(Boolean);
+
+    const documents = await Document.find({ consultant: { $in: ids } }).select("fileKey");
+    for (const doc of documents) {
+      try {
+        if (doc.fileKey) await deleteFile(doc.fileKey);
+      } catch (e) { /* ignore */ }
+    }
+
+    if (consultant.image) {
+      try {
+        const key = extractKeyFromUrl(consultant.image);
+        if (key) await deleteFile(key);
+      } catch (e) { /* ignore */ }
+    }
+
+    await Promise.all([
+      Document.deleteMany({ consultant: { $in: ids } }),
+      Transaction.deleteMany({ consultant: { $in: ids } }),
+      Appointment.deleteMany({ consultant: { $in: ids } }),
+      ConsultantSettings.deleteMany({ consultant: { $in: ids } }),
+      ClientConsultant.deleteMany({ consultant: { $in: ids } }),
+    ]);
+
+    const Notification = require("../../../models/notification.model");
+    await Notification.deleteMany({ recipient: { $in: ids } });
+
+    await Consultant.findByIdAndDelete(consultant._id);
+
+    return sendSuccess(res, "Your account and all associated data have been permanently deleted.");
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * GDPR - Update consent preferences
+ * PATCH /api/v1/consultants/me/consent
+ */
+exports.updateConsent = async (req, res, next) => {
+  try {
+    const consultantId = req.user.id;
+    const { marketingConsent, dataProcessingConsent } = req.body || {};
+
+    const update = {};
+    if (typeof marketingConsent === "boolean") update.marketingConsent = marketingConsent;
+    if (typeof dataProcessingConsent === "boolean") update.dataProcessingConsent = dataProcessingConsent;
+
+    if (Object.keys(update).length === 0) {
+      throw new ApiError("No valid consent fields to update", httpStatus.BAD_REQUEST);
+    }
+
+    let consultant = await Consultant.findByIdAndUpdate(consultantId, { $set: update }, { new: true });
+    if (!consultant) consultant = await Consultant.findOneAndUpdate({ user: consultantId }, { $set: update }, { new: true });
+    if (!consultant) throw new ApiError("Consultant not found", httpStatus.NOT_FOUND);
+
+    return sendSuccess(res, "Consent preferences updated", {
+      marketingConsent: consultant.marketingConsent,
+      dataProcessingConsent: consultant.dataProcessingConsent,
+    });
   } catch (error) {
     next(error);
   }

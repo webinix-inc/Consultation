@@ -1,6 +1,13 @@
 # Logs
 logs
 *.log
+*_log.txt
+debug_output*.txt
+
+# Debug scripts and dumps (security: avoid committing sensitive data)
+debug_*.js
+*_dump.json
+
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

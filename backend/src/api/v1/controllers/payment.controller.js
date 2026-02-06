@@ -3,6 +3,7 @@ const crypto = require("crypto");
 const { sendSuccess, ApiError } = require("../../../utils/response");
 const httpStatus = require("../../../constants/httpStatus");
 const Transaction = require("../../../models/transaction.model");
+const paypalService = require("../../../services/paypal.service");
 
 // Initialize Razorpay instance
 const razorpay = new Razorpay({
@@ -11,11 +12,11 @@ const razorpay = new Razorpay({
 });
 
 /**
- * Create Razorpay order for appointment booking
+ * Create order for appointment booking (Razorpay or PayPal)
  */
 exports.createOrder = async (req, res, next) => {
   try {
-    const { amount, appointmentId, holdId, consultantId, clientId, currency: reqCurrency } = req.body;
+    const { amount, appointmentId, holdId, consultantId, clientId, currency: reqCurrency, paymentMethod } = req.body;
     const user = req.user;
 
     if (!amount || amount <= 0) {
@@ -51,10 +52,6 @@ exports.createOrder = async (req, res, next) => {
       }
     }
 
-    // Convert amount to smallest currency unit (paise/cents)
-    // Razorpay supports most currencies with 100 subdivision
-    const amountInSmallestUnit = Math.round(amount * 100);
-
     // Generate receipt
     let receiptPrefix = "APPT";
     let idStr = String(appointmentId || "");
@@ -62,14 +59,69 @@ exports.createOrder = async (req, res, next) => {
       receiptPrefix = "HOLD";
       idStr = String(holdId);
     }
-
-    // Format: TYPE + last 12 chars of ID + timestamp (last 8 digits)
     const shortId = idStr.length > 12 ? idStr.slice(-12) : idStr;
-    const timestamp = String(Date.now()).slice(-8); // Last 8 digits of timestamp
-    // Prefix (4) + _ (1) + 12 chars + _ (1) + 8 digits = 26 chars
+    const timestamp = String(Date.now()).slice(-8);
     const receipt = `${receiptPrefix}_${shortId}_${timestamp}`.substring(0, 40);
 
-    // Create Razorpay order
+    const isPayPal = paymentMethod === "PayPal";
+
+    if (isPayPal) {
+      // PayPal: use USD if INR (PayPal sandbox prefers USD)
+      const paypalCurrency = currency === "INR" ? "USD" : currency;
+      const { orderId } = await paypalService.createOrder({
+        amount,
+        currency: paypalCurrency,
+        receipt,
+        customId: holdId || appointmentId,
+      });
+
+      let transaction = await Transaction.findOne({
+        appointment: appointmentId,
+        status: "Pending",
+        type: "Payment",
+      });
+
+      if (!transaction && !appointmentId) {
+        transaction = null;
+      }
+
+      if (transaction) {
+        transaction.transactionId = orderId;
+        transaction.amount = amount;
+        transaction.platformFee = platformFee;
+        transaction.netAmount = netAmount;
+        transaction.currency = currency;
+        transaction.paymentMethod = "PayPal";
+        transaction.metadata = { ...transaction.metadata, paypalOrderId: orderId, holdId: holdId || null };
+        await transaction.save();
+      } else {
+        transaction = await Transaction.create({
+          user: clientId || user._id || user.id,
+          consultant: consultantId || null,
+          appointment: appointmentId || null,
+          amount,
+          platformFee,
+          netAmount,
+          currency,
+          type: "Payment",
+          status: "Pending",
+          paymentMethod: "PayPal",
+          transactionId: orderId,
+          metadata: { paypalOrderId: orderId, holdId: holdId || null },
+        });
+      }
+
+      return sendSuccess(res, "Order created successfully", {
+        orderId,
+        amount,
+        currency: paypalCurrency,
+        paymentMethod: "PayPal",
+        transactionId: transaction._id,
+      });
+    }
+
+    // Razorpay flow
+    const amountInSmallestUnit = Math.round(amount * 100);
     const options = {
       amount: amountInSmallestUnit,
       currency: currency,
@@ -85,11 +137,7 @@ exports.createOrder = async (req, res, next) => {
 
     const order = await razorpay.orders.create(options);
 
-    // Check if a pending transaction already exists
     let transaction = null;
-
-    // Only search for existing pending transaction if we have an appointmentId
-    // If it's a hold, we likely create a new transaction every time as holds are temporary
     if (appointmentId) {
       transaction = await Transaction.findOne({
         appointment: appointmentId,
@@ -99,12 +147,11 @@ exports.createOrder = async (req, res, next) => {
     }
 
     if (transaction) {
-      // Update existing transaction with new order details
       transaction.transactionId = order.id;
       transaction.amount = amount;
       transaction.platformFee = platformFee;
       transaction.netAmount = netAmount;
-      transaction.currency = currency; // Update currency
+      transaction.currency = currency;
       transaction.metadata = {
         ...transaction.metadata,
         razorpayOrderId: order.id,
@@ -112,7 +159,6 @@ exports.createOrder = async (req, res, next) => {
       };
       await transaction.save();
     } else {
-      // Create pending transaction record
       transaction = await Transaction.create({
         user: clientId || user._id || user.id,
         consultant: consultantId || null,
@@ -151,53 +197,89 @@ exports.createOrder = async (req, res, next) => {
 };
 
 /**
- * Verify Razorpay payment and update transaction/appointment
+ * Verify payment (Razorpay or PayPal) and update transaction/appointment
  */
 exports.verifyPayment = async (req, res, next) => {
   try {
-    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, transactionId, appointmentId } = req.body;
+    const {
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature,
+      transactionId,
+      appointmentId,
+      paymentMethod,
+      orderID: paypalOrderId,
+    } = req.body;
 
-    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
-      throw new ApiError("Missing payment verification data", httpStatus.BAD_REQUEST);
-    }
+    const isPayPal = paymentMethod === "PayPal";
 
-    // Verify the payment signature
-    const text = `${razorpay_order_id}|${razorpay_payment_id}`;
-    const generatedSignature = crypto
-      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET || "")
-      .update(text)
-      .digest("hex");
-
-    if (generatedSignature !== razorpay_signature) {
-      throw new ApiError("Invalid payment signature", httpStatus.BAD_REQUEST);
-    }
-
-    // Fetch transaction
     let transaction = null;
-    if (transactionId) {
-      transaction = await Transaction.findById(transactionId);
+
+    if (isPayPal) {
+      if (!paypalOrderId) {
+        throw new ApiError("Missing PayPal order ID", httpStatus.BAD_REQUEST);
+      }
+      const { captureId } = await paypalService.captureOrder(paypalOrderId);
+
+      if (transactionId) {
+        transaction = await Transaction.findById(transactionId);
+      } else {
+        transaction = await Transaction.findOne({
+          "metadata.paypalOrderId": paypalOrderId,
+        });
+      }
+
+      if (!transaction) {
+        throw new ApiError("Transaction not found", httpStatus.NOT_FOUND);
+      }
+
+      transaction.status = "Success";
+      transaction.transactionId = captureId;
+      transaction.metadata = {
+        ...transaction.metadata,
+        paypalOrderId,
+        paypalCaptureId: captureId,
+        verifiedAt: new Date(),
+      };
+      await transaction.save();
     } else {
-      // Find by razorpay order ID
-      transaction = await Transaction.findOne({
-        "metadata.razorpayOrderId": razorpay_order_id,
-      });
-    }
+      if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+        throw new ApiError("Missing payment verification data", httpStatus.BAD_REQUEST);
+      }
 
-    if (!transaction) {
-      throw new ApiError("Transaction not found", httpStatus.NOT_FOUND);
-    }
+      const text = `${razorpay_order_id}|${razorpay_payment_id}`;
+      const generatedSignature = crypto
+        .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET || "")
+        .update(text)
+        .digest("hex");
 
-    // Update transaction with payment details
-    transaction.status = "Success";
-    transaction.transactionId = razorpay_payment_id;
-    transaction.metadata = {
-      ...transaction.metadata,
-      razorpayOrderId: razorpay_order_id,
-      razorpayPaymentId: razorpay_payment_id,
-      razorpaySignature: razorpay_signature,
-      verifiedAt: new Date(),
-    };
-    await transaction.save();
+      if (generatedSignature !== razorpay_signature) {
+        throw new ApiError("Invalid payment signature", httpStatus.BAD_REQUEST);
+      }
+
+      if (transactionId) {
+        transaction = await Transaction.findById(transactionId);
+      } else {
+        transaction = await Transaction.findOne({
+          "metadata.razorpayOrderId": razorpay_order_id,
+        });
+      }
+
+      if (!transaction) {
+        throw new ApiError("Transaction not found", httpStatus.NOT_FOUND);
+      }
+
+      transaction.status = "Success";
+      transaction.transactionId = razorpay_payment_id;
+      transaction.metadata = {
+        ...transaction.metadata,
+        razorpayOrderId: razorpay_order_id,
+        razorpayPaymentId: razorpay_payment_id,
+        razorpaySignature: razorpay_signature,
+        verifiedAt: new Date(),
+      };
+      await transaction.save();
+    }
 
     // Update appointment payment status if appointmentId is provided
     if (appointmentId) {
@@ -205,56 +287,92 @@ exports.verifyPayment = async (req, res, next) => {
       const appointment = await Appointment.findById(appointmentId);
 
       if (appointment) {
-        appointment.payment = {
-          amount: transaction.amount,
-          status: "Success",
-          method: "Razorpay",
-          transactionId: transaction._id,
-        };
-        appointment.fee = transaction.amount; // Also set fee field
+        // Link transaction to appointment if not already (e.g. hold flow)
+        if (!transaction.appointment) {
+          transaction.appointment = appointmentId;
+          await transaction.save();
+        }
+
+        // Get client and consultant for invoice and notifications
+        const User = require("../../../models/user.model");
+        const Client = require("../../../models/client.model");
+        const { Consultant: ConsultantModel } = require("../../../models/consultant.model");
+
+        let client = await Client.findById(appointment.client);
+        if (!client) client = await User.findById(appointment.client);
+        const clientName = client?.fullName || client?.name || "Client";
+
+        let consultantProfile = await ConsultantModel.findOne({ user: appointment.consultant });
+        if (!consultantProfile) consultantProfile = await ConsultantModel.findById(appointment.consultant);
+        const consultantUser = await User.findById(appointment.consultant);
+        const consultant = consultantProfile || consultantUser || appointment.consultantSnapshot;
+        let consultantName = consultant?.fullName || consultant?.name || consultant?.displayName || appointment.consultantSnapshot?.name || "Consultant";
+        if (consultantName === "Consultant" && consultantProfile) {
+          const combinedName = `${consultantProfile.firstName || ""} ${consultantProfile.lastName || ""}`.trim();
+          consultantName = consultantProfile.name || consultantProfile.fullName || consultantProfile.displayName || combinedName || consultantName;
+        }
+
+        // Update transaction snapshots if missing (for invoice generation)
+        if (!transaction.userSnapshot && client) {
+          transaction.userSnapshot = {
+            name: client.fullName || client.name,
+            email: client.email || "",
+            mobile: client.mobile || client.phone || "",
+          };
+        }
+        if (!transaction.consultantSnapshot && consultant) {
+          transaction.consultantSnapshot = {
+            name: consultant.fullName || consultant.name || consultant.displayName || consultantName,
+            email: consultant.email || "",
+            mobile: consultant.mobile || consultant.phone || "",
+            category: consultant.category?.name || consultant.category || "General",
+            subcategory: consultant.subcategory?.name || consultant.subcategory || "",
+          };
+        }
+        if (transaction.isModified()) await transaction.save();
+
+        // Generate invoice and set invoiceUrl
+        try {
+          const invoiceService = require("../../../services/invoice.service");
+          const invoiceConsultant = {
+            name: consultant?.fullName || consultant?.name || consultant?.displayName || consultantName,
+            email: consultant?.email,
+            mobile: consultant?.mobile || consultant?.phone,
+          };
+          const invoiceUrl = await invoiceService.generateInvoice(transaction, appointment, client, invoiceConsultant);
+          transaction.invoiceUrl = invoiceUrl;
+          await transaction.save({ validateBeforeSave: false });
+
+          appointment.payment = {
+            amount: transaction.amount,
+            status: "Success",
+            method: transaction.paymentMethod || "Razorpay",
+            transactionId: transaction._id,
+            invoiceUrl,
+          };
+        } catch (invErr) {
+          console.error("❌ Invoice generation failed in verifyPayment:", invErr);
+          appointment.payment = {
+            amount: transaction.amount,
+            status: "Success",
+            method: transaction.paymentMethod || "Razorpay",
+            transactionId: transaction._id,
+          };
+        }
+
+        appointment.fee = transaction.amount;
         appointment.status = "Upcoming";
         await appointment.save();
 
         // Send notifications for confirmed appointment using NotificationService
         try {
           const NotificationService = require("../../../services/notificationService");
-          const User = require("../../../models/user.model");
-          const Client = require("../../../models/client.model");
 
-          // Get client name
-          let client = await Client.findById(appointment.client);
-          if (!client) client = await User.findById(appointment.client);
-          const clientName = client?.fullName || "Client";
-
-          // Get consultant name
-          const consultantUser = await User.findById(appointment.consultant);
-          let consultantName = consultantUser?.fullName || consultantUser?.name || consultantUser?.displayName || "Consultant";
-
-          // Try to get better name from Consultant profile if possible
-          if (consultantName === "Consultant") {
-            const ConsultantModel = require("../../../models/consultant.model").Consultant;
-            const consultantProfile = await ConsultantModel.findOne({ user: appointment.consultant });
-            if (consultantProfile) {
-              const combinedName = `${consultantProfile.firstName || ""} ${consultantProfile.lastName || ""}`.trim();
-              consultantName = consultantProfile.name || consultantProfile.fullName || consultantProfile.displayName || combinedName || consultantName;
-            } else {
-              // Fallback 2: Check if appointment.consultant is directly the Consultant Profile ID (not User ID)
-              const consultantProfileDirect = await ConsultantModel.findById(appointment.consultant);
-              if (consultantProfileDirect) {
-                const combinedName = `${consultantProfileDirect.firstName || ""} ${consultantProfileDirect.lastName || ""}`.trim();
-                consultantName = consultantProfileDirect.name || consultantProfileDirect.fullName || consultantProfileDirect.displayName || combinedName || consultantName;
-              }
-            }
-          }
-
-          // Payment success notification for client
           await NotificationService.notifyPaymentSuccess(
             { ...transaction.toObject(), user: appointment.client },
             clientName
           );
 
-          // Payment received notification for consultant - REMOVED (Agency Model)
-          // instead notify Admin
           try {
             await NotificationService.notifyAdminPaymentReceived(
               transaction.toObject(),
@@ -265,7 +383,6 @@ exports.verifyPayment = async (req, res, next) => {
             console.error("Failed to send admin payment notification:", adminNotifErr);
           }
 
-          // Appointment confirmed notifications
           await NotificationService.notifyAppointmentBooked(
             { ...appointment.toObject(), date: appointment.date, timeStart: appointment.timeStart },
             clientName,
@@ -279,7 +396,7 @@ exports.verifyPayment = async (req, res, next) => {
 
     return sendSuccess(res, "Payment verified successfully", {
       transactionId: transaction._id,
-      paymentId: razorpay_payment_id,
+      paymentId: transaction.transactionId,
       status: "Success",
     });
   } catch (error) {
@@ -304,7 +421,10 @@ exports.getPaymentStatus = async (req, res, next) => {
       transaction = await Transaction.findById(transactionId);
     } else if (orderId) {
       transaction = await Transaction.findOne({
-        "metadata.razorpayOrderId": orderId,
+        $or: [
+          { "metadata.razorpayOrderId": orderId },
+          { "metadata.paypalOrderId": orderId },
+        ],
       });
     }
 

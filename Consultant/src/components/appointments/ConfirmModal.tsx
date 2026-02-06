@@ -1,6 +1,7 @@
 import React from "react";
-import { X, Calendar, Clock, Video, CreditCard } from "lucide-react";
+import { X, Calendar, Clock, Video } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { PayPalScriptProvider, PayPalButtons } from "@paypal/react-paypal-js";
 import { BookingTimer } from "./BookingTimer";
 import { formatCurrency, getCurrencyCode } from "@/utils/currencyUtils";
 
@@ -22,8 +23,14 @@ interface ConfirmModalProps {
     totalFee: number;
     onConfirm: () => void;
     isPending: boolean;
+    /** Override button label when pending (e.g. "Loading payment gateway..." vs "Processing...") */
+    pendingLabel?: string;
     expiresAt?: Date | string; // Optional for compatibility
     onExpire?: () => void;
+    /** PayPal flow - createOrder returns orderId */
+    payPalCreateOrder?: (amount: number) => Promise<string>;
+    /** PayPal flow - onApprove after user approves */
+    payPalOnApprove?: (data: { orderID: string; payerID?: string }) => Promise<void>;
 }
 
 export function ConfirmModal({
@@ -38,8 +45,11 @@ export function ConfirmModal({
     totalFee,
     onConfirm,
     isPending,
+    pendingLabel = "Processing...",
     expiresAt,
-    onExpire
+    onExpire,
+    payPalCreateOrder,
+    payPalOnApprove,
 }: ConfirmModalProps) {
     if (!open) return null;
 
@@ -105,18 +115,51 @@ export function ConfirmModal({
                     {/* Payment Method */}
                     <div className="px-6 py-4 border-t">
                         <h4 className="text-sm font-semibold text-gray-900 mb-3">Payment Method</h4>
-                        <div className="flex items-center justify-center gap-3 px-4 py-3 rounded-lg border-2 border-blue-500 bg-blue-50">
-                            <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M3 9V7C3 5.89543 3.89543 5 5 5H19C20.1046 5 21 5.89543 21 7V9M3 9V17C3 18.1046 3.89543 19 5 19H19C20.1046 19 21 18.1046 21 17V9M3 9H21" stroke="#0d6efd" strokeWidth="2" strokeLinecap="round" />
-                                <path d="M7 13H7.01M11 13H11.01M15 13H15.01" stroke="#0d6efd" strokeWidth="2" strokeLinecap="round" />
-                            </svg>
-                            <span className="text-sm font-semibold text-gray-900">Razorpay</span>
-                            <div className="ml-auto h-5 w-5 rounded-full bg-blue-500 flex items-center justify-center">
-                                <div className="h-2 w-2 rounded-full bg-white"></div>
-                            </div>
+                        <div className={`grid gap-3 ${payPalCreateOrder && payPalOnApprove ? "grid-cols-2" : "grid-cols-1"}`}>
+                            <button
+                                type="button"
+                                onClick={() => setPaymentMethod("Razorpay")}
+                                className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 transition-colors ${
+                                    paymentMethod === "Razorpay"
+                                        ? "border-blue-500 bg-blue-50"
+                                        : "border-gray-200 bg-white hover:border-gray-300"
+                                }`}
+                            >
+                                <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M3 9V7C3 5.89543 3.89543 5 5 5H19C20.1046 5 21 5.89543 21 7V9M3 9V17C3 18.1046 3.89543 19 5 19H19C20.1046 19 21 18.1046 21 17V9M3 9H21" stroke={paymentMethod === "Razorpay" ? "#0d6efd" : "#6b7280"} strokeWidth="2" strokeLinecap="round" />
+                                    <path d="M7 13H7.01M11 13H11.01M15 13H15.01" stroke={paymentMethod === "Razorpay" ? "#0d6efd" : "#6b7280"} strokeWidth="2" strokeLinecap="round" />
+                                </svg>
+                                <span className="text-sm font-semibold text-gray-900">Razorpay</span>
+                                {paymentMethod === "Razorpay" && (
+                                    <div className="h-4 w-4 rounded-full bg-blue-500 flex items-center justify-center">
+                                        <div className="h-1.5 w-1.5 rounded-full bg-white"></div>
+                                    </div>
+                                )}
+                            </button>
+                            {payPalCreateOrder && payPalOnApprove && (
+                                <button
+                                    type="button"
+                                    onClick={() => setPaymentMethod("PayPal")}
+                                    className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 transition-colors ${
+                                        paymentMethod === "PayPal"
+                                            ? "border-blue-500 bg-blue-50"
+                                            : "border-gray-200 bg-white hover:border-gray-300"
+                                    }`}
+                                >
+                                    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="#003087" xmlns="http://www.w3.org/2000/svg">
+                                        <path d="M7.076 21.337H2.47a.641.641 0 0 1-.635-.534L.005 4.72a.77.77 0 0 1 .762-.892h4.8a.77.77 0 0 1 .762.892l-.635 16.083a.641.641 0 0 1-.635.534h-.993zm16.524-16.083h-4.8a.77.77 0 0 0-.762.892l.635 16.083a.641.641 0 0 0 .635.534h.993l.635-16.083a.77.77 0 0 0-.762-.892h-.993zm-2.47 12.8h-2.47a.77.77 0 0 0-.762.892l.635 3.2a.641.641 0 0 0 .635.534h1.2l.635-4.092a.77.77 0 0 0-.762-.892h-.073z" />
+                                    </svg>
+                                    <span className="text-sm font-semibold text-gray-900">PayPal</span>
+                                    {paymentMethod === "PayPal" && (
+                                        <div className="h-4 w-4 rounded-full bg-blue-500 flex items-center justify-center">
+                                            <div className="h-1.5 w-1.5 rounded-full bg-white"></div>
+                                        </div>
+                                    )}
+                                </button>
+                            )}
                         </div>
                         <p className="text-xs text-gray-500 mt-2 text-center">
-                            Secure payment powered by Razorpay
+                            Secure payment via {paymentMethod === "PayPal" ? "PayPal" : "Razorpay"}
                         </p>
                     </div>
 
@@ -140,13 +183,33 @@ export function ConfirmModal({
 
                     {/* Action Button */}
                     <div className="px-6 py-4">
-                        <button
-                            onClick={onConfirm}
-                            disabled={isPending}
-                            className="w-full py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        >
-                            {isPending ? "Processing..." : "Confirm Appointment"}
-                        </button>
+                        {paymentMethod === "PayPal" && payPalCreateOrder && payPalOnApprove ? (
+                            <div className="min-h-[45px] flex items-center justify-center">
+                                <PayPalScriptProvider
+                                    options={{
+                                        clientId: import.meta.env.VITE_PAYPAL_CLIENT_ID || "sb",
+                                        currency: "USD",
+                                        intent: "capture",
+                                    }}
+                                >
+                                    <PayPalButtons
+                                        style={{ layout: "horizontal" }}
+                                        createOrder={() => payPalCreateOrder(totalFee)}
+                                        onApprove={(data) => payPalOnApprove({ orderID: data.orderID || "", payerID: data.payerID })}
+                                        onError={(err) => console.error("PayPal error:", err)}
+                                        disabled={isPending}
+                                    />
+                                </PayPalScriptProvider>
+                            </div>
+                        ) : (
+                            <button
+                                onClick={onConfirm}
+                                disabled={isPending}
+                                className="w-full py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                                {isPending ? pendingLabel : "Confirm Appointment"}
+                            </button>
+                        )}
                     </div>
                 </div>
             </motion.div>

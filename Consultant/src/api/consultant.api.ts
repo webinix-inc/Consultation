@@ -38,7 +38,21 @@ const ConsultantAPI = {
   updateAvailability: async (consultantId: string, data: any) => {
     const res = await axiosInstance.put(`/consultant-settings/${consultantId}/availability`, data);
     return res.data;
-  }
+  },
+
+  // GDPR - Self-service (current consultant)
+  exportMyData: async () => {
+    const res = await axiosInstance.get("/consultants/me/export", { responseType: "json" });
+    return res.data;
+  },
+  deleteMyAccount: async (password: string) => {
+    const res = await axiosInstance.delete("/consultants/me", { data: { password } });
+    return res.data;
+  },
+  updateConsent: async (data: { marketingConsent?: boolean; dataProcessingConsent?: boolean }) => {
+    const res = await axiosInstance.patch("/consultants/me/consent", data);
+    return res.data;
+  },
 };
 
 export default ConsultantAPI;

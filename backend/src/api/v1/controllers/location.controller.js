@@ -40,7 +40,9 @@ exports.searchStates = async (req, res, next) => {
     let query = { state: { $ne: null, $ne: "" } };
     
     if (q) {
-      query.state = { $regex: q, $options: "i" };
+      const { escapeRegex } = require("../../../utils/string.util");
+      const escaped = escapeRegex(String(q).slice(0, 100));
+      if (escaped) query.state = { $regex: escaped, $options: "i" };
     }
     
     const states = await Consultant.distinct("state", query);
@@ -62,7 +64,9 @@ exports.searchCities = async (req, res, next) => {
     }
     
     if (q) {
-      query.city = { $regex: q, $options: "i" };
+      const { escapeRegex } = require("../../../utils/string.util");
+      const escaped = escapeRegex(String(q).slice(0, 100));
+      if (escaped) query.city = { $regex: escaped, $options: "i" };
     }
     
     const cities = await Consultant.distinct("city", query);

@@ -1,4 +1,5 @@
 const Transaction = require("../../../models/transaction.model");
+const { Consultant } = require("../../../models/consultant.model");
 
 exports.getTransactions = async (req, res) => {
     try {
@@ -8,15 +9,22 @@ exports.getTransactions = async (req, res) => {
         let query = {};
 
         // If user is Admin, they can view any consultant's transactions if 'consultant' query param is provided
-        // Otherwise, they view their own transactions by default (unless we want admins to see everything by default, 
-        // but typically Admin dashboard views a specific consultant).
-        // Standard users can ONLY view their own transactions.
-
         if (req.user.role === "Admin" && consultant) {
             query = {
                 $or: [{ user: consultant }, { consultant: consultant }],
             };
+        } else if (req.user.role === "Consultant") {
+            // Consultant may have transactions stored with Consultant._id OR linked User._id
+            const consultantIds = [userId];
+            const consultantDoc = await Consultant.findById(userId).select("user").lean();
+            if (consultantDoc?.user) {
+                consultantIds.push(consultantDoc.user);
+            }
+            query = {
+                $or: consultantIds.map((id) => ({ consultant: id })),
+            };
         } else {
+            // Client or other: match user (client) or consultant
             query = {
                 $or: [{ user: userId }, { consultant: userId }],
             };
@@ -30,14 +38,13 @@ exports.getTransactions = async (req, res) => {
             .sort({ createdAt: -1 })
             .skip((page - 1) * limit)
             .limit(parseInt(limit))
-            .populate("appointment", "reason session status")
+            .populate("appointment", "reason session status payment")
             .lean();
 
         // Manually populate user (could be User or Client) and consultant (could be User or Consultant)
         // This is needed because Transaction.user is ref: "User" but might store Client ID
         const User = require("../../../models/user.model");
         const Client = require("../../../models/client.model");
-        const { Consultant } = require("../../../models/consultant.model");
 
         const populatedTransactions = await Promise.all(transactions.map(async (t) => {
             let userData = null;

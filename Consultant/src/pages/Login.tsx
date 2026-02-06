@@ -68,10 +68,10 @@ const Login = () => {
     setLoading(true);
     try {
       const response = await AuthAPI.sendOtp({ mobile: normalizedMobile });
-      const { otp } = response.data.data;
+      const { otp } = response.data?.data || {};
 
-      // console.log("📱 OTP:", otp); 
-      const message = `OTP sent successfully. Code: ${otp}`;
+      // OTP only returned in dev when ALLOW_OTP_IN_RESPONSE=true; in production user receives via SMS
+      const message = otp ? `OTP sent. Code: ${otp}` : "OTP sent to your mobile number";
       toast.success(message);
 
       setStep('otp');

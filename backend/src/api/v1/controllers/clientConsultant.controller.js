@@ -157,6 +157,74 @@ exports.unlinkClientConsultant = async (req, res, next) => {
 };
 
 /**
+ * Batch: Get client counts for multiple consultants (single aggregation)
+ * POST /api/v1/client-consultants/batch-client-counts
+ * Body: { consultantIds: string[] }
+ * Returns: { [consultantId]: number }
+ */
+exports.getBatchClientCounts = async (req, res, next) => {
+  try {
+    const { consultantIds } = req.body || {};
+    if (!Array.isArray(consultantIds) || consultantIds.length === 0) {
+      return sendSuccess(res, "Client counts fetched", {});
+    }
+
+    const validIds = consultantIds
+      .filter(id => id && mongoose.isValidObjectId(String(id)))
+      .map(id => String(id));
+
+    if (validIds.length === 0) {
+      return sendSuccess(res, "Client counts fetched", {});
+    }
+
+    const Appointment = require("../../../models/appointment.model");
+    const Consultant = require("../../../models/consultant.model").Consultant;
+
+    const consultantDocs = await Consultant.find({
+      $or: [
+        { _id: { $in: validIds.map(id => new mongoose.Types.ObjectId(id)) } },
+        { user: { $in: validIds.map(id => new mongoose.Types.ObjectId(id)) } }
+      ]
+    }).select("_id user").lean();
+
+    const appointmentConsultantIdToRequestedId = new Map();
+    consultantDocs.forEach(doc => {
+      const docIdStr = String(doc._id);
+      const userIdStr = doc.user ? String(doc.user) : null;
+      const requestedId = validIds.includes(docIdStr) ? docIdStr : (validIds.includes(userIdStr) ? userIdStr : docIdStr);
+      appointmentConsultantIdToRequestedId.set(docIdStr, requestedId);
+      if (userIdStr) appointmentConsultantIdToRequestedId.set(userIdStr, requestedId);
+    });
+    validIds.forEach(id => appointmentConsultantIdToRequestedId.set(id, id));
+
+    const allIds = [...new Set(appointmentConsultantIdToRequestedId.keys())].map(id => new mongoose.Types.ObjectId(id));
+
+    const rawCounts = await Appointment.aggregate([
+      { $match: { consultant: { $in: allIds } } },
+      { $group: { _id: "$consultant", clientIds: { $addToSet: "$client" } } }
+    ]);
+
+    const clientIdsByRequestedId = new Map();
+    validIds.forEach(id => clientIdsByRequestedId.set(id, new Set()));
+    rawCounts.forEach(row => {
+      const requestedId = appointmentConsultantIdToRequestedId.get(String(row._id));
+      if (requestedId && clientIdsByRequestedId.has(requestedId)) {
+        row.clientIds.forEach(cid => clientIdsByRequestedId.get(requestedId).add(String(cid)));
+      }
+    });
+
+    const result = {};
+    validIds.forEach(id => {
+      result[id] = clientIdsByRequestedId.get(id)?.size || 0;
+    });
+
+    return sendSuccess(res, "Client counts fetched", result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * Get all clients for a consultant
  * Includes clients from both ClientConsultant relationships AND appointments
  */

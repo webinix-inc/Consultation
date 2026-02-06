@@ -118,7 +118,7 @@ const UserManagement = () => {
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["users"],
-    queryFn: UserAPI.getAllUsers,
+    queryFn: () => UserAPI.getAllUsers(),
     retry: (failureCount, error: any) => {
       // Don't retry if it's an authentication error (401)
       if (error?.response?.status === 401) {

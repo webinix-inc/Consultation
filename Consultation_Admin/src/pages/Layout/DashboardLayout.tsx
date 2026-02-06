@@ -17,9 +17,7 @@ const DashboardLayout = () => {
         <div className="flex flex-col flex-1 min-w-0">
           <Navbar />
           <main className="flex-1 overflow-auto p-4">
-            {/* Temporarily disable auth check for testing */}
-            <Outlet />
-            {/* {isAuthenticated ? <Outlet /> : <Navigate to="/" replace />} */}
+            {isAuthenticated ? <Outlet /> : <Navigate to="/" replace />}
           </main>
         </div>
       </div>

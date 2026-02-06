@@ -20,6 +20,14 @@ router.delete(
   clientConsultantController.unlinkClientConsultant
 );
 
+// Batch: get client counts for multiple consultants
+router.post(
+  "/batch-client-counts",
+  authenticateToken,
+  authorizeRoles("Admin", "Consultant"),
+  clientConsultantController.getBatchClientCounts
+);
+
 // Get all clients for a consultant (supports pagination)
 router.get(
   "/consultant/:consultantId/clients",

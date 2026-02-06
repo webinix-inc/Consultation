@@ -13,6 +13,12 @@ const ClientConsultantAPI = {
     return res.data;
   },
 
+  // Batch: get client counts for multiple consultants
+  getBatchClientCounts: async (consultantIds: string[]) => {
+    const res = await axiosInstance.post("/client-consultants/batch-client-counts", { consultantIds });
+    return res.data;
+  },
+
   // Get all clients for a consultant
   getConsultantClients: async (consultantId: string) => {
     const res = await axiosInstance.get(`/client-consultants/consultant/${consultantId}/clients`);

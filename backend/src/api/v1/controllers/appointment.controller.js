@@ -322,7 +322,61 @@ exports.createAppointment = async (req, res, next) => {
 
       // 🔴 2. Verify Payment for Hold (If payment required)
       let transaction = null;
-      if (value.payment && value.payment.razorpayResponse) {
+      if (value.payment && value.payment.paypalResponse) {
+        const paypalService = require("../../../services/paypal.service");
+        const { orderID } = value.payment.paypalResponse;
+        if (!orderID) throw new ApiError("Missing PayPal order ID", httpStatus.BAD_REQUEST);
+
+        const { captureId } = await paypalService.captureOrder(orderID);
+        transaction = await Transaction.findOne({
+          "metadata.paypalOrderId": orderID,
+        });
+
+        if (transaction) {
+          transaction.status = "Success";
+          transaction.transactionId = captureId;
+          transaction.appointment = holdAppointment._id;
+          transaction.metadata = {
+            ...transaction.metadata,
+            paypalCaptureId: captureId,
+            verifiedAt: new Date(),
+          };
+
+          try {
+            const invoiceService = require("../../../services/invoice.service");
+            const invoiceConsultantRaw = consultantDoc || consultantUser;
+            const invoiceConsultant = {
+              name: invoiceConsultantRaw?.fullName || invoiceConsultantRaw?.name || "Consultant",
+              email: invoiceConsultantRaw?.email,
+              mobile: invoiceConsultantRaw?.mobile || invoiceConsultantRaw?.phone
+            };
+            const invoiceUrl = await invoiceService.generateInvoice(transaction, holdAppointment, client, invoiceConsultant);
+            transaction.invoiceUrl = invoiceUrl;
+          } catch (invErr) {
+            console.error("❌ Failed to generate invoice:", invErr);
+          }
+
+          await transaction.save();
+
+          holdAppointment.payment = {
+            amount: transaction.amount,
+            status: "Success",
+            method: "PayPal",
+            transactionId: transaction._id,
+            invoiceUrl: transaction.invoiceUrl
+          };
+
+          try {
+            const clientName = client.fullName || client.name || "Client";
+            const consultantName = consultantDoc?.fullName || consultantDoc?.name || consultantDoc?.displayName || "Consultant";
+            const NotificationService = require("../../../services/notificationService");
+            await NotificationService.notifyAdminPaymentReceived(transaction, clientName, consultantName);
+            await NotificationService.notifyPaymentSuccess(transaction, clientName);
+          } catch (notifErr) {
+            console.error("Payment Notification Error:", notifErr);
+          }
+        }
+      } else if (value.payment && value.payment.razorpayResponse) {
         const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = value.payment.razorpayResponse;
 
         // Verify Signature
@@ -705,14 +759,17 @@ exports.getAppointments = async (req, res, next) => {
       if (to) query.startAt.$lte = new Date(to);
     }
 
-    // Basic text search across reason/notes (simple)
+    // Basic text search across reason/notes (escape regex to prevent ReDoS)
     if (q) {
-      const textSearch = {
-        $or: [
-          { reason: new RegExp(q, "i") },
-          { notes: new RegExp(q, "i") },
-        ]
-      };
+      const { escapeRegex } = require("../../../utils/string.util");
+      const escaped = escapeRegex(String(q).slice(0, 100));
+      if (escaped) {
+        const textSearch = {
+          $or: [
+            { reason: new RegExp(escaped, "i") },
+            { notes: new RegExp(escaped, "i") },
+          ]
+        };
       // Combine with existing query using $and if we have role-based $or
       if (query.$or) {
         // If we already have $or, combine it with text search using $and
@@ -727,6 +784,7 @@ exports.getAppointments = async (req, res, next) => {
         }
       } else {
         query.$or = textSearch.$or;
+      }
       }
     }
 

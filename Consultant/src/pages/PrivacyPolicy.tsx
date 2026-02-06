@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
+import DOMPurify from "dompurify";
 import { Loader2 } from "lucide-react";
+
+const ALLOWED_TAGS = ["p", "b", "i", "u", "a", "ul", "ol", "li", "h1", "h2", "h3", "h4", "br", "strong", "em", "span", "div"];
 
 const API_URL = import.meta.env.VITE_BACKEND_URL
     ? `${import.meta.env.VITE_BACKEND_URL}/api/v1`
@@ -57,7 +60,7 @@ const PrivacyPolicy = () => {
             <div className="max-w-4xl mx-auto bg-white rounded-xl shadow-sm border p-8 sm:p-12">
                 <div
                     className="prose prose-blue max-w-none prose-headings:font-bold prose-headings:text-gray-900 prose-p:text-gray-600"
-                    dangerouslySetInnerHTML={{ __html: content }}
+                    dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(content, { ALLOWED_TAGS }) }}
                 />
             </div>
         </div>

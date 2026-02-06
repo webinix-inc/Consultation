@@ -5,12 +5,18 @@ const { authenticateToken, authorizeRoles } = require("../../../middlewares/auth
 const { validate, validateParams } = require("../../../middlewares/validate.middleware.js");
 const { createConsultantSchema, updateConsultantSchema, consultantIdSchema } = require("../validators/consultant.validator.js");
 const { uploadImage, uploadToS3 } = require("../../../middlewares/upload.middleware");
+const { deleteAccountSchema, consentSchema } = require("../validators/client.validator");
 
 // GET /api/v1/consultants/public - Public endpoint (no auth required)
 router.get("/public", controller.list);
 
 // GET /api/v1/consultants - Requires authentication
 router.get("/", authenticateToken, authorizeRoles("Admin", "Consultant", "Client"), controller.list);
+
+// GDPR: Data export and self-service deletion (must be before /:id)
+router.get("/me/export", authenticateToken, authorizeRoles("Consultant"), controller.exportMyData);
+router.delete("/me", authenticateToken, authorizeRoles("Consultant"), validate(deleteAccountSchema), controller.deleteMyAccount);
+router.patch("/me/consent", authenticateToken, authorizeRoles("Consultant"), validate(consentSchema), controller.updateConsent);
 
 // GET /api/v1/consultants/:id
 router.get(

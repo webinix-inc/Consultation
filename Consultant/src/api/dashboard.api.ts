@@ -5,6 +5,13 @@ const DashboardAPI = {
         const res = await axiosInstance.get("/analytics/consultant", { params });
         return res.data.data;
     },
+    getConsultantStatsExport: async (params?: { viewType?: "monthly" | "yearly"; month?: number; year?: number }) => {
+        const res = await axiosInstance.get("/analytics/consultant", {
+            params: { ...params, format: "csv" },
+            responseType: "blob",
+        });
+        return res;
+    },
     getClientStats: async (params?: { viewType?: "monthly" | "yearly"; month?: number; year?: number }) => {
         const res = await axiosInstance.get("/analytics/client", { params });
         return res.data.data;

@@ -7,6 +7,7 @@ import { ArrowLeft } from "lucide-react";
 
 const ForgotPassword = () => {
     const [email, setEmail] = useState("");
+    const [role, setRole] = useState<'Client' | 'Consultant'>('Client');
     const [loading, setLoading] = useState(false);
     const [emailSent, setEmailSent] = useState(false);
     const navigate = useNavigate();
@@ -25,7 +26,7 @@ const ForgotPassword = () => {
 
         setLoading(true);
         try {
-            await AuthAPI.forgotPassword({ email });
+            await AuthAPI.forgotPassword({ email, role });
             setEmailSent(true);
             toast.success("Password reset link sent to your email");
         } catch (error: any) {
@@ -85,6 +86,24 @@ const ForgotPassword = () => {
                     </div>
                 ) : (
                     <div className="space-y-6">
+                        {/* Role Toggle */}
+                        <div className="flex gap-2 bg-gray-100 p-1 rounded-xl">
+                            <button
+                                onClick={() => setRole('Client')}
+                                className={`flex-1 py-2 rounded-lg text-sm font-medium transition ${role === 'Client' ? 'bg-white shadow text-[#007ACC]' : 'text-gray-500 hover:text-gray-700'
+                                    }`}
+                            >
+                                I am a Client
+                            </button>
+                            <button
+                                onClick={() => setRole('Consultant')}
+                                className={`flex-1 py-2 rounded-lg text-sm font-medium transition ${role === 'Consultant' ? 'bg-white shadow text-[#007ACC]' : 'text-gray-500 hover:text-gray-700'
+                                    }`}
+                            >
+                                I am a Consultant
+                            </button>
+                        </div>
+
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">
                                 Email Address

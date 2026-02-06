@@ -7,15 +7,19 @@ const PaymentAPI = {
     holdId?: string;
     consultantId?: string;
     clientId?: string;
+    paymentMethod?: "Razorpay" | "PayPal";
   }) => {
     const res = await axiosInstance.post("/payments/create-order", data);
     return res.data;
   },
 
   verifyPayment: async (data: {
-    razorpay_order_id: string;
-    razorpay_payment_id: string;
-    razorpay_signature: string;
+    razorpay_order_id?: string;
+    razorpay_payment_id?: string;
+    razorpay_signature?: string;
+    paymentMethod?: "Razorpay" | "PayPal";
+    orderID?: string;
+    payerID?: string;
     transactionId?: string;
     appointmentId?: string;
   }) => {

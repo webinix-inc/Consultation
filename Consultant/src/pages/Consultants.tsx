@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useSocket } from "@/context/SocketContext";
 import { useSelector } from "react-redux";
 import type { RootState } from "@/app/store";
 import ConsultantAPI from "@/api/consultant.api";
@@ -24,16 +25,19 @@ declare global {
 
 export default function Consultants() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { socket } = useSocket();
   const handleViewProfile = (consultantId: string) => {
     navigate(`/consultant/${consultantId}`);
   };
-  // const queryClient = useQueryClient(); // Handled in hook
   const { user, isAuthenticated } = useSelector((state: RootState) => state.auth);
   const [searchTerm, setSearchTerm] = useState("");
 
   // Hook Initialization
   // We need to pass activeConsultants and categories to the hook if needed, 
   // currently the hook handles state, but standardizing data passing is good.
+  const [paymentMethod, setPaymentMethod] = useState<"Razorpay" | "PayPal">("Razorpay");
+
   const {
     sched,
     setSched,
@@ -41,7 +45,7 @@ export default function Consultants() {
     setShowBookingModal,
     showConfirmModal,
     setShowConfirmModal,
-    isProcessingPayment, // exposed as isPending
+    isProcessingPayment,
     selectedConsultant,
     setSelectedConsultant,
     selectedCategoryForBooking,
@@ -50,7 +54,9 @@ export default function Consultants() {
     confirmBooking,
     formatDateToISO,
     holdExpiresAt,
-    handleExpire
+    handleExpire,
+    payPalCreateOrder,
+    payPalOnApprove,
   } = useBooking({
     user,
     isAuthenticated,
@@ -189,6 +195,19 @@ export default function Consultants() {
   }, [activeConsultants, selectedCategoryForBooking, selectedConsultant, sched.consultant]);
 
 
+  // Realtime: invalidate slots when consultant availability changes
+  useEffect(() => {
+    if (!socket || !sched.consultant) return;
+    const handler = (payload: { consultantId?: string }) => {
+      const id = payload?.consultantId || payload?.targetUserId;
+      if (id && String(id) === String(sched.consultant)) {
+        queryClient.invalidateQueries({ queryKey: ["available-slots"] });
+      }
+    };
+    socket.on("availability:updated", handler);
+    return () => { socket.off("availability:updated", handler); };
+  }, [socket, sched.consultant, queryClient]);
+
   // Slots Query
   const selectedDateISO = formatDateToISO(sched.date);
   const { data: availableSlots = [] } = useQuery({
@@ -227,16 +246,32 @@ export default function Consultants() {
   const totalFee = consultationFee + platformFee;
 
 
+  // Razorpay script loading state - prevents "Confirm" before gateway is ready (only when Razorpay selected)
+  const [razorpayReady, setRazorpayReady] = useState(!!(typeof window !== "undefined" && window.Razorpay));
+
+  // Reset payment method when modal closes
+  useEffect(() => {
+    if (!showConfirmModal) setPaymentMethod("Razorpay");
+  }, [showConfirmModal]);
+
   // Load Razorpay Script (Effect)
   useEffect(() => {
     if (showConfirmModal && !window.Razorpay) {
+      setRazorpayReady(false);
       const script = document.createElement("script");
       script.src = "https://checkout.razorpay.com/v1/checkout.js";
       script.async = true;
+      script.onload = () => setRazorpayReady(true);
+      script.onerror = () => {
+        setRazorpayReady(false);
+        console.error("Razorpay script failed to load");
+      };
       document.body.appendChild(script);
       return () => {
         if (document.body.contains(script)) document.body.removeChild(script);
       };
+    } else if (showConfirmModal && window.Razorpay) {
+      setRazorpayReady(true);
     }
   }, [showConfirmModal]);
 
@@ -463,17 +498,20 @@ export default function Consultants() {
               setShowConfirmModal(false);
               handleExpire();
             }}
-            onConfirm={() => confirmBooking(totalFee)}
+            onConfirm={() => confirmBooking(totalFee, paymentMethod)}
             consultantDetails={selectedConsultantForBooking || {}}
             sched={sched}
-            isPending={isProcessingPayment}
-            paymentMethod="Razorpay"
-            setPaymentMethod={() => { }}
+            isPending={isProcessingPayment || (paymentMethod === "Razorpay" && !razorpayReady)}
+            pendingLabel={paymentMethod === "Razorpay" && !razorpayReady ? "Loading payment gateway..." : "Processing..."}
+            paymentMethod={paymentMethod}
+            setPaymentMethod={setPaymentMethod}
             consultationFee={consultationFee}
             platformFee={platformFee}
             totalFee={totalFee}
             expiresAt={holdExpiresAt || ""}
             onExpire={handleExpire}
+            payPalCreateOrder={payPalCreateOrder}
+            payPalOnApprove={payPalOnApprove}
           />
         </>
       )}

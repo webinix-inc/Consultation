@@ -9,8 +9,10 @@ import { loginSuccess } from "@/features/auth/authSlice";
 import type { AppDispatch } from "@/app/store";
 import AuthAPI from "@/api/auth.api";
 import CategoryAPI from "@/api/category.api";
-import SubcategoryAPI from "@/api/subcategory.api";
 import { useQuery } from "@tanstack/react-query";
+import { Plus, Trash2 } from "lucide-react";
+
+type CategoryItem = { categoryId: string; categoryName: string; subcategoryId: string; subcategoryName: string };
 import Logo from "@/assets/images/logo.png";
 import { getCurrencySymbol, getCurrencyCode } from "@/utils/currencyUtils";
 import { validatePhone, formatPhoneForBackend } from "@/utils/validationUtils";
@@ -30,25 +32,59 @@ const Signup = () => {
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const [category, setCategory] = useState("");
-  const [subcategory, setSubcategory] = useState("");
+  const [selectedCategories, setSelectedCategories] = useState<CategoryItem[]>([
+    { categoryId: "", categoryName: "", subcategoryId: "", subcategoryName: "" },
+  ]);
 
   const { data: categories = [] } = useQuery({
     queryKey: ["categories"],
-    queryFn: CategoryAPI.getAll,
+    queryFn: () => CategoryAPI.getAll(),
     select: (res: any) => res?.data ?? res ?? [],
   });
 
-  const { data: subcategories = [] } = useQuery({
-    queryKey: ["subcategories"],
-    queryFn: () => SubcategoryAPI.getAll(),
-    select: (res: any) => res?.data ?? res ?? [],
-  });
+  const getSubcategoriesForCategory = (categoryId: string) => {
+    const cat = categories.find((c: any) => c._id === categoryId);
+    return cat?.subcategories || [];
+  };
 
-  console.log("subcategories", subcategories);
+  const addCategoryRow = () => {
+    setSelectedCategories((prev) => [
+      ...prev,
+      { categoryId: "", categoryName: "", subcategoryId: "", subcategoryName: "" },
+    ]);
+  };
+
+  const removeCategoryRow = (index: number) => {
+    if (selectedCategories.length <= 1) return;
+    setSelectedCategories((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const updateCategoryRow = (index: number, field: keyof CategoryItem, value: string) => {
+    setSelectedCategories((prev) => {
+      const next = [...prev];
+      next[index] = { ...next[index], [field]: value };
+      if (field === "categoryId") {
+        const cat = categories.find((c: any) => c._id === value);
+        next[index].categoryName = cat?.title || "";
+        next[index].subcategoryId = "";
+        next[index].subcategoryName = "";
+      } else if (field === "subcategoryId") {
+        const cat = categories.find((c: any) => c._id === next[index].categoryId);
+        const sub = cat?.subcategories?.find((s: any) => s._id === value);
+        next[index].subcategoryName = sub?.name || sub?.title || "";
+      }
+      return next;
+    });
+  };
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
   const dispatch = useDispatch<AppDispatch>();
+
+  useEffect(() => {
+    if (userRole === 'Client') {
+      setSelectedCategories([{ categoryId: "", categoryName: "", subcategoryId: "", subcategoryName: "" }]);
+    }
+  }, [userRole]);
 
   // Redirect logged in users away from signup page
   useEffect(() => {
@@ -66,7 +102,8 @@ const Signup = () => {
   const isFormValid = () => {
     const baseFieldsValid = fullName && email && mobile.length >= 10 && password && confirmPassword && termsAccepted;
     if (userRole === 'Consultant') {
-      return baseFieldsValid && category && subcategory && fees;
+      const validCategories = selectedCategories.filter((c) => c.categoryId && c.subcategoryId);
+      return baseFieldsValid && validCategories.length > 0 && fees;
     }
     return baseFieldsValid;
   };
@@ -100,8 +137,9 @@ const Signup = () => {
       return;
     }
 
-    if (userRole === 'Consultant' && (!category || !subcategory)) {
-      toast.error("Please select a category and subcategory");
+    const validCategories = selectedCategories.filter((c) => c.categoryId && c.subcategoryId);
+    if (userRole === 'Consultant' && validCategories.length === 0) {
+      toast.error("Please select at least one category and subcategory");
       return;
     }
 
@@ -117,12 +155,6 @@ const Signup = () => {
 
     setLoading(true);
     try {
-      // Resolve Category and Subcategory Titles for payload
-      const categoryObj = categories.find((c: any) => c._id === category);
-      const categoryTitle = categoryObj?.title;
-
-      // subcategory state holds the title already (from the select value below)
-
       const normalizedMobile = formatPhoneForBackend(mobile, selectedCountry);
 
       const payload: any = {
@@ -131,11 +163,20 @@ const Signup = () => {
         mobile: normalizedMobile,
         password,
         role: userRole,
-        category: userRole === 'Consultant' ? categoryTitle : undefined,
-        subcategory: userRole === 'Consultant' ? subcategory : undefined,
         fees: userRole === 'Consultant' ? Number(fees) : undefined,
         currency: userRole === 'Consultant' ? getCurrencyCode(selectedCountry) : undefined,
       };
+
+      if (userRole === 'Consultant' && validCategories.length > 0) {
+        payload.categories = validCategories.map((c) => ({
+          categoryId: c.categoryId,
+          categoryName: c.categoryName,
+          subcategoryId: c.subcategoryId,
+          subcategoryName: c.subcategoryName,
+        }));
+        payload.category = validCategories[0].categoryId;
+        payload.subcategory = validCategories[0].subcategoryId;
+      }
 
       const response = await AuthAPI.signup(payload);
 
@@ -198,54 +239,57 @@ const Signup = () => {
           </div>
 
           {userRole === 'Consultant' && (
-            <>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Category
-                </label>
-                <select
-                  className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#2E7FC4] text-gray-700 bg-white"
-                  value={category}
-                  onChange={(e) => {
-                    setCategory(e.target.value);
-                    setSubcategory(""); // Reset subcategory
-                  }}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="block text-sm font-medium text-gray-700">Categories</label>
+                <button
+                  type="button"
+                  onClick={addCategoryRow}
+                  className="text-sm text-[#2E7FC4] hover:underline flex items-center gap-1"
                 >
-                  <option value="">Select Category</option>
-                  {categories.map((cat: any) => (
-                    <option key={cat._id} value={cat._id}>
-                      {cat.title}
-                    </option>
-                  ))}
-                </select>
+                  <Plus size={14} /> Add category
+                </button>
               </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Subcategory
-                </label>
-                <select
-                  className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#2E7FC4] text-gray-700 bg-white disabled:bg-gray-100 disabled:text-gray-400"
-                  value={subcategory}
-                  onChange={(e) => setSubcategory(e.target.value)}
-                  disabled={!category}
-                >
-                  <option value="">Select Subcategory</option>
-                  {subcategories
-                    .filter((sub: any) => {
-                      if (!category) return false;
-                      const pVal = sub.parentCategory;
-                      const pId = pVal?._id || pVal;
-                      return String(pId) === String(category);
-                    })
-                    .map((sub: any) => (
-                      <option key={sub._id} value={sub.title}>
-                        {sub.title}
-                      </option>
-                    ))}
-                </select>
-              </div>
-            </>
+              {selectedCategories.map((item, index) => (
+                <div key={index} className="flex gap-2 items-end">
+                  <div className="flex-1 grid grid-cols-2 gap-2">
+                    <select
+                      className="px-3 py-2 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#2E7FC4] text-gray-700 text-sm"
+                      value={item.categoryId}
+                      onChange={(e) => updateCategoryRow(index, "categoryId", e.target.value)}
+                    >
+                      <option value="">Category</option>
+                      {categories.map((cat: any) => (
+                        <option key={cat._id} value={cat._id}>
+                          {cat.title}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      className="px-3 py-2 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#2E7FC4] text-gray-700 text-sm"
+                      value={item.subcategoryId}
+                      onChange={(e) => updateCategoryRow(index, "subcategoryId", e.target.value)}
+                      disabled={!item.categoryId}
+                    >
+                      <option value="">Subcategory</option>
+                      {getSubcategoriesForCategory(item.categoryId).map((sub: any) => (
+                        <option key={sub._id} value={sub._id}>
+                          {sub.name || sub.title}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeCategoryRow(index)}
+                    disabled={selectedCategories.length <= 1}
+                    className="p-2 text-red-500 hover:bg-red-50 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                </div>
+              ))}
+            </div>
           )}
 
           {userRole === 'Consultant' && (

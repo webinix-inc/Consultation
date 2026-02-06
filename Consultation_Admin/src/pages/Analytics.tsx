@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ArrowUpRight, ArrowDownRight, RefreshCw, TrendingUp, DollarSign, Users, Briefcase, Calendar } from "lucide-react";
+import { ArrowUpRight, ArrowDownRight, RefreshCw, TrendingUp, DollarSign, Users, Briefcase, Calendar, Download } from "lucide-react";
 import { motion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
 import AnalyticsAPI from "../api/analytics.api";
@@ -13,6 +13,7 @@ const AnalyticsDashboard: React.FC = () => {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1); // 1-indexed for display/value
 
+  const [exporting, setExporting] = useState(false);
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["admin-analytics", viewType, selectedYear, selectedMonth],
     queryFn: () => {
@@ -27,6 +28,7 @@ const AnalyticsDashboard: React.FC = () => {
   console.log("ddata", data?.data.topConsultants);
   const analyticsData = data?.data || {};
   const revenueBreakdown = analyticsData.revenueBreakdown || {};
+  const payoutSummary = analyticsData.payoutSummary || {};
   const categoryData = analyticsData.categoryPerformance || [];
   const consultants = analyticsData.topConsultants || [];
   const months = analyticsData.monthlyTrends || [];
@@ -112,6 +114,36 @@ const AnalyticsDashboard: React.FC = () => {
           >
             <RefreshCw size={16} />
           </button>
+          <button
+            onClick={async () => {
+              setExporting(true);
+              try {
+                const res = await AnalyticsAPI.overviewExport({
+                  viewType,
+                  year: selectedYear,
+                  month: viewType === "monthly" ? selectedMonth : undefined,
+                });
+                const blob = res.data;
+                const url = window.URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = `analytics-overview-${selectedYear}-${String(selectedMonth).padStart(2, "0")}.csv`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(url);
+              } catch (e) {
+                console.error("Export failed", e);
+              } finally {
+                setExporting(false);
+              }
+            }}
+            disabled={exporting}
+            className="p-2 border rounded-md hover:bg-gray-100 transition flex items-center gap-2 bg-white disabled:opacity-50"
+          >
+            <Download size={16} />
+            {exporting ? "Exporting..." : "Export CSV"}
+          </button>
         </div>
       </div>
 
@@ -169,6 +201,25 @@ const AnalyticsDashboard: React.FC = () => {
           <p className="text-sm text-gray-500 mt-1">Transactions This Month</p>
         </motion.div>
       </div>
+
+      {/* Payout Summary & Remaining Balance */}
+      <motion.div variants={fadeUp} initial="hidden" animate="show" className="bg-white rounded-xl border shadow-sm p-5 mb-6">
+        <h4 className="font-semibold text-gray-800 mb-4">Payout Section</h4>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="border rounded-lg p-4">
+            <p className="text-sm text-gray-500">Total Consultant Earnings</p>
+            <p className="text-xl font-bold text-gray-900">{formatCurrency(payoutSummary.totalEarnings || 0)}</p>
+          </div>
+          <div className="border rounded-lg p-4">
+            <p className="text-sm text-gray-500">Total Paid Out</p>
+            <p className="text-xl font-bold text-gray-900">{formatCurrency(payoutSummary.totalPaidOut || 0)}</p>
+          </div>
+          <div className="border rounded-lg p-4 bg-amber-50">
+            <p className="text-sm text-gray-500">Remaining Balance</p>
+            <p className="text-xl font-bold text-amber-700">{formatCurrency(payoutSummary.remainingBalance || 0)}</p>
+          </div>
+        </div>
+      </motion.div>
 
       {/* YTD Summary */}
       <motion.div variants={fadeUp} initial="hidden" animate="show" className="bg-blue-700 rounded-xl p-5 mb-6">

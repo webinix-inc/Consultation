@@ -23,6 +23,7 @@ import { checkIsNowFromDates } from "@/utils/dateTimeUtils";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useSocket } from "@/context/SocketContext";
 import { toast } from "react-hot-toast";
 import AppointmentAPI from "@/api/appointment.api";
 import UserAPI from "@/api/user.api";
@@ -161,6 +162,7 @@ const AppointmentManagementConsultant: React.FC = () => {
   const [paymentMethod, setPaymentMethod] = useState("Card");
 
   const queryClient = useQueryClient();
+  const { socket } = useSocket();
 
   // Check if consultantId was passed via navigation state
   const consultantIdFromState = (location.state as any)?.consultantId;
@@ -676,6 +678,19 @@ const AppointmentManagementConsultant: React.FC = () => {
     enabled: !!consultantIdForSlots && !!selectedDateISO,
     staleTime: 30 * 1000,
   });
+
+  // Realtime: invalidate slots when consultant availability changes
+  useEffect(() => {
+    if (!socket || !consultantIdForSlots) return;
+    const handler = (payload: { consultantId?: string }) => {
+      const id = payload?.consultantId || payload?.targetUserId;
+      if (id && String(id) === String(consultantIdForSlots)) {
+        queryClient.invalidateQueries({ queryKey: ["available-slots"] });
+      }
+    };
+    socket.on("availability:updated", handler);
+    return () => { socket.off("availability:updated", handler); };
+  }, [socket, consultantIdForSlots, queryClient]);
 
   const availableSlotsFromServer = availableSlotsQuery.data || [];
 

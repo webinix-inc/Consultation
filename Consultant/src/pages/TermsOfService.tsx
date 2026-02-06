@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
+import DOMPurify from "dompurify";
 import { Loader2 } from "lucide-react";
+
+const ALLOWED_TAGS = ["p", "b", "i", "u", "a", "ul", "ol", "li", "h1", "h2", "h3", "h4", "br", "strong", "em", "span", "div"];
 
 // Use the public axios instance or standard axios if not authenticated
 // Assuming we can access the backend URL from env
@@ -57,10 +60,9 @@ const TermsOfService = () => {
     return (
         <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
             <div className="max-w-4xl mx-auto bg-white rounded-xl shadow-sm border p-8 sm:p-12">
-                {/* Render HTML content safely */}
                 <div
                     className="prose prose-blue max-w-none prose-headings:font-bold prose-headings:text-gray-900 prose-p:text-gray-600"
-                    dangerouslySetInnerHTML={{ __html: content }}
+                    dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(content, { ALLOWED_TAGS }) }}
                 />
             </div>
         </div>

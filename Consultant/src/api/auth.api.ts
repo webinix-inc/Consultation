@@ -5,7 +5,7 @@ const AuthAPI = {
 
   login: (data: any) => axiosInstance.post("/auth/login", data),
 
-  forgotPassword: (data: { email: string }) => axiosInstance.post("/auth/forgot-password", data),
+  forgotPassword: (data: { email: string; role?: 'Client' | 'Consultant' }) => axiosInstance.post("/auth/forgot-password", data),
 
   resetPassword: (token: string, data: { password: string }) => axiosInstance.put(`/auth/reset-password/${token}`, data),
 
@@ -22,6 +22,7 @@ const AuthAPI = {
     role: "Consultant" | "Client";
     category?: string;
     subcategory?: string;
+    categories?: Array<{ categoryId?: string; categoryName?: string; subcategoryId?: string; subcategoryName?: string }>;
     password?: string;
     fees?: number;
   }) => axiosInstance.post("/auth/register", data),

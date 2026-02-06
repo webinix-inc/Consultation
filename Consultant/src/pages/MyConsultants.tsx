@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Mail, Phone, MapPin, Briefcase, Video } from "lucide-react";
+import { getCountryDisplayName } from "@/constants/countries";
 import { Button } from "@/components/ui/button";
 
 const MyConsultants = () => {
@@ -143,11 +144,13 @@ const MyConsultants = () => {
                                             <span className="text-xs">{consultant.mobile}</span>
                                         </div>
                                     )}
-                                    {(consultant.city || consultant.state) && (
+                                    {(consultant.city || consultant.state || consultant.country) && (
                                         <div className="flex items-center gap-2 text-muted-foreground">
                                             <MapPin className="h-3.5 w-3.5 shrink-0 text-slate-400" />
                                             <span className="text-xs">
-                                                {[consultant.city, consultant.state].filter(Boolean).join(", ")}
+                                                {[consultant.city, consultant.state, consultant.country ? getCountryDisplayName(consultant.country) : ""]
+                                                    .filter(Boolean)
+                                                    .join(", ")}
                                             </span>
                                         </div>
                                     )}

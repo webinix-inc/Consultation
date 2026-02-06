@@ -7,10 +7,12 @@ interface PhoneDisplayProps {
     phone: string;
     label?: string;
     className?: string;
+    defaultCountry?: string;
 }
 
-export const PhoneDisplay: React.FC<PhoneDisplayProps> = ({ phone, label = "Phone Number", className }) => {
-    const { countryCode, number, country } = splitPhoneForDisplay(phone);
+export const PhoneDisplay: React.FC<PhoneDisplayProps> = ({ phone, label = "Phone Number", className, defaultCountry = "IN" }) => {
+    const { countryCode, number, country } = splitPhoneForDisplay(phone, defaultCountry);
+    const hasCountryCode = Boolean(countryCode);
 
     return (
         <div className={className}>
@@ -19,27 +21,33 @@ export const PhoneDisplay: React.FC<PhoneDisplayProps> = ({ phone, label = "Phon
                     {label}
                 </Label>
             )}
-            <div className="flex gap-2">
-                <div className="flex h-9 w-[124px] shrink-0 items-center gap-2 rounded-md border border-input bg-gray-50 px-3">
-                    {country && (
-                        <img
-                            src={`https://flagcdn.com/w20/${country.toLowerCase()}.png`}
-                            srcSet={`https://flagcdn.com/w40/${country.toLowerCase()}.png 2x`}
-                            alt="Flag"
-                            className="h-auto w-5 shrink-0 rounded-[2px] object-cover"
+            <div className="flex min-w-0 gap-2">
+                {hasCountryCode ? (
+                    <>
+                        <div className="flex h-9 w-16 shrink-0 items-center gap-1.5 rounded-md border border-input bg-muted/50 px-2">
+                            {country && (
+                                <img
+                                    src={`https://flagcdn.com/w20/${country.toLowerCase()}.png`}
+                                    srcSet={`https://flagcdn.com/w40/${country.toLowerCase()}.png 2x`}
+                                    alt=""
+                                    className="h-4 w-4 shrink-0 rounded-[2px] object-cover"
+                                />
+                            )}
+                            <span className="truncate text-sm font-medium text-foreground">{countryCode}</span>
+                        </div>
+                        <Input
+                            value={number}
+                            disabled={true}
+                            className="h-9 min-w-0 flex-1 bg-muted/50"
                         />
-                    )}
+                    </>
+                ) : (
                     <Input
-                        value={countryCode}
+                        value={number || phone}
                         disabled={true}
-                        className="h-auto w-full border-0 bg-transparent p-0 shadow-none focus-visible:ring-0 text-sm"
+                        className="h-9 min-w-0 flex-1 bg-muted/50"
                     />
-                </div>
-                <Input
-                    value={number}
-                    disabled={true}
-                    className="bg-gray-50 flex-1 h-9"
-                />
+                )}
             </div>
         </div>
     );

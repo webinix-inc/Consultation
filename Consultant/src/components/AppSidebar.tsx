@@ -14,6 +14,7 @@ import {
   FaBell,
   FaUserMd,
   FaUserCircle,
+  FaCog,
   FaRupeeSign
 } from "react-icons/fa";
 import {
@@ -55,6 +56,11 @@ const consultantItems = [
     title: "Notifications",
     url: "/notifications",
     icon: FaBell,
+  },
+  {
+    title: "Settings",
+    url: "/settings",
+    icon: FaCog,
   },
 ];
 

@@ -889,7 +889,6 @@ function DocumentsTab({ consultantId }: { consultantId: string }) { // consultan
     const [isUploadOpen, setIsUploadOpen] = useState(false);
     const [uploadFile, setUploadFile] = useState<File | null>(null);
     const [uploadTitle, setUploadTitle] = useState("");
-    const [uploadType, setUploadType] = useState("Medical Report");
     const [uploadDesc, setUploadDesc] = useState("");
     const [isUploading, setIsUploading] = useState(false);
     const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -929,7 +928,7 @@ function DocumentsTab({ consultantId }: { consultantId: string }) { // consultan
             // 2. Create Document
             const docPayload = {
                 title: uploadTitle,
-                type: uploadType,
+                type: "Other",
                 description: uploadDesc,
                 client: clientId,
                 // consultant: // Backend handles consultant assignment based on logged-in user if role is Consultant
@@ -1040,8 +1039,6 @@ function DocumentsTab({ consultantId }: { consultantId: string }) { // consultan
                         <label className="text-sm font-medium">Title</label>
                         <Input value={uploadTitle} onChange={(e) => setUploadTitle(e.target.value)} placeholder="e.g. Lab Report - Oct 24" />
                     </div>
-
-
 
                     <div className="grid gap-2">
                         <label className="text-sm font-medium">Description (Optional)</label>
@@ -1173,12 +1170,10 @@ function PaymentRow({
                         disabled={!p.invoiceUrl}
                         onClick={() => {
                             if (p.invoiceUrl) {
-                                const link = document.createElement('a');
-                                link.href = p.invoiceUrl;
-                                link.setAttribute('download', 'Invoice.pdf');
-                                document.body.appendChild(link);
-                                link.click();
-                                document.body.removeChild(link);
+                                const token = localStorage.getItem("token");
+                                const sep = p.invoiceUrl.includes('?') ? '&' : '?';
+                                const urlWithToken = token ? `${p.invoiceUrl}${sep}token=${token}` : p.invoiceUrl;
+                                window.open(urlWithToken, "_blank");
                             }
                         }}
                     >
@@ -1190,7 +1185,13 @@ function PaymentRow({
                         className="gap-1"
                         disabled={!p.invoiceUrl}
                         onClick={() => {
-                            if (p.invoiceUrl) window.open(`${p.invoiceUrl}&view=inline`, '_blank');
+                            if (p.invoiceUrl) {
+                                const token = localStorage.getItem("token");
+                                const sep = p.invoiceUrl.includes('?') ? '&' : '?';
+                                const urlWithToken = token ? `${p.invoiceUrl}${sep}token=${token}` : p.invoiceUrl;
+                                const finalSep = urlWithToken.includes('?') ? '&' : '?';
+                                window.open(`${urlWithToken}${finalSep}view=inline`, '_blank');
+                            }
                         }}
                     >
                         <Receipt className="h-4 w-4" /> Receipt
@@ -1240,7 +1241,7 @@ function PaymentsTab({ transactions }: { transactions: any[] }) {
         method: t.paymentMethod,
         txn: t.transactionId || "N/A",
         invoice: t.metadata?.invoiceId || "INV-" + t._id.substring(18),
-        invoiceUrl: t.invoiceUrl,
+        invoiceUrl: t.invoiceUrl || t.appointment?.payment?.invoiceUrl,
         price: t.amount || 0,
         session: t.appointment?.session || "Video Call",
     }));
@@ -1373,12 +1374,10 @@ function PaymentsTab({ transactions }: { transactions: any[] }) {
                                     disabled={!open.invoiceUrl}
                                     onClick={() => {
                                         if (open.invoiceUrl) {
-                                            const link = document.createElement('a');
-                                            link.href = open.invoiceUrl;
-                                            link.setAttribute('download', 'Invoice.pdf');
-                                            document.body.appendChild(link);
-                                            link.click();
-                                            document.body.removeChild(link);
+                                            const token = localStorage.getItem("token");
+                                            const sep = open.invoiceUrl.includes('?') ? '&' : '?';
+                                            const urlWithToken = token ? `${open.invoiceUrl}${sep}token=${token}` : open.invoiceUrl;
+                                            window.open(urlWithToken, "_blank");
                                         }
                                     }}
                                 >
@@ -1390,7 +1389,13 @@ function PaymentsTab({ transactions }: { transactions: any[] }) {
                                     size="sm"
                                     disabled={!open.invoiceUrl}
                                     onClick={() => {
-                                        if (open.invoiceUrl) window.open(`${open.invoiceUrl}&view=inline`, '_blank');
+                                        if (open.invoiceUrl) {
+                                            const token = localStorage.getItem("token");
+                                            const sep = open.invoiceUrl.includes('?') ? '&' : '?';
+                                            const urlWithToken = token ? `${open.invoiceUrl}${sep}token=${token}` : open.invoiceUrl;
+                                            const finalSep = urlWithToken.includes('?') ? '&' : '?';
+                                            window.open(`${urlWithToken}${finalSep}view=inline`, '_blank');
+                                        }
                                     }}
                                 >
                                     <Receipt className="h-4 w-4" /> Download Receipt

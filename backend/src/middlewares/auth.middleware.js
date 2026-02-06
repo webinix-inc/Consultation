@@ -3,12 +3,16 @@ const jwt = require("jsonwebtoken");
 // Middleware to check JWT access token
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers.authorization;
+  let token;
 
-  if (!authHeader?.startsWith("Bearer ")) {
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    token = authHeader.split(" ")[1];
+  } else if (req.query && req.query.token) {
+    // Fallback: Check query parameter (useful for img src, iframe, window.open)
+    token = req.query.token;
+  } else {
     return res.status(401).json({ message: "Access denied. No token provided." });
   }
-
-  const token = authHeader.split(" ")[1];
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);

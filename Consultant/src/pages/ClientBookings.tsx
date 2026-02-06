@@ -13,6 +13,7 @@ import {
     Phone,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useSocket } from "@/context/SocketContext";
 import AppointmentAPI from "@/api/appointment.api";
 import DashboardAPI from "@/api/dashboard.api";
 import { toast } from "react-hot-toast";
@@ -377,6 +378,7 @@ export default function ClientBookings() {
     const [rescheduleItem, setRescheduleItem] = useState<BookingItem | null>(null);
     const [notesItem, setNotesItem] = useState<BookingItem | null>(null);
     const queryClient = useQueryClient();
+    const { socket } = useSocket();
     const { user } = useAuth();
     const isConsultant = user?.role === "Consultant";
     const [activeTab, setActiveTab] = useState<"upcoming" | "past">("upcoming");
@@ -426,6 +428,19 @@ export default function ClientBookings() {
         enabled: !!rescheduleItem?.consultantId && !!selectedDateISO,
         staleTime: 30 * 1000,
     });
+
+    // Realtime: invalidate slots when consultant availability changes
+    useEffect(() => {
+        if (!socket || !rescheduleItem?.consultantId) return;
+        const handler = (payload: { consultantId?: string }) => {
+            const id = payload?.consultantId || payload?.targetUserId;
+            if (id && String(id) === String(rescheduleItem?.consultantId)) {
+                queryClient.invalidateQueries({ queryKey: ["available-slots"] });
+            }
+        };
+        socket.on("availability:updated", handler);
+        return () => { socket.off("availability:updated", handler); };
+    }, [socket, rescheduleItem?.consultantId, queryClient]);
 
     const availableSlots = availableSlotsQuery.data || [];
 

@@ -34,6 +34,7 @@ import SubcategoryAPI from "@/api/subcategory.api";
 import { toast } from "react-hot-toast";
 import { Autocomplete } from "@/components/ui/autocomplete";
 import { INDIAN_STATES } from "@/constants/indianStates";
+import { COUNTRIES_LIST, normalizeCountryCode } from "@/constants/countries";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Bell, Calendar } from "lucide-react";
 import { NotificationsTab, AvailabilityTab } from "@/pages/Settings";
@@ -507,7 +508,7 @@ export default function Profile() {
      ============================ */
   const { data: categories = [] } = useQuery({
     queryKey: ["categories"],
-    queryFn: CategoryAPI.getAll,
+    queryFn: () => CategoryAPI.getAll(),
     select: (res: any) => res?.data ?? res ?? [],
   });
 
@@ -595,7 +596,7 @@ export default function Profile() {
       bioTitle: consultant?.bioTitle || "",
       yearsOfExperience: "", // Will be calculated from experiences
       address: consultant?.address || "",
-      country: consultant?.country || "",
+      country: normalizeCountryCode(consultant?.country || "") || "",
       state: consultant?.state || "",
       city: consultant?.city || "",
       pincode: consultant?.pincode || "",
@@ -1121,15 +1122,15 @@ export default function Profile() {
 
   return (
 
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="mx-auto w-full max-w-7xl space-y-5 px-2 sm:px-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl font-semibold">Consultant Profile</h1>
+          <h1 className="text-lg font-semibold sm:text-xl">Consultant Profile</h1>
           <p className="text-xs text-muted-foreground">
             Home » Consultant Profile
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {editing ? (
             <>
               <Button
@@ -1162,24 +1163,24 @@ export default function Profile() {
       </div>
 
       <Tabs value={profileTab} onValueChange={(v) => setProfileTab(v as any)} className="w-full">
-        <TabsList className="grid w-full grid-cols-6">
-          <TabsTrigger value="basic">Basic Info</TabsTrigger>
-          <TabsTrigger value="address">Address</TabsTrigger>
-          <TabsTrigger value="online">Online Presence</TabsTrigger>
-          <TabsTrigger value="education">Education & Experience</TabsTrigger>
-          <TabsTrigger value="settings">Settings</TabsTrigger>
-          <TabsTrigger value="payments">Payments</TabsTrigger>
+        <TabsList className="flex h-auto w-full flex-wrap gap-1 rounded-lg bg-muted/50 p-1 sm:grid sm:grid-cols-3 lg:grid-cols-6">
+          <TabsTrigger value="basic" className="flex-1 sm:flex-none">Basic Info</TabsTrigger>
+          <TabsTrigger value="address" className="flex-1 sm:flex-none">Address</TabsTrigger>
+          <TabsTrigger value="online" className="flex-1 sm:flex-none">Online Presence</TabsTrigger>
+          <TabsTrigger value="education" className="flex-1 sm:flex-none whitespace-nowrap">Education</TabsTrigger>
+          <TabsTrigger value="settings" className="flex-1 sm:flex-none">Settings</TabsTrigger>
+          <TabsTrigger value="payments" className="flex-1 sm:flex-none">Payments</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="basic" className="space-y-5 mt-4">
+        <TabsContent value="basic" className="mt-4 space-y-5">
           <Card className="border-muted/60">
             <CardHeader className="pb-2">
               <CardTitle className="text-base">
                 Basic Information
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex flex-wrap items-center gap-6">
+            <CardContent className="space-y-4 p-4 sm:p-6">
+              <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:gap-6">
                 <Avatar className="h-16 w-16 rounded-lg">
                   <AvatarImage src={photo ?? undefined} />
                   <AvatarFallback className="rounded-lg">
@@ -1256,7 +1257,7 @@ export default function Profile() {
                   disabled={disabled || Boolean(consultantId)}
                   className={consultantId ? "bg-gray-50" : ""}
                 />
-                <PhoneDisplay phone={form.phone} />
+                <PhoneDisplay phone={form.phone} defaultCountry={form.country || "IN"} />
                 <LabeledInput
                   id="alternatePhone"
                   label="Alternate Phone"
@@ -1383,14 +1384,14 @@ export default function Profile() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="address" className="space-y-5 mt-4">
+        <TabsContent value="address" className="mt-4 space-y-5">
           <Card className="border-muted/60">
             <CardHeader className="pb-2">
               <CardTitle className="text-base">
                 Address Information
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-4 p-4 sm:p-6">
               <div>
                 <Label className="text-xs text-muted-foreground mb-1 block">
                   Address
@@ -1424,8 +1425,11 @@ export default function Profile() {
                       <SelectValue placeholder="Select" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="india">India</SelectItem>
-                      <SelectItem value="us">United States</SelectItem>
+                      {COUNTRIES_LIST.map((c) => (
+                        <SelectItem key={c.value} value={c.value}>
+                          {c.label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -1472,12 +1476,12 @@ export default function Profile() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="online" className="space-y-5 mt-4">
+        <TabsContent value="online" className="mt-4 space-y-5">
           <Card className="border-muted/60">
             <CardHeader className="pb-2">
               <CardTitle className="text-base">Online Presence</CardTitle>
             </CardHeader>
-            <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <CardContent className="grid grid-cols-1 gap-4 p-4 sm:p-6 md:grid-cols-2">
               <LabeledInput
                 id="website"
                 label="Website"
@@ -1527,14 +1531,14 @@ export default function Profile() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="education" className="space-y-5 mt-4">
+        <TabsContent value="education" className="mt-4 space-y-5">
           <Card className="border-muted/60">
             <CardHeader className="pb-2">
               <CardTitle className="text-base">
                 Educational Details
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-3 p-4 sm:p-6">
               {education.map((row, index) => (
                 <div
                   key={`edu-${index}`}
@@ -1810,8 +1814,8 @@ export default function Profile() {
           </Tabs>
         </TabsContent>
 
-        <TabsContent value="payments" className="space-y-5 mt-4">
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <TabsContent value="payments" className="mt-4 space-y-5">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <Card className="border-muted/60">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Total Earnings</CardTitle>
@@ -1854,28 +1858,28 @@ export default function Profile() {
             <CardHeader className="pb-2">
               <CardTitle className="text-base">Transaction History</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-4 sm:p-6">
               {transactions.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">No transactions found.</div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
+                <div className="-mx-2 overflow-x-auto sm:mx-0">
+                  <table className="w-full min-w-[520px] text-sm">
                     <thead>
                       <tr className="border-b">
-                        <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Date</th>
-                        <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Type</th>
-                        <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Amount</th>
-                        <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Status</th>
-                        <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Details</th>
+                        <th className="h-12 px-2 text-left align-middle font-medium text-muted-foreground sm:px-4">Date</th>
+                        <th className="h-12 px-2 text-left align-middle font-medium text-muted-foreground sm:px-4">Type</th>
+                        <th className="h-12 px-2 text-left align-middle font-medium text-muted-foreground sm:px-4">Amount</th>
+                        <th className="h-12 px-2 text-left align-middle font-medium text-muted-foreground sm:px-4">Status</th>
+                        <th className="h-12 px-2 text-left align-middle font-medium text-muted-foreground sm:px-4">Details</th>
                       </tr>
                     </thead>
                     <tbody>
                       {transactions.map((t) => (
                         <tr key={t._id} className="border-b transition-colors hover:bg-muted/50">
-                          <td className="p-4 align-middle">
+                          <td className="p-2 align-middle sm:p-4">
                             {t.createdAt ? new Date(t.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '-'}
                           </td>
-                          <td className="p-4 align-middle">
+                          <td className="p-2 align-middle sm:p-4">
                             <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold
                                             ${t.type === 'Payment' ? 'bg-green-100 text-green-800' :
                                 t.type === 'Payout' ? 'bg-blue-100 text-blue-800' :
@@ -1883,11 +1887,11 @@ export default function Profile() {
                               {t.type}
                             </span>
                           </td>
-                          <td className="p-4 align-middle font-medium">
+                          <td className="p-2 align-middle font-medium sm:p-4">
                             {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(t.amount)}
                           </td>
-                          <td className="p-4 align-middle">{t.status}</td>
-                          <td className="p-4 align-middle text-muted-foreground">
+                          <td className="p-2 align-middle sm:p-4">{t.status}</td>
+                          <td className="p-2 align-middle text-muted-foreground sm:p-4">
                             {t.metadata?.notes || t.appointment?.reason || '-'}
                           </td>
                         </tr>

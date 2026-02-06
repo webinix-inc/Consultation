@@ -4,12 +4,17 @@ const userController = require("../controllers/user.controller");
 const { authenticateToken, authorizeRoles } = require("../../../middlewares/auth.middleware.js");
 const { validate, validateParams } = require("../../../middlewares/validate.middleware.js");
 const { createUserSchema, updateUserSchema, userIdSchema } = require("../validators/user.validator.js");
+const { deleteAccountSchema } = require("../validators/client.validator.js");
 
 // GET /api/v1/users - Admin, Employee and Consultant only
 router.get("/", authenticateToken, authorizeRoles("Admin", "Employee", "Consultant"), userController.getUsers);
 
 // GET /api/v1/users/profile - Get current user profile
 router.get("/profile", authenticateToken, userController.getProfile);
+
+// GDPR - Self-service for Admin/Employee
+router.get("/profile/export", authenticateToken, authorizeRoles("Admin", "Employee"), userController.exportMyData);
+router.delete("/profile", authenticateToken, authorizeRoles("Admin", "Employee"), validate(deleteAccountSchema), userController.deleteMyAccount);
 
 
 // GET /api/v1/users/consultants/active - For Client role to get active consultants

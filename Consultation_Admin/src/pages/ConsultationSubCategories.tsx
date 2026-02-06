@@ -27,7 +27,7 @@ const ConsultationSubCategories: React.FC = () => {
 
   const { data: categoriesData } = useQuery({
     queryKey: ["categories"],
-    queryFn: CategoryAPI.getAll,
+    queryFn: () => CategoryAPI.getAll(),
   });
 
   const { mutate: createSubcategory, isPending: isCreating } = useMutation({

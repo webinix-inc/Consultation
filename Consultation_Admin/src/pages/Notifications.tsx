@@ -60,7 +60,7 @@ const NotificationsPage: React.FC = () => {
   // Fetch users for recipient selection
   const { data: usersData } = useQuery({
     queryKey: ["users"],
-    queryFn: UserAPI.getAllUsers,
+    queryFn: () => UserAPI.getAllUsers(),
   });
 
   const users = useMemo(() => usersData?.data || [], [usersData]);

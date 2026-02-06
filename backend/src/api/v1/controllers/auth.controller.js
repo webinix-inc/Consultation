@@ -1,6 +1,6 @@
 const User = require("../../../models/user.model");
 const OTP = require("../../../models/otp.model");
-const sendEmail = require("../../../jobs/email.job");
+const { sendEmail } = require("../../../jobs/email.job");
 const { sendSuccess, sendError, ApiError } = require("../../../utils/response");
 const { SUCCESS, ERROR } = require("../../../constants/messages");
 const httpStatus = require("../../../constants/httpStatus");
@@ -9,6 +9,43 @@ const crypto = require("crypto");
 const { Consultant } = require("../../../models/consultant.model");
 
 
+
+/**
+ * Bootstrap: Create first admin (only when no Admin users exist)
+ * POST /api/v1/auth/create-admin
+ */
+exports.createAdmin = async (req, res, next) => {
+  try {
+    const adminCount = await User.countDocuments({ role: "Admin" });
+    if (adminCount > 0) {
+      throw new ApiError("Admin already exists. Use User Management to add more admins.", httpStatus.FORBIDDEN);
+    }
+
+    const { fullName, email, password, mobile } = req.body;
+    const userId = "ADM-" + crypto.randomBytes(4).toString("hex").toUpperCase();
+
+    const admin = await User.create({
+      userId,
+      fullName,
+      email: email.toLowerCase(),
+      mobile,
+      password,
+      role: "Admin",
+      status: "Active",
+      verificationStatus: "Approved",
+    });
+
+    return sendSuccess(res, "Admin created successfully", {
+      id: admin._id,
+      userId: admin.userId,
+      email: admin.email,
+      fullName: admin.fullName,
+      role: admin.role,
+    }, httpStatus.CREATED);
+  } catch (error) {
+    next(error);
+  }
+};
 
 exports.updateProfile = async (req, res, next) => {
   try {
@@ -57,31 +94,56 @@ exports.sendOtp = async (req, res, next) => {
       { upsert: true, new: true }
     );
 
-    console.log(`🔐 OTP for ${mobile}: ${otp}`);
-
-    return sendSuccess(res, "OTP sent successfully", { otp });
+    // Security: Never log or return OTP. In production, OTP should only be sent via SMS.
+    // For dev/testing without SMS, set ALLOW_OTP_IN_RESPONSE=true (never in production)
+    const responseData = process.env.NODE_ENV === "development" && process.env.ALLOW_OTP_IN_RESPONSE === "true"
+      ? { otp }
+      : undefined;
+    return sendSuccess(res, "OTP sent successfully", responseData);
   } catch (error) {
     next(error);
   }
+};
+
+// Get phone/mobile variants for flexible lookup (Admin may store "9876543210", login sends "+919876543210")
+const getPhoneLookupVariants = (mobile) => {
+  if (!mobile || typeof mobile !== 'string') return [];
+  const digits = mobile.replace(/\D/g, '');
+  if (!digits) return [mobile];
+  const variants = new Set([mobile, digits]);
+  // Indian numbers: 91 + 10 digits → also try last 10 (national format Admin often uses)
+  if (digits.length === 12 && digits.startsWith('91')) {
+    variants.add(digits.slice(2));
+  } else if (digits.length === 10 && !mobile.startsWith('+')) {
+    variants.add('+91' + digits);
+    variants.add('91' + digits);
+  }
+  return [...variants];
+};
+
+// Normalize role for case-insensitive matching (Client vs client, Consultant vs consultant)
+const normalizeRole = (r) => {
+  if (!r || typeof r !== 'string') return null;
+  const s = r.trim();
+  if (!s) return null;
+  const lower = s.toLowerCase();
+  if (lower === 'client') return 'Client';
+  if (lower === 'consultant') return 'Consultant';
+  if (lower === 'admin') return 'Admin';
+  if (lower === 'employee') return 'Employee';
+  return s;
 };
 
 exports.verifyOtp = async (req, res, next) => {
   try {
     let { mobile, otp, role: requestedRole } = req.body;
 
-    // Mobile number should be in E.164 format
-    // mobile = mobile.replace(/\D/g, '');
-
-    console.log(`🔍 Verifying OTP - Mobile: ${mobile}, OTP: ${otp}, Requested Role: ${requestedRole || 'Any'}`);
+    // Normalize role so "client" / "Client" both work
+    const normalizedRole = normalizeRole(requestedRole);
 
     const otpRecord = await OTP.findOne({ mobile, otp });
 
-    console.log(`🔍 OTP Record found:`, otpRecord);
-
     if (!otpRecord) {
-      const anyOtpForMobile = await OTP.findOne({ mobile });
-      console.log(`🔍 Any OTP for mobile ${mobile}:`, anyOtpForMobile);
-
       throw new ApiError("Invalid OTP", httpStatus.BAD_REQUEST);
     }
 
@@ -94,69 +156,56 @@ exports.verifyOtp = async (req, res, next) => {
     let accountName = null;
     let accountEmail = null;
 
-    // If role is specified, only check that specific model
-    if (requestedRole === 'Consultant') {
+    // Phone variants for flexible lookup (Admin stores "9876543210", login sends "+919876543210")
+    const phoneVariants = getPhoneLookupVariants(mobile);
+    const consultantPhoneOr = phoneVariants.flatMap((v) => [{ phone: v }, { mobile: v }]);
+    const clientMobileOr = phoneVariants.map((v) => ({ mobile: v }));
+
+    // If role is specified, only check that specific model (use normalized role for case-insensitive match)
+    if (normalizedRole === 'Consultant') {
       // Check Consultant model only
       const Consultant = require("../../../models/consultant.model").Consultant;
-      account = await Consultant.findOne({
-        $or: [
-          { phone: mobile },
-          { mobile: mobile }
-        ]
-      });
+      account = await Consultant.findOne({ $or: consultantPhoneOr });
 
       if (account) {
         role = "Consultant";
         accountName = account.name || account.fullName || `${account.firstName} ${account.lastName}`.trim();
         accountEmail = account.email;
       }
-    } else if (requestedRole === 'Client') {
-      // Check Client model only
+    } else if (normalizedRole === 'Client') {
+      // Check Client model only - never fall through to Consultant when user selected Client
       const Client = require("../../../models/client.model");
-      account = await Client.findOne({ mobile });
+      account = await Client.findOne({ $or: clientMobileOr });
 
       if (account) {
         role = "Client";
         accountName = account.fullName;
         accountEmail = account.email;
       }
-    } else if (requestedRole === 'Admin' || requestedRole === 'Employee') {
+    } else if (normalizedRole === 'Admin' || normalizedRole === 'Employee') {
       // Check User model (Admin/Employee)
-      account = await User.findOne({ mobile });
+      account = await User.findOne({ $or: clientMobileOr });
 
       if (account) {
-        if (account.role !== requestedRole) {
-          // If user exists but role mismatch, we might want to reject or just handle it
-          // For now, let's just respect the found user's role
-        }
         role = account.role;
         accountName = account.fullName;
         accountEmail = account.email;
       }
     } else {
-      // No role specified - check all models (backward compatibility)
-      // Check User model (Admin/Employee) - but skip for this portal
-      // Check Consultant model
+      // No role specified - check Client FIRST, then Consultant (fixes: Client selected but role not sent → was returning Consultant)
+      const Client = require("../../../models/client.model");
       const Consultant = require("../../../models/consultant.model").Consultant;
-      account = await Consultant.findOne({
-        $or: [
-          { phone: mobile },
-          { mobile: mobile }
-        ]
-      });
 
+      account = await Client.findOne({ $or: clientMobileOr });
       if (account) {
-        role = "Consultant";
-        accountName = account.name || account.fullName || `${account.firstName} ${account.lastName}`.trim();
+        role = "Client";
+        accountName = account.fullName;
         accountEmail = account.email;
       } else {
-        // Check Client model
-        const Client = require("../../../models/client.model");
-        account = await Client.findOne({ mobile });
-
+        account = await Consultant.findOne({ $or: consultantPhoneOr });
         if (account) {
-          role = "Client";
-          accountName = account.fullName;
+          role = "Consultant";
+          accountName = account.name || account.fullName || `${account.firstName} ${account.lastName}`.trim();
           accountEmail = account.email;
         }
       }
@@ -232,6 +281,9 @@ exports.login = async (req, res, next) => {
   try {
     const { email, password, mobile, otp, role: requestedRole } = req.body;
 
+    // Normalize role for case-insensitive matching
+    const normalizedRole = normalizeRole(requestedRole);
+
     // 1. Check if login is via OTP (mobile + otp) -> Existing Logic
     if (otp && mobile) {
       // Reuse verifyOtp logic or call it? verifyOtp is an endpoint.
@@ -247,33 +299,58 @@ exports.login = async (req, res, next) => {
     }
 
     // Check for user in all collections (or specific based on role)
-    // To support unified login, we might need to check multiple.
-
+    // Use requestedRole to determine lookup order so Client/Consultant with same email get correct role
     let user;
     let role;
 
-    // Check Consultant
     const Consultant = require("../../../models/consultant.model").Consultant;
-    user = await Consultant.findOne({ email: email.toLowerCase() }).select("+password");
-    if (user) {
-      role = "Consultant";
+    const Client = require("../../../models/client.model");
+    const emailLower = email.toLowerCase();
+
+    // Lookup order based on normalizedRole (Client first vs Consultant first)
+    if (normalizedRole === "Client") {
+      user = await Client.findOne({ email: emailLower }).select("+password");
+      if (user) role = "Client";
+      if (!user) {
+        user = await Consultant.findOne({ email: emailLower }).select("+password");
+        if (user) role = "Consultant";
+      }
+      if (!user) {
+        user = await User.findOne({ email: emailLower }).select("+password");
+        if (user) role = user.role;
+      }
+    } else if (normalizedRole === "Consultant") {
+      user = await Consultant.findOne({ email: emailLower }).select("+password");
+      if (user) role = "Consultant";
+      if (!user) {
+        user = await Client.findOne({ email: emailLower }).select("+password");
+        if (user) role = "Client";
+      }
+      if (!user) {
+        user = await User.findOne({ email: emailLower }).select("+password");
+        if (user) role = user.role;
+      }
+    } else if (!normalizedRole) {
+      // No role specified - check Client first, then Consultant, then User (fixes Client selection returning Consultant)
+      user = await Client.findOne({ email: emailLower }).select("+password");
+      if (user) role = "Client";
+      if (!user) {
+        user = await Consultant.findOne({ email: emailLower }).select("+password");
+        if (user) role = "Consultant";
+      }
+      if (!user) {
+        user = await User.findOne({ email: emailLower }).select("+password");
+        if (user) role = user.role;
+      }
+    } else {
+      // normalizedRole is Admin/Employee - only check User
+      user = await User.findOne({ email: emailLower }).select("+password");
+      if (user) role = user.role;
     }
 
-    // Check Client if not found
-    if (!user) {
-      const Client = require("../../../models/client.model");
-      user = await Client.findOne({ email: email.toLowerCase() }).select("+password");
-      if (user) {
-        role = "Client";
-      }
-    }
-
-    // Check Admin/User if not found
-    if (!user) {
-      user = await User.findOne({ email: email.toLowerCase() }).select("+password");
-      if (user) {
-        role = user.role; // Admin or Employee
-      }
+    // Enforce role match if role was provided (reject when user selected Client but account is Consultant, or vice versa)
+    if (normalizedRole && user && role !== normalizedRole) {
+      throw new ApiError("Invalid credentials or role mismatch", httpStatus.UNAUTHORIZED);
     }
 
     if (!user) {
@@ -324,20 +401,57 @@ exports.login = async (req, res, next) => {
 
 exports.forgotPassword = async (req, res, next) => {
   try {
-    const { email } = req.body;
+    const { email, role: requestedRole } = req.body;
+    console.log(`[ForgotPassword] Request received for email: ${email}, role: ${requestedRole || 'None'}`);
+
     const Consultant = require("../../../models/consultant.model").Consultant;
     const Client = require("../../../models/client.model");
 
-    let user = await Consultant.findOne({ email: email.toLowerCase() });
-    if (!user) user = await Client.findOne({ email: email.toLowerCase() });
-    if (!user) user = await User.findOne({ email: email.toLowerCase() });
+    let user = null;
+    let userType = null;
 
-    if (!user) {
-      throw new ApiError("There is no user with that email", httpStatus.NOT_FOUND);
+    // Normalize role for case-insensitive matching
+    const normalizedRole = normalizeRole(requestedRole);
+
+    if (normalizedRole === 'Consultant') {
+      user = await Consultant.findOne({ email: email.toLowerCase() });
+      userType = user ? 'Consultant' : null;
+    } else if (normalizedRole === 'Client') {
+      user = await Client.findOne({ email: email.toLowerCase() });
+      userType = user ? 'Client' : null;
+    } else if (normalizedRole === 'Admin' || normalizedRole === 'Employee') {
+      user = await User.findOne({ email: email.toLowerCase() });
+      userType = user ? 'User' : null;
+    } else {
+      // Legacy behavior: Check Consultant -> Client -> User
+      user = await Consultant.findOne({ email: email.toLowerCase() });
+      userType = user ? 'Consultant' : null;
+
+      if (!user) {
+        user = await Client.findOne({ email: email.toLowerCase() });
+        userType = user ? 'Client' : null;
+      }
+      if (!user) {
+        user = await User.findOne({ email: email.toLowerCase() });
+        userType = user ? 'User' : null;
+      }
     }
+
+    // Return error if user does not exist (User Enumeration allowed per requirement)
+    if (!user) {
+      console.log(`[ForgotPassword] No user found with email: ${email} (Role: ${normalizedRole || 'Any'})`);
+      throw new ApiError("Account does not exist with this email and role", httpStatus.NOT_FOUND);
+    }
+
+    // Double check if role matches found user type (only relevant if role was unspecified but found user might be wrong type if duplicates exist)
+    // Actually, if role IS specified, we only searched that collection, so userType is correct.
+    // If role IS NOT specified, we found the first match in priority order.
+
+    console.log(`[ForgotPassword] User found - Type: ${userType}, ID: ${user._id}, Email: ${user.email}`);
 
     // Get reset token
     const resetToken = user.getResetPasswordToken();
+    console.log(`[ForgotPassword] Reset token generated for user: ${user._id}`);
 
     await user.save({ validateBeforeSave: false });
 
@@ -346,37 +460,44 @@ exports.forgotPassword = async (req, res, next) => {
     // Assuming it's in env or we construct it.
     const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173"; // Fallback dev url
     const resetUrl = `${frontendUrl}/reset-password/${resetToken}`;
-
-    const message = `You are receiving this email because you (or someone else) has requested the reset of a password. Please make a PUT request to: \n\n ${resetUrl}`;
+    console.log(`[ForgotPassword] Reset URL generated: ${resetUrl}`);
 
     try {
+      // Get user's display name
+      const userName = user.fullName || user.name || user.email.split('@')[0];
+
+      console.log(`[ForgotPassword] Sending password reset email to: ${user.email} (User: ${userName})`);
+
       await sendEmail({
-        email: user.email,
-        subject: "Password Reset Token",
-        message, // Use simple message or HTML template if available
-        html: `
-        <h1>Password Reset Request</h1>
-        <p>You requested a password reset. Please click the link below to reset your password:</p>
-        <a href="${resetUrl}" clicktracking=off>${resetUrl}</a>
-        <p>This link will expire in 10 minutes.</p>
-        `
+        template: 'reset-password',
+        to: user.email,
+        subject: 'Reset Your Password',
+        data: {
+          user_name: userName,
+          reset_link: resetUrl,
+          expiry_time: '10 minutes',
+        },
       });
 
-      return sendSuccess(res, "Email sent", { data: "Email sent" });
+      console.log(`[ForgotPassword] Password reset email sent successfully to: ${user.email}`);
+      return sendSuccess(res, "If an account exists with that email, you will receive a reset link.");
     } catch (err) {
-      console.error(err);
+      console.error(`[ForgotPassword] Failed to send email to ${user.email}:`, err.message);
       user.resetPasswordToken = undefined;
       user.resetPasswordExpire = undefined;
       await user.save({ validateBeforeSave: false });
       throw new ApiError("Email could not be sent", httpStatus.INTERNAL_SERVER_ERROR);
     }
   } catch (error) {
+    console.error(`[ForgotPassword] Error:`, error.message);
     next(error);
   }
 };
 
 exports.resetPassword = async (req, res, next) => {
   try {
+    console.log(`[ResetPassword] Request received with token: ${req.params.resettoken?.substring(0, 10)}...`);
+
     // Get hashed token
     const resetPasswordToken = crypto
       .createHash('sha256')
@@ -391,12 +512,14 @@ exports.resetPassword = async (req, res, next) => {
       resetPasswordToken,
       resetPasswordExpire: { $gt: Date.now() }
     });
+    let userType = user ? 'Consultant' : null;
 
     if (!user) {
       user = await Client.findOne({
         resetPasswordToken,
         resetPasswordExpire: { $gt: Date.now() }
       });
+      userType = user ? 'Client' : null;
     }
 
     if (!user) {
@@ -404,11 +527,15 @@ exports.resetPassword = async (req, res, next) => {
         resetPasswordToken,
         resetPasswordExpire: { $gt: Date.now() }
       });
+      userType = user ? 'User' : null;
     }
 
     if (!user) {
+      console.log(`[ResetPassword] Invalid or expired token`);
       throw new ApiError("Invalid token", httpStatus.BAD_REQUEST);
     }
+
+    console.log(`[ResetPassword] Valid token found - Type: ${userType}, User ID: ${user._id}, Email: ${user.email}`);
 
     // Set new password
     user.password = req.body.password;
@@ -416,19 +543,21 @@ exports.resetPassword = async (req, res, next) => {
     user.resetPasswordExpire = undefined;
 
     await user.save();
+    console.log(`[ResetPassword] Password updated successfully for user: ${user._id} (${user.email})`);
 
     const token = user.generateAuthToken();
 
     return sendSuccess(res, "Password updated", { token });
 
   } catch (error) {
+    console.error(`[ResetPassword] Error:`, error.message);
     next(error);
   }
 };
 
 exports.register = async (req, res, next) => {
   try {
-    const { registrationToken, fullName, email, role, category, subcategory, fees, password } = req.body;
+    const { registrationToken, fullName, email, role, category, subcategory, categories, fees, password } = req.body;
 
     let decoded;
     try {
@@ -452,29 +581,66 @@ exports.register = async (req, res, next) => {
         throw new ApiError("Consultant with this email or mobile already exists", httpStatus.CONFLICT);
       }
 
-      // Get category name if category is an ObjectId
-      let categoryName = 'General';
-      if (category) {
-        const Category = require("../../../models/category.model");
-        const categoryDoc = await Category.findById(category);
-        if (categoryDoc) {
-          categoryName = categoryDoc.title || 'General';
+      const CategoryModel = require("../../../models/category.model");
+      const SubCategoryModel = require("../../../models/subcategory.model");
+
+      // Resolve categories array (multiple categories support)
+      let categoriesResolved = [];
+      if (Array.isArray(categories) && categories.length > 0) {
+        for (const c of categories) {
+          const catId = c.categoryId || c.category;
+          const subId = c.subcategoryId || c.subcategory;
+          let catName = c.categoryName || "General";
+          let subName = c.subcategoryName || "";
+          if (catId) {
+            const catDoc = await CategoryModel.findById(catId);
+            if (catDoc) catName = catDoc.title || "General";
+          }
+          if (subId) {
+            const subDoc = await SubCategoryModel.findById(subId);
+            if (subDoc) subName = subDoc.title || "";
+          }
+          categoriesResolved.push({
+            categoryId: catId,
+            categoryName: catName,
+            subcategoryId: subId,
+            subcategoryName: subName,
+          });
+        }
+      }
+
+      // Primary category/subcategory (backward compat) - from categories[0] or single category/subcategory
+      let categoryName = "General";
+      let subcategoryName = "";
+      if (categoriesResolved.length > 0) {
+        categoryName = categoriesResolved[0].categoryName;
+        subcategoryName = categoriesResolved[0].subcategoryName || "";
+      } else if (category) {
+        const categoryDoc = await CategoryModel.findById(category);
+        if (categoryDoc) categoryName = categoryDoc.title || "General";
+        if (subcategory) {
+          const subDoc = await SubCategoryModel.findById(subcategory);
+          if (subDoc) subcategoryName = subDoc.title || "";
         }
       }
 
       // Create Consultant directly
-      const newConsultant = await Consultant.create({
+      const createPayload = {
         name: fullName,
         email: email.toLowerCase(),
         phone: mobile,
         mobile: mobile,
-        category: categoryName,
-        status: 'Pending',
+        category: { name: categoryName, description: "", imageUrl: "" },
+        subcategory: { name: subcategoryName, description: "", imageUrl: "" },
+        status: "Pending",
         fees: fees || 0,
-        fees: fees || 0,
-        currency: req.body.currency, // Removed default INR
+        currency: req.body.currency,
         password: password
-      });
+      };
+      if (categoriesResolved.length > 0) {
+        createPayload.categories = categoriesResolved;
+      }
+      const newConsultant = await Consultant.create(createPayload);
 
       // Notify Admins about new registration
       try {
@@ -564,7 +730,7 @@ exports.register = async (req, res, next) => {
 
 exports.signup = async (req, res, next) => {
   try {
-    const { fullName, email, mobile, role, category, subcategory, fees, password } = req.body;
+    const { fullName, email, mobile, role, category, subcategory, categories, fees, password } = req.body;
 
     // Validate role
     if (role !== 'Client' && role !== 'Consultant') {
@@ -572,12 +738,13 @@ exports.signup = async (req, res, next) => {
     }
 
     // Mobile number should be in E.164 format
-    // const normalizedMobile = mobile.replace(/\D/g, '');
     const normalizedMobile = mobile;
 
     if (role === 'Consultant') {
       // Check if consultant already exists
       const Consultant = require("../../../models/consultant.model").Consultant;
+      const CategoryModel = require("../../../models/category.model");
+      const SubCategoryModel = require("../../../models/subcategory.model");
       const existingConsultant = await Consultant.findOne({
         $or: [{ email: email.toLowerCase() }, { phone: normalizedMobile }, { mobile: normalizedMobile }]
       });
@@ -586,79 +753,86 @@ exports.signup = async (req, res, next) => {
         throw new ApiError("Consultant with this email or mobile already exists", httpStatus.CONFLICT);
       }
 
-      // Validate and Normalize Category
-      let categoryData = { name: 'General' };
-      if (category) {
-        if (typeof category === 'object') {
-          categoryData = {
-            name: category.name || 'General',
-            description: category.description || '',
-            imageUrl: category.imageUrl || ''
-          };
-        } else if (typeof category === 'string') {
-          const objectIdPattern = /^[0-9a-fA-F]{24}$/;
-          if (objectIdPattern.test(category)) {
-            try {
-              const Category = require("../../../models/category.model");
-              const categoryDoc = await Category.findById(category);
-              if (categoryDoc) {
-                categoryData = {
-                  name: categoryDoc.title,
-                  description: categoryDoc.description,
-                  imageUrl: categoryDoc.image
-                };
-              }
-            } catch (err) { console.error("Category lookup failed", err); }
-          } else {
-            categoryData = { name: category };
+      // Resolve categories array (multiple categories support)
+      let categoriesResolved = [];
+      if (Array.isArray(categories) && categories.length > 0) {
+        for (const c of categories) {
+          const catId = c.categoryId || c.category;
+          const subId = c.subcategoryId || c.subcategory;
+          let catName = c.categoryName || "General";
+          let subName = c.subcategoryName || "";
+          if (catId) {
+            const catDoc = await CategoryModel.findById(catId);
+            if (catDoc) catName = catDoc.title || "General";
+          }
+          if (subId) {
+            const subDoc = await SubCategoryModel.findById(subId);
+            if (subDoc) subName = subDoc.title || "";
+          }
+          categoriesResolved.push({
+            categoryId: catId,
+            categoryName: catName,
+            subcategoryId: subId,
+            subcategoryName: subName,
+          });
+        }
+      }
+
+      // Primary category/subcategory (from categories[0] or single category/subcategory)
+      let categoryData = { name: 'General', description: '', imageUrl: '' };
+      let subcategoryData = { name: '', description: '', imageUrl: '' };
+      if (categoriesResolved.length > 0) {
+        categoryData = { name: categoriesResolved[0].categoryName, description: '', imageUrl: '' };
+        subcategoryData = { name: categoriesResolved[0].subcategoryName || '', description: '', imageUrl: '' };
+      } else if (category || subcategory) {
+        if (category) {
+          if (typeof category === 'object') {
+            categoryData = { name: category.name || 'General', description: category.description || '', imageUrl: category.imageUrl || '' };
+          } else if (typeof category === 'string') {
+            const objectIdPattern = /^[0-9a-fA-F]{24}$/;
+            if (objectIdPattern.test(category)) {
+              const catDoc = await CategoryModel.findById(category);
+              if (catDoc) categoryData = { name: catDoc.title, description: catDoc.description || '', imageUrl: catDoc.image || '' };
+            } else {
+              categoryData = { name: category, description: '', imageUrl: '' };
+            }
+          }
+        }
+        if (subcategory) {
+          if (typeof subcategory === 'object') {
+            subcategoryData = { name: subcategory.name || '', description: subcategory.description || '', imageUrl: subcategory.imageUrl || '' };
+          } else if (typeof subcategory === 'string') {
+            const objectIdPattern = /^[0-9a-fA-F]{24}$/;
+            if (objectIdPattern.test(subcategory)) {
+              const subDoc = await SubCategoryModel.findById(subcategory);
+              if (subDoc) subcategoryData = { name: subDoc.title, description: subDoc.description || '', imageUrl: subDoc.image || '' };
+            } else {
+              subcategoryData = { name: subcategory, description: '', imageUrl: '' };
+            }
           }
         }
       }
 
-      // Validate and Normalize Subcategory
-      let subcategoryData = { name: '' };
-      if (subcategory) {
-        if (typeof subcategory === 'object') {
-          subcategoryData = {
-            name: subcategory.name || '',
-            description: subcategory.description || '',
-            imageUrl: subcategory.imageUrl || ''
-          };
-        } else if (typeof subcategory === 'string') {
-          const objectIdPattern = /^[0-9a-fA-F]{24}$/;
-          if (objectIdPattern.test(subcategory)) {
-            try {
-              const SubCategory = require("../../../models/subcategory.model");
-              const subDoc = await SubCategory.findById(subcategory);
-              if (subDoc) {
-                subcategoryData = {
-                  name: subDoc.title,
-                  description: subDoc.description,
-                  imageUrl: subDoc.image
-                };
-              }
-            } catch (err) { console.error("Subcategory lookup failed", err); }
-          } else {
-            subcategoryData = { name: subcategory };
-          }
-        }
-      }
-
-      // Create Consultant
-      const newConsultant = await Consultant.create({
+      const now = new Date();
+      const createPayload = {
         name: fullName,
         email: email.toLowerCase(),
         phone: normalizedMobile,
         mobile: normalizedMobile,
-
         category: categoryData,
         subcategory: subcategoryData,
         status: 'Pending',
         fees: fees || 0,
-        fees: fees || 0,
-        currency: req.body.currency, // Removed default INR
-        password: password
-      });
+        currency: req.body.currency,
+        password: password,
+        termsAcceptedAt: now,
+        privacyAcceptedAt: now,
+      };
+      if (categoriesResolved.length > 0) {
+        createPayload.categories = categoriesResolved;
+      }
+
+      const newConsultant = await Consultant.create(createPayload);
 
       // Notify Admins about new consultant signup
       try {
@@ -700,13 +874,15 @@ exports.signup = async (req, res, next) => {
         throw new ApiError("Client with this email or mobile already exists", httpStatus.CONFLICT);
       }
 
+      const now = new Date();
       const newClient = await Client.create({
         fullName,
         email: email.toLowerCase(),
         mobile: normalizedMobile,
-
         status: 'Active',
-        password: password
+        password: password,
+        termsAcceptedAt: now,
+        privacyAcceptedAt: now,
       });
 
       // Notify Admins about new client signup

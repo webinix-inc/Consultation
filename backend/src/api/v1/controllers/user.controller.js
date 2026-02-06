@@ -1,5 +1,5 @@
 const User = require("../../../models/user.model");
-const sendEmail = require("../../../jobs/email.job");
+const { sendEmail } = require("../../../jobs/email.job");
 const { sendSuccess, sendError, ApiError } = require("../../../utils/response");
 const { SUCCESS, ERROR } = require("../../../constants/messages");
 const httpStatus = require("../../../constants/httpStatus");
@@ -183,6 +183,92 @@ exports.updateUser = async (req, res, next) => {
     }
 
     return sendSuccess(res, SUCCESS.USER_UPDATED, updatedUser);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * GDPR Art. 15 - Right to Access: Export all personal data (Admin/Employee only)
+ * GET /api/v1/users/profile/export
+ */
+exports.exportMyData = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const user = await User.findById(userId)
+      .populate("category subcategory")
+      .select("-password -otp -otpExpires -resetPasswordToken -resetPasswordExpire")
+      .lean();
+
+    if (!user) {
+      throw new ApiError(ERROR.USER_NOT_FOUND, httpStatus.NOT_FOUND);
+    }
+
+    // Only Admin/Employee can use this endpoint (enforced by route)
+    if (user.role !== "Admin" && user.role !== "Employee") {
+      throw new ApiError("This endpoint is for Admin/Employee only", httpStatus.FORBIDDEN);
+    }
+
+    const AdminSettings = require("../../../models/adminSettings.model");
+    const Notification = require("../../../models/notification.model");
+
+    const [adminSettings, notifications] = await Promise.all([
+      AdminSettings.findOne({ admin: userId }).lean(),
+      Notification.find({ recipient: userId })
+        .select("name message type category read createdAt")
+        .lean(),
+    ]);
+
+    const exportData = {
+      exportedAt: new Date().toISOString(),
+      profile: user,
+      adminSettings: adminSettings || null,
+      notifications,
+    };
+
+    res.setHeader("Content-Disposition", `attachment; filename="my-data-export-${Date.now()}.json"`);
+    res.setHeader("Content-Type", "application/json");
+    return res.status(200).json(exportData);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * GDPR Art. 17 - Right to Erasure: Self-service account deletion (Admin/Employee only)
+ * DELETE /api/v1/users/profile
+ */
+exports.deleteMyAccount = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { password } = req.body || {};
+
+    const user = await User.findById(userId).select("+password");
+    if (!user) {
+      throw new ApiError(ERROR.USER_NOT_FOUND, httpStatus.NOT_FOUND);
+    }
+
+    if (user.role !== "Admin" && user.role !== "Employee") {
+      throw new ApiError("This endpoint is for Admin/Employee only", httpStatus.FORBIDDEN);
+    }
+
+    if (user.password) {
+      if (!password) throw new ApiError("Password is required to delete your account", httpStatus.BAD_REQUEST);
+      const isMatch = await user.matchPassword(password);
+      if (!isMatch) throw new ApiError("Invalid password", httpStatus.UNAUTHORIZED);
+    }
+
+    const AdminSettings = require("../../../models/adminSettings.model");
+    const Notification = require("../../../models/notification.model");
+
+    await Promise.all([
+      AdminSettings.deleteMany({ admin: userId }),
+      Notification.deleteMany({ recipient: userId }),
+    ]);
+
+    await User.findByIdAndDelete(userId);
+
+    return sendSuccess(res, "Your account and all associated data have been permanently deleted.");
   } catch (error) {
     next(error);
   }

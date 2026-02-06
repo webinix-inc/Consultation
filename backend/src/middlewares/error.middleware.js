@@ -39,16 +39,13 @@ const errorHandler = (err, req, res, next) => {
     );
   }
 
-  // Handle Mongoose duplicate key error
+  // Handle Mongoose duplicate key error (avoid exposing values in production)
   if (err.code === 11000) {
-    const field = Object.keys(err.keyValue)[0];
-    const value = err.keyValue[field];
-    return sendError(
-      res,
-      `${field.charAt(0).toUpperCase() + field.slice(1)} '${value}' already exists`,
-      null,
-      httpStatus.CONFLICT
-    );
+    const field = Object.keys(err.keyValue || {})[0] || "field";
+    const message = process.env.NODE_ENV === "production"
+      ? "A record with this value already exists"
+      : `${field.charAt(0).toUpperCase() + field.slice(1)} '${err.keyValue[field]}' already exists`;
+    return sendError(res, message, null, httpStatus.CONFLICT);
   }
 
   // Handle Mongoose CastError (invalid ObjectId)

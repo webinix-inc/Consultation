@@ -45,6 +45,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import ConsultantAPI from "@/api/consultant.api";
 import { Autocomplete } from "@/components/ui/autocomplete";
 import { INDIAN_STATES } from "@/constants/indianStates";
+import { COUNTRIES_LIST, normalizeCountryCode } from "@/constants/countries";
 import { NotificationsTab, AvailabilityTab } from "@/components/ConsultantSettingsTabs";
 import TransactionAPI from "@/api/transaction.api";
 import { formatCurrency } from "@/utils/currencyUtils";
@@ -524,7 +525,7 @@ const ConsultantDashboard = () => {
       bioTitle: consultant?.bioTitle || "",
       yearsOfExperience: "", // Will be calculated from experiences
       address: consultant?.address || "",
-      country: consultant?.country || "",
+      country: normalizeCountryCode(consultant?.country || "") || "",
       state: consultant?.state || "",
       city: consultant?.city || "",
       pincode: consultant?.pincode || "",
@@ -1295,8 +1296,11 @@ const ConsultantDashboard = () => {
                                 <SelectValue placeholder="Select" />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="india">India</SelectItem>
-                                <SelectItem value="us">United States</SelectItem>
+                                {COUNTRIES_LIST.map((c) => (
+                                  <SelectItem key={c.value} value={c.value}>
+                                    {c.label}
+                                  </SelectItem>
+                                ))}
                               </SelectContent>
                             </Select>
                           </div>

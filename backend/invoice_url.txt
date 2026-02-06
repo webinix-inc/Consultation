@@ -1,0 +1,1 @@
+http://localhost:5002/api/v1/storage/proxy?key=invoices/2026/26e6b7c4-0deb-4caf-9138-31bb5f515a8f.pdf&filename=INVOICE-Consultant_New-2026-02-06-09-00-00.pdf

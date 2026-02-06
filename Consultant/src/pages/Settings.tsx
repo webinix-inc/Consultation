@@ -3,11 +3,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { RefreshCcw, Bell, Calendar, AlertCircle, Plus, Trash2 } from "lucide-react";
+import { RefreshCcw, Bell, Calendar, AlertCircle, Plus, Trash2, Shield, Download, Loader2 } from "lucide-react";
 import ConsultantAPI from "@/api/consultant.api";
 import UserAPI from "@/api/user.api";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
+import { toast } from "react-hot-toast";
 
 /* --------------------------------------
    Types (partial - match backend nested shape)
@@ -136,12 +137,13 @@ function SettingsHeader() {
   );
 }
 
-type TabKey = "notifications" | "availability";
+type TabKey = "notifications" | "availability" | "privacy";
 
 function TabsPills({ tab, onChange }: { tab: TabKey; onChange: (t: TabKey) => void }) {
   const pills: { key: TabKey; label: string; icon: React.ReactNode }[] = [
     { key: "notifications", label: "Notifications", icon: <Bell className="h-4 w-4" /> },
     { key: "availability", label: "Availability", icon: <Calendar className="h-4 w-4" /> },
+    { key: "privacy", label: "Privacy & Data", icon: <Shield className="h-4 w-4" /> },
   ];
 
   return (
@@ -158,6 +160,109 @@ function TabsPills({ tab, onChange }: { tab: TabKey; onChange: (t: TabKey) => vo
           {p.label}
         </Button>
       ))}
+    </div>
+  );
+}
+
+/* --------------------------------------
+   Privacy & Data Tab (GDPR)
+-------------------------------------- */
+function PrivacyDataTab() {
+  const [exporting, setExporting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleteError, setDeleteError] = useState("");
+
+  const handleExport = async () => {
+    setExporting(true);
+    setDeleteError("");
+    try {
+      const data = await ConsultantAPI.exportMyData();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `my-data-export-${Date.now()}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Data exported successfully");
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Export failed");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deletePassword.trim()) {
+      setDeleteError("Password is required");
+      return;
+    }
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      await ConsultantAPI.deleteMyAccount(deletePassword);
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      window.location.href = "/login";
+    } catch (err: any) {
+      setDeleteError(err.response?.data?.message || "Failed to delete account");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-sm font-medium mb-1">Export Your Data</h3>
+        <p className="text-xs text-muted-foreground mb-3">
+          Download a copy of your personal data (profile, appointments, documents, transactions) in JSON format. GDPR Right to Access.
+        </p>
+        <Button variant="outline" onClick={handleExport} disabled={exporting} className="gap-2">
+          {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+          {exporting ? "Exporting..." : "Export My Data"}
+        </Button>
+      </div>
+
+      <div className="border-t pt-6">
+        <h3 className="text-sm font-medium text-red-600 mb-1">Delete Account</h3>
+        <p className="text-xs text-muted-foreground mb-3">
+          Permanently delete your account and all associated data. This cannot be undone. GDPR Right to Erasure.
+        </p>
+        <Button variant="destructive" onClick={() => setShowDeleteModal(true)} className="gap-2">
+          <Trash2 className="h-4 w-4" />
+          Delete My Account
+        </Button>
+      </div>
+
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 space-y-4">
+            <h3 className="font-semibold text-red-600">Confirm Account Deletion</h3>
+            <p className="text-sm text-muted-foreground">
+              This will permanently delete your account and all data. Enter your password to confirm.
+            </p>
+            <Input
+              type="password"
+              placeholder="Your password"
+              value={deletePassword}
+              onChange={(e) => { setDeletePassword(e.target.value); setDeleteError(""); }}
+              className="mt-2"
+            />
+            {deleteError && <p className="text-sm text-red-600">{deleteError}</p>}
+            <div className="flex gap-2 justify-end pt-2">
+              <Button variant="outline" onClick={() => { setShowDeleteModal(false); setDeletePassword(""); setDeleteError(""); }} disabled={deleting}>
+                Cancel
+              </Button>
+              <Button variant="destructive" onClick={handleDeleteConfirm} disabled={deleting}>
+                {deleting ? "Deleting..." : "Delete Permanently"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -720,6 +825,7 @@ export default function SettingsPage() {
         <CardContent className="p-4 sm:p-6">
           {tab === "notifications" && <NotificationsTab consultantId={consultantId} />}
           {tab === "availability" && <AvailabilityTab consultantId={consultantId} />}
+          {tab === "privacy" && <PrivacyDataTab />}
         </CardContent>
       </Card>
     </div>

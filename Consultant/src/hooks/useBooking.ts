@@ -142,7 +142,53 @@ export function useBooking({ user, isAuthenticated, activeConsultants, categorie
         setHoldExpiresAt(null);
     }, []);
 
-    const confirmBooking = async (consultationFee: number) => {
+    const runPostPaymentSuccess = async (appt: any) => {
+        toast.success("Booking confirmed!");
+        let downloadUrl = appt?.payment?.invoiceUrl;
+        if (downloadUrl) {
+            try {
+                const response = await fetch(downloadUrl);
+                if (!response.ok) throw new Error(`Network response was not ok: ${response.status} ${response.statusText}`);
+                const blob = await response.blob();
+                const disposition = response.headers.get('Content-Disposition');
+                let filename = `Invoice-${appt._id}.pdf`;
+                if (disposition && disposition.includes('filename=')) {
+                    const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);
+                    if (matches != null && matches[1]) filename = matches[1].replace(/['"]/g, '');
+                }
+                const url = window.URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = filename;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(url);
+                toast.success("Invoice downloaded successfully!");
+            } catch (e: any) {
+                console.error("Auto-download failed:", e);
+                toast.error(`Download failed: ${e.message}`);
+                window.open(downloadUrl, "_blank");
+            }
+        } else {
+            toast.error("Invoice URL missing! Please contact support.", { duration: 5000 });
+        }
+        setHoldId(null);
+        setHoldExpiresAt(null);
+        setShowBookingModal(false);
+        setShowConfirmModal(false);
+        setSelectedConsultant(null);
+        setSched(prev => ({ ...prev, consultant: "", time: null, reason: "", notes: "" }));
+        queryClient.invalidateQueries({ queryKey: ["appointments"] });
+        queryClient.invalidateQueries({ queryKey: ["available-slots"] });
+        queryClient.invalidateQueries({ queryKey: ["clientTransactions"] });
+    };
+
+    const confirmBooking = async (consultationFee: number, paymentMethod: string = "Razorpay") => {
+        if (paymentMethod === "PayPal") {
+            toast.error("Use the PayPal button below to pay.");
+            return;
+        }
         if (!window.Razorpay) {
             toast.error("Payment gateway loading...");
             return;
@@ -157,17 +203,17 @@ export function useBooking({ user, isAuthenticated, activeConsultants, categorie
         setIsProcessingPayment(true);
 
         try {
-            // 2. Razorpay Order (using EXISTING holdId)
             const orderRes = await PaymentAPI.createOrder({
                 amount: consultationFee,
                 holdId: holdId,
                 consultantId: sched.consultant,
-                clientId: sched.client || user?.id || user?._id
+                clientId: sched.client || user?.id || user?._id,
+                paymentMethod: "Razorpay"
             });
 
             const orderData = orderRes.data || orderRes;
 
-            // 3. Open Razorpay
+            // Open Razorpay
             const options = {
                 key: orderData.key,
                 amount: orderData.amount,
@@ -213,99 +259,7 @@ export function useBooking({ user, isAuthenticated, activeConsultants, categorie
 
                         const res = await AppointmentAPI.create(confirmPayload);
                         const appt = res.data || res;
-
-                        toast.success("Booking confirmed!");
-
-                        // Auto-download Invoice if available
-                        // Auto-download Invoice
-                        let downloadUrl = appt?.payment?.invoiceUrl;
-
-                        // Fallback: Construct URL if missing but transaction ID exists
-                        if (!downloadUrl && appt?.payment?.transactionId) {
-                            const year = new Date().getFullYear();
-                            // Assuming backend running on 5002 as seen in server.js
-                            const backendUrl = import.meta.env.VITE_BACKEND_URL;
-                            if (!backendUrl) console.warn("VITE_BACKEND_URL is missing!");
-                            // Check if transactionId is an object (populated) or string
-                            const txnId = typeof appt.payment.transactionId === 'object'
-                                ? appt.payment.transactionId._id || appt.payment.transactionId.transactionId // handle populated
-                                : appt.payment.transactionId;
-
-                            // Try to use the transaction ID string (which might be the razorpay ID or Mongo ID depending on how it's stored)
-                            // The local fallback uses `INV-${transaction.transactionId}.pdf`. 
-                            // We need to be careful if transactionId in payment object is the Mongo _id or the 'transactionId' field (e.g. razorpay_payment_id).
-                            // The controller sets `holdAppointment.payment.transactionId = transaction._id`.
-                            // Wait, typical usage in invoice service is `INV-${transaction.transactionId}.pdf` (which seems to be the human readable one/razorpay one).
-                            // If `payment.transactionId` is the Mongo ID, we can't easily guess the filename unless we fetched the transaction.
-
-                            // Let's rely on the fact that if it's missing, we warn the user. 
-                            // OR, better, we simply ask the user to check their email (if we had email sending).
-
-                            // Actually, let's try to construct it if we can. 
-                            // But we don't have the razorpay_payment_id easily available here if it's not in the payment object.
-                            // `payment.transactionId` is `transaction._id` (Mongo).
-
-                            // CHANGE OF PLANS: We can't robustly guess the filename if it uses the Razorpay ID. 
-                            // We must rely on the backend returning it.
-                        }
-
-                        if (downloadUrl) {
-                            console.log("Invoice URL found:", downloadUrl);
-                            toast.success("Invoice URL found, attempting download...");
-                            try {
-                                const response = await fetch(downloadUrl);
-                                if (!response.ok) throw new Error(`Network response was not ok: ${response.status} ${response.statusText}`);
-                                const blob = await response.blob();
-
-                                // Extract filename from header
-                                const disposition = response.headers.get('Content-Disposition');
-                                let filename = `Invoice-${appt._id}.pdf`; // Fallback default
-                                if (disposition && disposition.includes('filename=')) {
-                                    const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);
-                                    if (matches != null && matches[1]) {
-                                        filename = matches[1].replace(/['"]/g, '');
-                                    }
-                                }
-
-                                const url = window.URL.createObjectURL(blob);
-                                const link = document.createElement('a');
-                                link.href = url;
-                                link.download = filename;
-
-                                document.body.appendChild(link);
-                                link.click();
-                                document.body.removeChild(link);
-                                window.URL.revokeObjectURL(url);
-                                toast.success("Invoice downloaded successfully!");
-                            } catch (e: any) {
-                                console.error("Auto-download failed:", e);
-                                toast.error(`Download failed: ${e.message}`);
-                                toast("Opening in new tab...", { icon: '⚠️' });
-                                window.open(downloadUrl, "_blank");
-                            }
-                        } else {
-                            console.warn("No invoice URL in appointment response", appt);
-                            console.log("Full Appointment Object:", JSON.stringify(appt, null, 2)); // Detailed Debug
-                            toast.error("Invoice URL missing! Please contact support.", { duration: 5000 });
-                        }
-
-                        // Cleanup
-                        setHoldId(null);
-                        setHoldExpiresAt(null);
-                        setShowBookingModal(false);
-                        setShowConfirmModal(false);
-                        setSelectedConsultant(null);
-                        setSched(prev => ({
-                            ...prev,
-                            consultant: "",
-                            time: null,
-                            reason: "",
-                            notes: ""
-                        }));
-
-                        queryClient.invalidateQueries({ queryKey: ["appointments"] });
-                        queryClient.invalidateQueries({ queryKey: ["available-slots"] });
-
+                        await runPostPaymentSuccess(appt);
                     } catch (confirmErr: any) {
                         console.error("Confirm failed", confirmErr);
                         toast.error("Payment success but booking failed. Contact support.");
@@ -352,6 +306,60 @@ export function useBooking({ user, isAuthenticated, activeConsultants, categorie
         }
     };
 
+    const payPalCreateOrder = async (amount: number): Promise<string> => {
+        const orderRes = await PaymentAPI.createOrder({
+            amount,
+            holdId: holdId!,
+            consultantId: sched.consultant,
+            clientId: sched.client || user?.id || user?._id,
+            paymentMethod: "PayPal"
+        });
+        const data = orderRes.data || orderRes;
+        return data.orderId;
+    };
+
+    const payPalOnApprove = async (data: { orderID: string; payerID?: string }) => {
+        if (!holdId) {
+            toast.error("Session expired. Please re-book.");
+            return;
+        }
+        setIsProcessingPayment(true);
+        try {
+            const dateISO = formatDateToISO(sched.date);
+            const slotTime = sched.time || "";
+            const [startHH, startMM] = slotTime.split(" - ")[0].split(":");
+            const endTimeStr = slotTime.split(" - ")[1];
+            let endHH = "00", endMM = "00";
+            if (endTimeStr) [endHH, endMM] = endTimeStr.split(":");
+            else { const h = parseInt(startHH); endHH = String(h + 1).padStart(2, "0"); endMM = startMM; }
+            const startAt = `${dateISO}T${startHH}:${startMM}:00+05:30`;
+            const endAt = `${dateISO}T${endHH}:${endMM}:00+05:30`;
+
+            const confirmPayload = {
+                client: sched.client || user?.id || user?._id,
+                consultant: sched.consultant,
+                status: "Upcoming",
+                startAt,
+                endAt,
+                reason: sched.reason,
+                notes: sched.notes,
+                fee: selectedConsultant?.fees || 0,
+                holdId,
+                payment: { paypalResponse: { orderID: data.orderID, payerID: data.payerID } }
+            };
+
+            const res = await AppointmentAPI.create(confirmPayload);
+            const appt = res.data || res;
+            await runPostPaymentSuccess(appt);
+        } catch (err: any) {
+            console.error("PayPal confirm failed", err);
+            toast.error(err?.response?.data?.message || "Payment success but booking failed. Contact support.");
+            setShowConfirmModal(false);
+        } finally {
+            setIsProcessingPayment(false);
+        }
+    };
+
     return {
         sched,
         setSched,
@@ -368,6 +376,8 @@ export function useBooking({ user, isAuthenticated, activeConsultants, categorie
         confirmBooking,
         formatDateToISO,
         holdExpiresAt,
-        handleExpire
+        handleExpire,
+        payPalCreateOrder,
+        payPalOnApprove,
     };
 }
