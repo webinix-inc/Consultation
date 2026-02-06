@@ -6,7 +6,7 @@ interface AuthState {
     id: string
     name: string
     email: string
-    role: "Admin" | "Consultant" | "Client" | null
+    role: "Admin" | "Consultant" | "Client" | "Employee" | null
   } | null
   token: string | null
 }

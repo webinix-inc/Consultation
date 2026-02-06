@@ -682,7 +682,7 @@ const AppointmentManagementConsultant: React.FC = () => {
   // Realtime: invalidate slots when consultant availability changes
   useEffect(() => {
     if (!socket || !consultantIdForSlots) return;
-    const handler = (payload: { consultantId?: string }) => {
+    const handler = (payload: { consultantId?: string; targetUserId?: string }) => {
       const id = payload?.consultantId || payload?.targetUserId;
       if (id && String(id) === String(consultantIdForSlots)) {
         queryClient.invalidateQueries({ queryKey: ["available-slots"] });

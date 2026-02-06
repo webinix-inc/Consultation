@@ -432,7 +432,7 @@ export default function ClientBookings() {
     // Realtime: invalidate slots when consultant availability changes
     useEffect(() => {
         if (!socket || !rescheduleItem?.consultantId) return;
-        const handler = (payload: { consultantId?: string }) => {
+        const handler = (payload: { consultantId?: string; targetUserId?: string }) => {
             const id = payload?.consultantId || payload?.targetUserId;
             if (id && String(id) === String(rescheduleItem?.consultantId)) {
                 queryClient.invalidateQueries({ queryKey: ["available-slots"] });

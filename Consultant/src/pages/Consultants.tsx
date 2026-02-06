@@ -198,7 +198,7 @@ export default function Consultants() {
   // Realtime: invalidate slots when consultant availability changes
   useEffect(() => {
     if (!socket || !sched.consultant) return;
-    const handler = (payload: { consultantId?: string }) => {
+    const handler = (payload: { consultantId?: string; targetUserId?: string }) => {
       const id = payload?.consultantId || payload?.targetUserId;
       if (id && String(id) === String(sched.consultant)) {
         queryClient.invalidateQueries({ queryKey: ["available-slots"] });

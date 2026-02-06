@@ -38,7 +38,7 @@ export const splitPhoneForDisplay = (phone: string, defaultCountry: string = "IN
         if (!phoneNumber && !phone.startsWith("+")) {
             const digits = phone.replace(/\D/g, "");
             if (digits.length >= 10) {
-                phoneNumber = parsePhoneNumber(phone, defaultCountry);
+                phoneNumber = parsePhoneNumber(phone, defaultCountry as any);
             }
         }
         if (phoneNumber) {

@@ -17,7 +17,7 @@ interface ConfirmModalProps {
     consultantDetails: any;
     sched: any;
     paymentMethod: string;
-    setPaymentMethod: (method: string) => void;
+    setPaymentMethod: (method: any) => void;
     consultationFee: number;
     platformFee: number;
     totalFee: number;
@@ -119,11 +119,10 @@ export function ConfirmModal({
                             <button
                                 type="button"
                                 onClick={() => setPaymentMethod("Razorpay")}
-                                className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 transition-colors ${
-                                    paymentMethod === "Razorpay"
+                                className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 transition-colors ${paymentMethod === "Razorpay"
                                         ? "border-blue-500 bg-blue-50"
                                         : "border-gray-200 bg-white hover:border-gray-300"
-                                }`}
+                                    }`}
                             >
                                 <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                                     <path d="M3 9V7C3 5.89543 3.89543 5 5 5H19C20.1046 5 21 5.89543 21 7V9M3 9V17C3 18.1046 3.89543 19 5 19H19C20.1046 19 21 18.1046 21 17V9M3 9H21" stroke={paymentMethod === "Razorpay" ? "#0d6efd" : "#6b7280"} strokeWidth="2" strokeLinecap="round" />
@@ -140,11 +139,10 @@ export function ConfirmModal({
                                 <button
                                     type="button"
                                     onClick={() => setPaymentMethod("PayPal")}
-                                    className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 transition-colors ${
-                                        paymentMethod === "PayPal"
+                                    className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 transition-colors ${paymentMethod === "PayPal"
                                             ? "border-blue-500 bg-blue-50"
                                             : "border-gray-200 bg-white hover:border-gray-300"
-                                    }`}
+                                        }`}
                                 >
                                     <svg className="h-5 w-5" viewBox="0 0 24 24" fill="#003087" xmlns="http://www.w3.org/2000/svg">
                                         <path d="M7.076 21.337H2.47a.641.641 0 0 1-.635-.534L.005 4.72a.77.77 0 0 1 .762-.892h4.8a.77.77 0 0 1 .762.892l-.635 16.083a.641.641 0 0 1-.635.534h-.993zm16.524-16.083h-4.8a.77.77 0 0 0-.762.892l.635 16.083a.641.641 0 0 0 .635.534h.993l.635-16.083a.77.77 0 0 0-.762-.892h-.993zm-2.47 12.8h-2.47a.77.77 0 0 0-.762.892l.635 3.2a.641.641 0 0 0 .635.534h1.2l.635-4.092a.77.77 0 0 0-.762-.892h-.073z" />
