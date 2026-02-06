@@ -770,21 +770,21 @@ exports.getAppointments = async (req, res, next) => {
             { notes: new RegExp(escaped, "i") },
           ]
         };
-      // Combine with existing query using $and if we have role-based $or
-      if (query.$or) {
-        // If we already have $or, combine it with text search using $and
-        if (query.$and) {
-          query.$and.push(textSearch);
+        // Combine with existing query using $and if we have role-based $or
+        if (query.$or) {
+          // If we already have $or, combine it with text search using $and
+          if (query.$and) {
+            query.$and.push(textSearch);
+          } else {
+            query.$and = [
+              { $or: query.$or },
+              textSearch
+            ];
+            delete query.$or;
+          }
         } else {
-          query.$and = [
-            { $or: query.$or },
-            textSearch
-          ];
-          delete query.$or;
+          query.$or = textSearch.$or;
         }
-      } else {
-        query.$or = textSearch.$or;
-      }
       }
     }
 
@@ -1165,8 +1165,8 @@ exports.updateAppointment = async (req, res, next) => {
       const timeChanged = originalStartAt && appt.startAt && originalStartAt.getTime() !== appt.startAt.getTime();
 
       if (timeChanged) {
-        const dateStr = appt.startAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        const timeStr = appt.startAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+        const dateStr = dateUtil.formatToIST(appt.startAt, 'MMM d');
+        const timeStr = dateUtil.formatToIST(appt.startAt, 'h:mm aa');
 
         // Notification to Client
         await Notification.create({

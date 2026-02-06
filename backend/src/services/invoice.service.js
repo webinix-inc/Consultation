@@ -1,5 +1,6 @@
 const PDFDocument = require("pdfkit");
 const { uploadFile } = require("./s3.service");
+const dateUtil = require("../utils/date.util");
 
 // Helper to format currency
 const formatCurrency = (amount) => {
@@ -9,12 +10,7 @@ const formatCurrency = (amount) => {
 // Helper to format date
 const formatDate = (date) => {
     if (!date) return "";
-    const d = new Date(date);
-    return d.toLocaleDateString("en-IN", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-    });
+    return dateUtil.formatToIST(new Date(date), "d MMM yyyy");
 };
 
 const generateInvoice = async (transaction, appointment, client, consultant) => {
@@ -46,9 +42,9 @@ const generateInvoice = async (transaction, appointment, client, consultant) => 
                         const cName = transaction.consultantSnapshot?.name || consultant?.name || "Consultant";
                         // Retrieve date and slot more robustly
                         const aDateObj = appointment.date ? new Date(appointment.date) : (appointment.startAt ? new Date(appointment.startAt) : new Date());
-                        const aDate = aDateObj.toISOString().split('T')[0]; // YYYY-MM-DD
+                        const aDate = dateUtil.formatToIST(aDateObj, 'yyyy-MM-dd'); // YYYY-MM-DD
 
-                        const aSlot = appointment.timeStart || (appointment.startAt ? new Date(appointment.startAt).toLocaleTimeString('en-US', { hour12: false }).replace(/:/g, "-") : "Slot");
+                        const aSlot = appointment.timeStart || (appointment.startAt ? dateUtil.formatToIST(new Date(appointment.startAt), 'HH-mm') : "Slot");
 
                         // Sanitize components
                         const safeName = cName.replace(/[^a-zA-Z0-9]/g, "_");
@@ -157,8 +153,8 @@ function generateInvoiceTable(doc, transaction, appointment, consultant) { // Ac
 
     // Robust consultant name retrieval
     const consultantName = transaction.consultantSnapshot?.name || consultant?.name || consultant?.fullName || "Consultant";
-    const dateStr = appointment.date || (appointment.startAt ? new Date(appointment.startAt).toLocaleDateString() : "");
-    const timeStr = appointment.timeStart || (appointment.startAt ? new Date(appointment.startAt).toLocaleTimeString() : "");
+    const dateStr = appointment.date || (appointment.startAt ? dateUtil.formatToIST(new Date(appointment.startAt), "d MMM yyyy") : "");
+    const timeStr = appointment.timeStart || (appointment.startAt ? dateUtil.formatToIST(new Date(appointment.startAt), "h:mm aa") : "");
 
     const itemDescription = `Consultation with ${consultantName}\n(${dateStr} ${timeStr})`;
 

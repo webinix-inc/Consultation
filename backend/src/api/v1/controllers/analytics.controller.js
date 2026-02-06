@@ -4,6 +4,7 @@ const Appointment = require("../../../models/appointment.model");
 const Category = require("../../../models/category.model");
 const Transaction = require("../../../models/transaction.model");
 const { sendSuccess } = require("../../../utils/response");
+const dateUtil = require("../../../utils/date.util");
 
 /** Build CSV string from analytics overview data */
 function buildOverviewCsv(data) {
@@ -377,7 +378,7 @@ exports.overview = async (req, res, next) => {
         consultant: consultantName,
         category: consultantCategory,
         date: appt.date,
-        time: appt.startAt ? new Date(appt.startAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : "",
+        time: appt.startAt ? dateUtil.formatToIST(new Date(appt.startAt), "h:mm aa") : "",
         startAt: appt.startAt,
         status: appt.status,
       };
@@ -967,7 +968,7 @@ exports.consultantStats = async (req, res, next) => {
       const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
       const target = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate());
 
-      let dateString = dateObj.toLocaleDateString("en-GB", { day: '2-digit', month: '2-digit', year: 'numeric' });
+      let dateString = dateUtil.formatToIST(dateObj, "dd/MM/yyyy");
       if (target.getTime() === today.getTime()) dateString = "Today";
       else if (target.getTime() === tomorrow.getTime()) dateString = "Tomorrow";
       else if (target.getTime() === yesterday.getTime()) dateString = "Yesterday";
@@ -977,7 +978,7 @@ exports.consultantStats = async (req, res, next) => {
         name: clientName,
         with: consultantName, // Use actual consultant name
         tag: displayCategory || "General",
-        time: dateObj.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
+        time: dateUtil.formatToIST(dateObj, "h:mm aa"),
         date: dateString, // Today, Tomorrow, Yesterday or DD/MM/YYYY
         status: appt.status,
         avatar: clientAvatar
@@ -1296,7 +1297,7 @@ exports.clientStats = async (req, res, next) => {
       let formattedDate = "";
       if (appt.startAt) {
         const d = new Date(appt.startAt);
-        const timeStr = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+        const timeStr = dateUtil.formatToIST(d, "h:mm aa");
         displayTime = timeStr; // Just time
 
         // Relative Date Logic
@@ -1306,7 +1307,7 @@ exports.clientStats = async (req, res, next) => {
         const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
         const target = new Date(d.getFullYear(), d.getMonth(), d.getDate());
 
-        formattedDate = d.toLocaleDateString("en-GB", { day: '2-digit', month: '2-digit', year: 'numeric' });
+        formattedDate = dateUtil.formatToIST(d, "dd/MM/yyyy");
         if (target.getTime() === today.getTime()) formattedDate = "Today";
         else if (target.getTime() === tomorrow.getTime()) formattedDate = "Tomorrow";
         else if (target.getTime() === yesterday.getTime()) formattedDate = "Yesterday";
@@ -1455,8 +1456,8 @@ exports.getClientStatsById = async (req, res, next) => {
       let displayTime = "";
       if (appt.startAt) {
         const d = new Date(appt.startAt);
-        const dateStr = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-        const timeStr = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+        const dateStr = dateUtil.formatToIST(d, "MMM d");
+        const timeStr = dateUtil.formatToIST(d, "h:mm aa");
         displayTime = `${dateStr}, ${timeStr}`;
       }
 

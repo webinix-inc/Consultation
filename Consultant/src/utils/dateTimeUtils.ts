@@ -83,7 +83,7 @@ export function parseSlotToRange(date: Date, slot: string, durationMin: number =
  * @returns Formatted time string
  */
 export function formatToDisplay(d: Date): string {
-  return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  return d.toLocaleTimeString('en-IN', { hour: "numeric", minute: "2-digit", hour12: true, timeZone: 'Asia/Kolkata' });
 }
 
 /**
@@ -132,9 +132,11 @@ export function formatDateLine(date: string, start: string, end: string, session
     const [sH, sM] = startNormalized.split(':').map(Number);
     const [eH, eM] = endNormalized.split(':').map(Number);
     const duration = (eH * 60 + eM) - (sH * 60 + sM);
-    const startDate = new Date();
-    startDate.setHours(sH, sM);
-    const timeDisplay = startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+
+    // Use Intl for consistent IST display
+    const options: Intl.DateTimeFormatOptions = { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' };
+    const timeDisplay = new Intl.DateTimeFormat('en-IN', options).format(d);
+
     timeStr = `${timeDisplay} (${duration} min)`;
   } else if (endNormalized) {
     timeStr = `${startNormalized} - ${endNormalized}`;
@@ -153,7 +155,7 @@ export function formatDateLine(date: string, start: string, end: string, session
  */
 export function formatDate(dateString: string | Date): string {
   const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
-  return date.toLocaleDateString();
+  return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' });
 }
 
 /**
@@ -190,8 +192,8 @@ export function checkIsNow(dateStr?: string, timeStart?: string, timeEnd?: strin
  */
 export function formatDateLineFromDates(start: Date, end: Date, session: string): string {
   if (!start) return "";
-  const dateStr = start.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
-  const startStr = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  const dateStr = start.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' });
+  const startStr = start.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' });
 
   if (end) {
     const diffMs = end.getTime() - start.getTime();

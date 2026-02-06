@@ -23,7 +23,7 @@ export function normalizeTimeString(t: string): string {
  * Formats a Date object to display format with 12-hour time
  */
 export function formatTime(d: Date): string {
-  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  return d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' });
 }
 
 /**
@@ -32,6 +32,6 @@ export function formatTime(d: Date): string {
 export function formatDate(date: string | Date): string {
   const dateObj = typeof date === 'string' ? new Date(date) : date;
   if (isNaN(dateObj.getTime())) return '';
-  return dateObj.toLocaleDateString();
+  return dateObj.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' });
 }
 

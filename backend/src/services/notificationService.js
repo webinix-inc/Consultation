@@ -11,6 +11,7 @@
 const Notification = require("../models/notification.model");
 const User = require("../models/user.model");
 const SocketService = require("./socket.service");
+const dateUtil = require("../utils/date.util");
 
 class NotificationService {
     /**
@@ -158,11 +159,7 @@ class NotificationService {
     static getTime(appointment) {
         if (appointment.timeStart) return appointment.timeStart;
         if (appointment.startAt) {
-            return new Date(appointment.startAt).toLocaleTimeString("en-US", {
-                hour: "numeric",
-                minute: "2-digit",
-                hour12: true
-            });
+            return dateUtil.formatToIST(new Date(appointment.startAt), "h:mm aa");
         }
         return "";
     }
@@ -170,12 +167,7 @@ class NotificationService {
     static getDate(appointment) {
         if (appointment.date) return appointment.date;
         if (appointment.startAt) {
-            return new Date(appointment.startAt).toLocaleDateString("en-US", {
-                weekday: 'long',
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric'
-            });
+            return dateUtil.formatToIST(new Date(appointment.startAt), "EEEE, MMMM d, yyyy");
         }
         return "";
     }
