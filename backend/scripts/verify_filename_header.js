@@ -1,9 +1,12 @@
-
+require("dotenv").config({ path: ".env" });
 const http = require("http");
+
+const PORT = process.env.PORT || 5002;
+const BACKEND_URL = process.env.BACKEND_URL || `http://localhost:${PORT}`;
 
 const run = async () => {
     const filename = "TEST-INVOICE-NAME.pdf";
-    const proxyUrl = `http://localhost:5002/api/v1/storage/proxy?key=invoices/proxy-test.txt&filename=${filename}`;
+    const proxyUrl = `${BACKEND_URL}/api/v1/storage/proxy?key=invoices/proxy-test.txt&filename=${filename}`;
 
     console.log(`Checking URL: ${proxyUrl}`);
 

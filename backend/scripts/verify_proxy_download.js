@@ -11,8 +11,8 @@ const s3Client = new S3Client({
     },
 });
 
-const BUCKET_NAME = process.env.S3_BUCKET || process.env.AWS_S3_BUCKET_NAME;
-const KEY = "invoices/proxy-test.txt";
+const PORT = process.env.PORT || 5002;
+const BACKEND_URL = process.env.BACKEND_URL || `http://localhost:${PORT}`;
 
 const run = async () => {
     try {
@@ -24,7 +24,7 @@ const run = async () => {
             ContentType: "text/plain"
         }));
 
-        const proxyUrl = `http://localhost:5002/api/v1/storage/proxy?key=${KEY}`;
+        const proxyUrl = `${BACKEND_URL}/api/v1/storage/proxy?key=${KEY}`;
         console.log(`2. Attempting download via Proxy: ${proxyUrl}`);
 
         http.get(proxyUrl, (res) => {
